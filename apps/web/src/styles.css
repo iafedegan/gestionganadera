@@ -2549,3 +2549,16 @@ button.user {
     display: none;
   }
 }
+
+/* Con 13 módulos, en pantallas bajas se prioriza la lista sobre la ilustración. */
+@media (min-width: 901px) and (max-height: 860px) {
+  .sidebar-pasture {
+    display: none;
+  }
+  .sidebar-foot {
+    padding-bottom: 12px;
+  }
+}
+.sidebar nav {
+  flex: 1 1 auto;
+}

@@ -8,17 +8,17 @@ Node 22 y pnpm 10 (`corepack enable`). No se necesita Docker: en desarrollo la b
 
 ## Puesta en marcha
 
+Todo sale por **un solo puerto**: la landing en `/`, la aplicación en `/app/` y la API en `/v1/`.
+
 ```bash
 pnpm install
-pnpm --filter @ganaderia/api seed      # crea datos y credenciales de desarrollo
-pnpm --filter @ganaderia/api start     # API en http://127.0.0.1:3000
-pnpm --filter @ganaderia/web build     # el service worker solo existe en el build
-pnpm --filter @ganaderia/web preview   # app en http://localhost:4173
+pnpm --filter @ganaderia/api seed   # crea datos y credenciales de desarrollo (una vez)
+pnpm start                          # compila landing y app y las sirve en http://localhost:3000
 ```
 
 Las credenciales de desarrollo quedan en `apps/api/.seed-credentials.json` (ignorado por git). El seed no corre con `NODE_ENV=production`.
 
-Para desarrollo con recarga: `pnpm --filter @ganaderia/web dev` (puerto 5173, sin service worker).
+Desarrollo con recarga (puertos separados): `pnpm --filter @ganaderia/web dev` (5173, en `/app/`) y `pnpm --filter @ganaderia/landing dev` (5175). El servicio worker solo existe en la versión compilada.
 
 ## Calidad
 

@@ -1,4 +1,6 @@
+import { existsSync } from "node:fs";
 import cookie from "@fastify/cookie";
+import fastifyStatic from "@fastify/static";
 import { FarmCreate, LoginRequest, PushRequest } from "@ganaderia/contracts";
 import Fastify, { type FastifyInstance, type FastifyReply, type FastifyRequest } from "fastify";
 import { z } from "zod";
@@ -29,6 +31,16 @@ export interface AppOptions {
   production?: boolean;
   /** Orígenes permitidos para peticiones que modifican estado. */
   allowedOrigins?: string[];
+  /** Carpeta compilada de la landing; se sirve en «/». */
+  landingDir?: string;
+  /** Carpeta compilada de la PWA; se sirve en «/app/». */
+  appDir?: string;
+}
+
+/** Caché de estáticos: los archivos con huella son inmutables; el resto siempre se revalida. */
+function staticHeaders(res: { setHeader(k: string, v: string): void }, path: string): void {
+  const hashed = path.replaceAll("\\", "/").includes("/assets/");
+  res.setHeader("cache-control", hashed ? "public, max-age=31536000, immutable" : "no-cache");
 }
 
 export async function buildApp(opts: AppOptions): Promise<FastifyInstance> {
@@ -40,11 +52,12 @@ export async function buildApp(opts: AppOptions): Promise<FastifyInstance> {
   const throttle = new LoginThrottle();
   await app.register(cookie);
 
-  app.addHook("onSend", async (_req, reply) => {
+  app.addHook("onSend", async (req, reply) => {
     reply.header("x-content-type-options", "nosniff");
     reply.header("x-frame-options", "DENY");
     reply.header("referrer-policy", "no-referrer");
-    reply.header("cache-control", "no-store");
+    // Las respuestas de la API nunca se guardan; los estáticos manejan su propia caché.
+    if (req.url.startsWith("/v1/")) reply.header("cache-control", "no-store");
   });
 
   // Defensa CSRF: cookie SameSite=Strict + encabezado propio + verificación de Origin si viene.
@@ -194,6 +207,35 @@ export async function buildApp(opts: AppOptions): Promise<FastifyInstance> {
         .send({ error: "PERMISO_DENEGADO", message: "Sin permiso de auditoría." });
     }
     return db.tenant(q.data.organizationId, (qq) => verifyAuditChain(qq, q.data.organizationId));
+  });
+
+  // Un solo origen: la landing en «/», la aplicación en «/app/» y la API en «/v1/».
+  const { landingDir, appDir } = opts;
+  if (landingDir && existsSync(landingDir)) {
+    await app.register(fastifyStatic, {
+      root: landingDir,
+      prefix: "/",
+      cacheControl: false,
+      setHeaders: staticHeaders,
+    });
+  }
+  if (appDir && existsSync(appDir)) {
+    await app.register(fastifyStatic, {
+      root: appDir,
+      prefix: "/app/",
+      redirect: true,
+      cacheControl: false,
+      decorateReply: Boolean(!landingDir || !existsSync(landingDir)),
+      setHeaders: staticHeaders,
+    });
+  }
+  app.get("/app", (_req, reply) => reply.redirect("/app/", 301));
+  app.setNotFoundHandler((req, reply) => {
+    if (req.method === "GET" && req.url.startsWith("/app/") && appDir && existsSync(appDir)) {
+      // La aplicación no tiene rutas propias; cualquier ruta bajo /app/ abre su portada.
+      return reply.header("cache-control", "no-cache").sendFile("index.html", appDir);
+    }
+    return reply.code(404).send({ error: "NO_ENCONTRADO", message: "Recurso no encontrado." });
   });
 
   return app;

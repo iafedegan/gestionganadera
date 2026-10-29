@@ -11,7 +11,9 @@
     "test": "turbo run test",
     "typecheck": "turbo run typecheck",
     "lint": "biome check .",
-    "format": "biome format --write ."
+    "format": "biome format --write .",
+    "build:site": "turbo run build --filter=@ganaderia/landing --filter=@ganaderia/web",
+    "start": "pnpm build:site && pnpm --filter @ganaderia/api start"
   },
   "devDependencies": {
     "@biomejs/biome": "^1.9.4",

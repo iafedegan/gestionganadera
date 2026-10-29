@@ -2,28 +2,28 @@
   "version": "0.0.1",
   "configurations": [
     {
-      "name": "api",
+      "name": "app",
       "runtimeExecutable": "/Users/edgar/.local/bin/pnpm",
       "runtimeArgs": ["--filter", "@ganaderia/api", "start"],
       "port": 3000
     },
     {
-      "name": "web-preview",
+      "name": "web-dev",
       "runtimeExecutable": "/Users/edgar/.local/bin/pnpm",
-      "runtimeArgs": ["--filter", "@ganaderia/web", "preview"],
-      "port": 4173
+      "runtimeArgs": ["--filter", "@ganaderia/web", "dev"],
+      "port": 5173
+    },
+    {
+      "name": "landing-dev",
+      "runtimeExecutable": "/Users/edgar/.local/bin/pnpm",
+      "runtimeArgs": ["--filter", "@ganaderia/landing", "dev"],
+      "port": 5175
     },
     {
       "name": "spike-s0",
       "runtimeExecutable": "/Users/edgar/.local/bin/pnpm",
       "runtimeArgs": ["--filter", "@ganaderia/spike-s0", "dev"],
       "port": 5174
-    },
-    {
-      "name": "landing",
-      "runtimeExecutable": "/Users/edgar/.local/bin/pnpm",
-      "runtimeArgs": ["--filter", "@ganaderia/landing", "dev"],
-      "port": 5175
     }
   ]
 }

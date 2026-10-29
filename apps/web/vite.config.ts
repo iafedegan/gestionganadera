@@ -5,6 +5,8 @@ import { VitePWA } from "vite-plugin-pwa";
 const api = { "/v1": { target: "http://127.0.0.1:3000", changeOrigin: false } };
 
 export default defineConfig({
+  // La aplicación vive en /app/; la landing ocupa la raíz del mismo servidor.
+  base: "/app/",
   plugins: [
     react(),
     VitePWA({
@@ -15,8 +17,8 @@ export default defineConfig({
         short_name: "Gestión Ganadera",
         description: "Gestión de fincas, animales y registros de campo, también sin conexión.",
         lang: "es-CO",
-        start_url: "/",
-        scope: "/",
+        start_url: "/app/",
+        scope: "/app/",
         display: "standalone",
         orientation: "portrait",
         background_color: "#F5F4F0",
@@ -32,7 +34,7 @@ export default defineConfig({
         // Todo el shell, las fuentes y el motor SQLite quedan disponibles sin red.
         globPatterns: ["**/*.{js,css,html,svg,png,wasm,woff,woff2}"],
         maximumFileSizeToCacheInBytes: 6 * 1024 * 1024,
-        navigateFallback: "/index.html",
+        navigateFallback: "/app/index.html",
         navigateFallbackDenylist: [/^\/v1\//],
       },
     }),
