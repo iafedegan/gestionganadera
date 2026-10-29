@@ -8,10 +8,14 @@ import {
   Clock,
   CloudOff,
   Database,
+  Download,
+  Eye,
+  EyeOff,
   KeyRound,
   LogOut,
   Menu,
   PawPrint,
+  PlusCircle,
   RefreshCw,
   Wifi,
   WifiOff,
@@ -50,6 +54,7 @@ export function Login() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [showPw, setShowPw] = useState(false);
 
   async function submit(e: FormEvent) {
     e.preventDefault();
@@ -104,13 +109,24 @@ export function Login() {
           </label>
           <label>
             Contraseña
-            <input
-              type="password"
-              autoComplete="current-password"
-              required
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-            />
+            <span className="pw">
+              <input
+                type={showPw ? "text" : "password"}
+                autoComplete="current-password"
+                required
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+              />
+              <button
+                type="button"
+                className="pw-toggle"
+                aria-label={showPw ? "Ocultar contraseña" : "Mostrar contraseña"}
+                aria-pressed={showPw}
+                onClick={() => setShowPw((v) => !v)}
+              >
+                {showPw ? <EyeOff size={20} /> : <Eye size={20} />}
+              </button>
+            </span>
           </label>
           {error && (
             <p role="alert" className="form-error">
@@ -157,6 +173,30 @@ function NavList(props: {
   );
 }
 
+function useInstall() {
+  const [evt, setEvt] = useState<(Event & { prompt(): Promise<void> }) | null>(null);
+  useEffect(() => {
+    const h = (e: Event) => {
+      e.preventDefault();
+      setEvt(e as Event & { prompt(): Promise<void> });
+    };
+    window.addEventListener("beforeinstallprompt", h);
+    return () => window.removeEventListener("beforeinstallprompt", h);
+  }, []);
+  const standalone =
+    window.matchMedia("(display-mode: standalone)").matches ||
+    (navigator as unknown as { standalone?: boolean }).standalone === true;
+  const ios = /iPhone|iPad|iPod/.test(navigator.userAgent);
+  return {
+    canInstall: evt !== null && !standalone,
+    iosHint: ios && !standalone,
+    prompt: async () => {
+      await evt?.prompt();
+      setEvt(null);
+    },
+  };
+}
+
 const BOTTOM: ModuleKey[] = ["inicio", "animales", "produccion", "reproduccion"];
 
 export function Shell(props: {
@@ -180,6 +220,7 @@ export function Shell(props: {
     dismissToast,
   } = useApp();
   const [more, setMore] = useState(false);
+  const install = useInstall();
 
   // El menú "Más" solo existe en celular: si la ventana se ensancha, se cierra.
   useEffect(() => {
@@ -284,11 +325,26 @@ export function Shell(props: {
                 {role && <small>{ROLE_LABEL[role]}</small>}
               </span>
             </div>
-            <button type="button" className="icon-btn" aria-label="Cerrar sesión" onClick={exit}>
+            <button
+              type="button"
+              className="icon-btn hide-mobile"
+              aria-label="Cerrar sesión"
+              onClick={exit}
+            >
               <LogOut size={20} />
             </button>
           </div>
         </header>
+
+        {!online && (
+          <div className="offline-bar">
+            <WifiOff size={16} aria-hidden="true" />
+            <span>
+              Sin conexión ·{" "}
+              {pendientes > 0 ? `${pendientes} por enviar` : "los cambios se guardan aquí"}
+            </span>
+          </div>
+        )}
 
         {sessionExpired && (
           <div className="banner banner-warn" role="alert">
@@ -352,7 +408,43 @@ export function Shell(props: {
                 <X size={20} />
               </button>
             </div>
+            <div className="account">
+              <span className="avatar" aria-hidden="true">
+                {initials(name)}
+              </span>
+              <span className="user-text">
+                <strong>{name}</strong>
+                {role && <small>{ROLE_LABEL[role]}</small>}
+              </span>
+            </div>
             <NavList active={props.module} onPick={pick} variant="sheet" />
+            <div className="sheet-actions">
+              {install.canInstall && (
+                <button
+                  type="button"
+                  className="btn btn-ghost btn-block"
+                  onClick={() => void install.prompt()}
+                >
+                  <Download size={18} aria-hidden="true" /> Instalar en el celular
+                </button>
+              )}
+              {install.iosHint && (
+                <p className="hint">
+                  <Download size={14} aria-hidden="true" /> Para instalar: toque Compartir y «Añadir
+                  a pantalla de inicio».
+                </p>
+              )}
+              <button
+                type="button"
+                className="btn btn-ghost btn-block danger"
+                onClick={() => {
+                  setMore(false);
+                  void exit();
+                }}
+              >
+                <LogOut size={18} aria-hidden="true" /> Cerrar sesión
+              </button>
+            </div>
           </aside>
         </>
       )}
@@ -398,7 +490,7 @@ export function Home({
   onOpenSync(): void;
   onModule(m: ModuleKey): void;
 }) {
-  const { orgId, counts, dataVersion, lastSync, online, session } = useApp();
+  const { orgId, counts, dataVersion, lastSync, online, session, syncNow, syncing } = useApp();
   const [inv, setInv] = useState<{ total: number; bovino: number; bufalino: number } | null>(null);
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: dataVersion fuerza la relectura
@@ -452,6 +544,20 @@ export function Home({
         title={`${greeting()}${first ? `, ${first}` : ""}`}
         lead="Un vistazo general para priorizar las actividades de la finca."
       />
+
+      <div className="quick-actions">
+        <button type="button" className="btn btn-primary" onClick={() => onModule("animales")}>
+          <PlusCircle size={18} aria-hidden="true" /> Registrar animal
+        </button>
+        <button
+          type="button"
+          className="btn btn-ghost"
+          onClick={() => void syncNow()}
+          disabled={syncing}
+        >
+          <RefreshCw size={18} aria-hidden="true" className={syncing ? "spin" : ""} /> Sincronizar
+        </button>
+      </div>
 
       <div className="kpis">
         <Kpi

@@ -19,6 +19,7 @@ import {
   Scale,
   Scan,
   Search,
+  SlidersHorizontal,
   Upload,
   Weight,
   X,
@@ -87,6 +88,8 @@ export function AnimalsScreen() {
   const [creatingFarm, setCreatingFarm] = useState(false);
   const [inv, setInv] = useState({ total: 0, bovino: 0, bufalino: 0 });
   const wide = useMedia("(min-width: 1500px)");
+  const mobile = useMedia("(max-width: 900px)");
+  const [filtersOpen, setFiltersOpen] = useState(false);
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: dataVersion fuerza la relectura
   useEffect(() => {
@@ -106,6 +109,7 @@ export function AnimalsScreen() {
   const canRegister = role !== null && can(role, "animal.write");
   const canCreateFarm = role !== null && can(role, "farm.write");
   const filtered = Boolean(q || species || category || farmId);
+  const activeFilters = [species, category, farmId].filter(Boolean).length;
   const source = `Fuente: registros de este dispositivo${lastSync ? "" : " · aún sin sincronizar"}`;
 
   return (
@@ -145,6 +149,21 @@ export function AnimalsScreen() {
           </>
         }
       />
+
+      <section className="statstrip" aria-label="Resumen del inventario">
+        <div>
+          <strong>{num(inv.total)}</strong>
+          <span>Activos</span>
+        </div>
+        <div>
+          <strong>{num(inv.bovino)}</strong>
+          <span>Bovinos</span>
+        </div>
+        <div>
+          <strong>{num(inv.bufalino)}</strong>
+          <span>Bufalinos</span>
+        </div>
+      </section>
 
       <div className="kpis kpis-3">
         <Kpi
@@ -206,37 +225,51 @@ export function AnimalsScreen() {
             onChange={(e) => setQ(e.target.value)}
           />
         </label>
-        <label>
-          Especie
-          <select value={species} onChange={(e) => setSpecies(e.target.value)}>
-            <option value="">Todas</option>
-            <option value="bovino">Bovino</option>
-            <option value="bufalino">Bufalino</option>
-          </select>
-        </label>
-        <label>
-          Categoría
-          <select value={category} onChange={(e) => setCategory(e.target.value)}>
-            <option value="">Todas</option>
-            {Object.entries(CATEGORY_LABEL).map(([k, v]) => (
-              <option key={k} value={k}>
-                {v}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label>
-          Finca
-          <select value={farmId} onChange={(e) => setFarmId(e.target.value)}>
-            <option value="">Todas</option>
-            {farms.map((f) => (
-              <option key={f.id} value={f.id}>
-                {f.name}
-              </option>
-            ))}
-          </select>
-        </label>
-        {canCreateFarm && farms.length > 0 && (
+        {mobile ? (
+          <button
+            type="button"
+            className="btn btn-ghost filter-btn"
+            aria-label={`Filtros${activeFilters ? `, ${activeFilters} activos` : ""}`}
+            onClick={() => setFiltersOpen(true)}
+          >
+            <SlidersHorizontal size={18} aria-hidden="true" />
+            {activeFilters > 0 && <span className="dot dot-inline">{activeFilters}</span>}
+          </button>
+        ) : (
+          <>
+            <label>
+              Especie
+              <select value={species} onChange={(e) => setSpecies(e.target.value)}>
+                <option value="">Todas</option>
+                <option value="bovino">Bovino</option>
+                <option value="bufalino">Bufalino</option>
+              </select>
+            </label>
+            <label>
+              Categoría
+              <select value={category} onChange={(e) => setCategory(e.target.value)}>
+                <option value="">Todas</option>
+                {Object.entries(CATEGORY_LABEL).map(([k, v]) => (
+                  <option key={k} value={k}>
+                    {v}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              Finca
+              <select value={farmId} onChange={(e) => setFarmId(e.target.value)}>
+                <option value="">Todas</option>
+                {farms.map((f) => (
+                  <option key={f.id} value={f.id}>
+                    {f.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </>
+        )}
+        {!mobile && canCreateFarm && farms.length > 0 && (
           <button
             type="button"
             className="btn btn-ghost btn-sm"
@@ -294,19 +327,31 @@ export function AnimalsScreen() {
                     <th scope="row">
                       <button type="button" className="row-btn" onClick={() => setSelected(r.id)}>
                         <SpeciesBadge species={r.species} />
-                        <span className="mono">{r.tag}</span>
+                        <span className="row-main">
+                          <span className="mono">{r.tag}</span>
+                          <span className="row-sub">
+                            {SPECIES_LABEL[r.species]} · {CATEGORY_LABEL[r.category]} ·{" "}
+                            {farmName(r.farmId)}
+                          </span>
+                        </span>
                       </button>
                     </th>
-                    <td data-label="Especie">{SPECIES_LABEL[r.species]}</td>
-                    <td data-label="Categoría">{CATEGORY_LABEL[r.category]}</td>
-                    <td data-label="Ubicación">{farmName(r.farmId)}</td>
-                    <td data-label="Estado">
+                    <td data-label="Especie" className="col-x">
+                      {SPECIES_LABEL[r.species]}
+                    </td>
+                    <td data-label="Categoría" className="col-x">
+                      {CATEGORY_LABEL[r.category]}
+                    </td>
+                    <td data-label="Ubicación" className="col-x">
+                      {farmName(r.farmId)}
+                    </td>
+                    <td data-label="Estado" className="col-x">
                       <span className="status">
                         <span className={`dot dot-${r.status}`} />
                         {STATUS_LABEL[r.status]}
                       </span>
                     </td>
-                    <td data-label="Sincronización">
+                    <td data-label="Sincronización" className="col-sync">
                       <SyncChip state={r.syncState} />
                     </td>
                   </tr>
@@ -332,6 +377,88 @@ export function AnimalsScreen() {
           )
         )}
       </div>
+
+      {mobile && canRegister && farms.length > 0 && (
+        <button type="button" className="fab" onClick={() => setRegistering(true)}>
+          <PlusCircle size={22} aria-hidden="true" />
+          <span>Registrar</span>
+        </button>
+      )}
+
+      {mobile && filtersOpen && (
+        <>
+          <button
+            type="button"
+            className="backdrop"
+            aria-label="Cerrar filtros"
+            tabIndex={-1}
+            onClick={() => setFiltersOpen(false)}
+          />
+          <aside className="sheet-panel filter-sheet" aria-label="Filtros">
+            <div className="drawer-head">
+              <h2>Filtros</h2>
+              <button
+                type="button"
+                className="icon-btn"
+                aria-label="Cerrar"
+                onClick={() => setFiltersOpen(false)}
+              >
+                <X size={20} />
+              </button>
+            </div>
+            <label>
+              Especie
+              <select value={species} onChange={(e) => setSpecies(e.target.value)}>
+                <option value="">Todas</option>
+                <option value="bovino">Bovino</option>
+                <option value="bufalino">Bufalino</option>
+              </select>
+            </label>
+            <label>
+              Categoría
+              <select value={category} onChange={(e) => setCategory(e.target.value)}>
+                <option value="">Todas</option>
+                {Object.entries(CATEGORY_LABEL).map(([k, v]) => (
+                  <option key={k} value={k}>
+                    {v}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              Finca
+              <select value={farmId} onChange={(e) => setFarmId(e.target.value)}>
+                <option value="">Todas</option>
+                {farms.map((f) => (
+                  <option key={f.id} value={f.id}>
+                    {f.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <div className="dialog-actions">
+              <button
+                type="button"
+                className="btn btn-ghost"
+                onClick={() => {
+                  setSpecies("");
+                  setCategory("");
+                  setFarmId("");
+                }}
+              >
+                Limpiar
+              </button>
+              <button
+                type="button"
+                className="btn btn-primary"
+                onClick={() => setFiltersOpen(false)}
+              >
+                Ver resultados
+              </button>
+            </div>
+          </aside>
+        </>
+      )}
 
       {registering && <RegisterDialog onClose={() => setRegistering(false)} />}
       {creatingFarm && <FarmDialog onClose={() => setCreatingFarm(false)} />}
@@ -545,6 +672,9 @@ export function RegisterDialog(props: {
   const { orgId, refresh, syncNow, online, notify } = useApp();
   const farms = useFarms();
   const ref = useRef<HTMLDialogElement>(null);
+  const formRef = useRef<HTMLFormElement>(null);
+  const tagRef = useRef<HTMLInputElement>(null);
+  const another = useRef(false);
   const init = props.initial;
 
   const [farmId, setFarmId] = useState(init?.farmId ?? "");
@@ -568,7 +698,8 @@ export function RegisterDialog(props: {
 
   useEffect(() => {
     ref.current?.showModal();
-  }, []);
+    if (!init) tagRef.current?.focus();
+  }, [init]);
 
   useEffect(() => {
     if (!farmId && farms.length === 1 && farms[0]) setFarmId(farms[0].id);
@@ -594,6 +725,8 @@ export function RegisterDialog(props: {
 
   async function submit(e: FormEvent) {
     e.preventDefault();
+    const again = another.current;
+    another.current = false;
     setError(null);
     const payload: AnimalRegisterPayload = {
       id: init?.id ?? uuidv7(),
@@ -652,82 +785,115 @@ export function RegisterDialog(props: {
           ? `Animal ${payload.tag} guardado. Enviando al servidor…`
           : `Animal ${payload.tag} guardado en este dispositivo. Se enviará al reconectar.`,
       );
-      close();
+      if ("vibrate" in navigator) navigator.vibrate(30);
       if (online) void syncNow();
+      if (again) {
+        // Carga rápida de inventario: se conservan finca, especie, categoría y fechas.
+        setTag("");
+        setMotherId("");
+        setFatherId("");
+        tagRef.current?.focus();
+      } else {
+        close();
+      }
     } finally {
       setBusy(false);
     }
   }
 
+  const farmOne = farms.length === 1 ? farms[0] : undefined;
+
   return (
-    <dialog ref={ref} className="dialog" onClose={props.onClose} aria-labelledby="reg-title">
-      <form onSubmit={submit}>
-        <h2 id="reg-title">{init ? "Corregir y reenviar animal" : "Registrar animal"}</h2>
-        <div className="grid">
-          <label>
-            Finca
-            <select required value={farmId} onChange={(e) => setFarmId(e.target.value)}>
-              <option value="" disabled>
-                Seleccione
-              </option>
-              {farms.map((f) => (
-                <option key={f.id} value={f.id}>
-                  {f.name}
+    <dialog
+      ref={ref}
+      className="dialog dialog-form"
+      onClose={props.onClose}
+      aria-labelledby="reg-title"
+    >
+      <form onSubmit={(e) => void submit(e)} ref={formRef}>
+        <header className="dialog-head">
+          <button type="button" className="icon-btn" aria-label="Cerrar" onClick={close}>
+            <X size={22} />
+          </button>
+          <h2 id="reg-title">{init ? "Corregir y reenviar" : "Registrar animal"}</h2>
+          {!online && <span className="pill pill-warn">Sin conexión</span>}
+        </header>
+
+        <div className="dialog-body">
+          {farmOne ? (
+            <p className="farm-chip">
+              <Building2 size={16} aria-hidden="true" /> {farmOne.name}
+            </p>
+          ) : (
+            <label>
+              Finca
+              <select required value={farmId} onChange={(e) => setFarmId(e.target.value)}>
+                <option value="" disabled>
+                  Seleccione
                 </option>
-              ))}
-            </select>
-          </label>
+                {farms.map((f) => (
+                  <option key={f.id} value={f.id}>
+                    {f.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
+
           <label>
             Arete o identificación visible
             <input
+              ref={tagRef}
               required
+              autoComplete="off"
+              autoCapitalize="characters"
+              autoCorrect="off"
+              spellCheck={false}
+              enterKeyHint="done"
               maxLength={40}
+              placeholder="Ej. BOV-014"
               value={tag}
               onChange={(e) => setTag(e.target.value)}
-              className="mono"
+              className="mono input-lg"
             />
           </label>
-          <label>
-            Especie
-            <select
-              value={species}
-              onChange={(e) => {
-                setSpecies(e.target.value as Species);
-                setMotherId("");
-                setFatherId("");
-              }}
-            >
-              <option value="bovino">Bovino</option>
-              <option value="bufalino">Bufalino</option>
-            </select>
-          </label>
-          <label>
-            Sexo
-            <select value={sex} onChange={(e) => changeSex(e.target.value as "hembra" | "macho")}>
-              <option value="hembra">Hembra</option>
-              <option value="macho">Macho</option>
-            </select>
-          </label>
-          <label>
-            Categoría
-            <select value={category} onChange={(e) => setCategory(e.target.value)}>
-              {cats.map((c) => (
-                <option key={c} value={c}>
-                  {CATEGORY_LABEL[c]}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label>
-            Motivo de entrada
-            <select value={reason} onChange={(e) => setReason(e.target.value)}>
-              {Object.entries(REASON_LABEL).map(([k, v]) => (
-                <option key={k} value={k}>
-                  {v}
-                </option>
-              ))}
-            </select>
-          </label>
+
+          <Segmented
+            legend="Especie"
+            value={species}
+            onChange={(v) => {
+              setSpecies(v);
+              setMotherId("");
+              setFatherId("");
+            }}
+            options={[
+              { value: "bovino", label: "Bovino" },
+              { value: "bufalino", label: "Bufalino" },
+            ]}
+          />
+          <Segmented
+            legend="Sexo"
+            value={sex}
+            onChange={changeSex}
+            options={[
+              { value: "hembra", label: "Hembra" },
+              { value: "macho", label: "Macho" },
+            ]}
+          />
+          <Segmented
+            legend="Categoría"
+            value={category}
+            onChange={setCategory}
+            wrap
+            options={cats.map((c) => ({ value: c, label: CATEGORY_LABEL[c] ?? c }))}
+          />
+          <Segmented
+            legend="Motivo de entrada"
+            value={reason}
+            onChange={setReason}
+            wrap
+            options={Object.entries(REASON_LABEL).map(([value, label]) => ({ value, label }))}
+          />
           <label>
             Fecha de entrada
             <input
@@ -738,82 +904,126 @@ export function RegisterDialog(props: {
               onChange={(e) => setEntryDate(e.target.value)}
             />
           </label>
-          <label>
-            Procedencia (opcional)
-            <input maxLength={120} value={origin} onChange={(e) => setOrigin(e.target.value)} />
-          </label>
-          <label>
-            Fecha de nacimiento (opcional)
-            <input
-              type="date"
-              max={todayLocal()}
-              value={birth}
-              onChange={(e) => setBirth(e.target.value)}
-            />
-          </label>
-          <label>
-            Precisión de la fecha
-            <select
-              value={precision}
-              disabled={!birth}
-              onChange={(e) => setPrecision(e.target.value as "exacta" | "estimada")}
-            >
-              <option value="exacta">Exacta</option>
-              <option value="estimada">Estimada</option>
-            </select>
-          </label>
-          <label>
-            Madre (si se conoce)
-            <select value={motherId} onChange={(e) => setMotherId(e.target.value)}>
-              <option value="">Desconocida</option>
-              {mothers.map((m) => (
-                <option key={m.id} value={m.id}>
-                  {m.tag}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label>
-            Padre (si se conoce)
-            <select value={fatherId} onChange={(e) => setFatherId(e.target.value)}>
-              <option value="">Desconocido</option>
-              {fathers.map((m) => (
-                <option key={m.id} value={m.id}>
-                  {m.tag}
-                </option>
-              ))}
-            </select>
-          </label>
+
+          <details
+            className="more"
+            open={Boolean(init?.birthDate || init?.motherId || init?.notes)}
+          >
+            <summary>Más datos (opcional)</summary>
+            <div className="more-body">
+              <label>
+                Fecha de nacimiento
+                <input
+                  type="date"
+                  max={todayLocal()}
+                  value={birth}
+                  onChange={(e) => setBirth(e.target.value)}
+                />
+              </label>
+              {birth && (
+                <Segmented
+                  legend="Precisión de la fecha"
+                  value={precision}
+                  onChange={(v) => setPrecision(v as "exacta" | "estimada")}
+                  options={[
+                    { value: "exacta", label: "Exacta" },
+                    { value: "estimada", label: "Estimada" },
+                  ]}
+                />
+              )}
+              <label>
+                Madre (si se conoce)
+                <select value={motherId} onChange={(e) => setMotherId(e.target.value)}>
+                  <option value="">Desconocida</option>
+                  {mothers.map((m) => (
+                    <option key={m.id} value={m.id}>
+                      {m.tag}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                Padre (si se conoce)
+                <select value={fatherId} onChange={(e) => setFatherId(e.target.value)}>
+                  <option value="">Desconocido</option>
+                  {fathers.map((m) => (
+                    <option key={m.id} value={m.id}>
+                      {m.tag}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                Procedencia
+                <input maxLength={120} value={origin} onChange={(e) => setOrigin(e.target.value)} />
+              </label>
+              <label>
+                Observaciones
+                <textarea
+                  maxLength={500}
+                  rows={2}
+                  value={notes}
+                  onChange={(e) => setNotes(e.target.value)}
+                />
+              </label>
+            </div>
+          </details>
+
+          {error && (
+            <p role="alert" className="form-error">
+              {error}
+            </p>
+          )}
         </div>
-        <label>
-          Observaciones (opcional)
-          <textarea
-            maxLength={500}
-            rows={2}
-            value={notes}
-            onChange={(e) => setNotes(e.target.value)}
-          />
-        </label>
-        {error && (
-          <p role="alert" className="form-error">
-            {error}
-          </p>
-        )}
-        <p className="hint">
-          {online
-            ? "Se guardará en este dispositivo y se enviará al servidor."
-            : "Sin conexión: se guardará en este dispositivo y se enviará al reconectar."}
-        </p>
+
         <div className="dialog-actions">
-          <button type="button" className="btn btn-ghost" onClick={close}>
-            Cancelar
-          </button>
+          {!init && (
+            <button
+              type="button"
+              className="btn btn-ghost"
+              disabled={busy}
+              onClick={() => {
+                another.current = true;
+                formRef.current?.requestSubmit();
+              }}
+            >
+              Guardar y otro
+            </button>
+          )}
           <button type="submit" className="btn btn-primary" disabled={busy}>
             Guardar
           </button>
         </div>
       </form>
     </dialog>
+  );
+}
+
+function Segmented<T extends string>(props: {
+  legend: string;
+  value: T;
+  options: { value: T; label: string }[];
+  onChange(v: T): void;
+  wrap?: boolean;
+}) {
+  return (
+    <fieldset className="seg">
+      <legend>{props.legend}</legend>
+      <div className={props.wrap ? "seg-row wrap" : "seg-row"}>
+        {props.options.map((o) => (
+          <label key={o.value} className={props.value === o.value ? "seg-opt on" : "seg-opt"}>
+            <input
+              type="radio"
+              name={props.legend}
+              value={o.value}
+              checked={props.value === o.value}
+              onChange={() => props.onChange(o.value)}
+            />
+            <span>{o.label}</span>
+          </label>
+        ))}
+      </div>
+    </fieldset>
   );
 }
 
