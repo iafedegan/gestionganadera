@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { AnimalsScreen } from "./animals";
-import { Home, Login, type ModuleKey, Placeholder, Shell } from "./screens";
+import { Home, Login, type ModuleKey, ModulePreview, Shell } from "./screens";
 import { useApp } from "./state";
 
 export function App() {
@@ -14,7 +14,7 @@ export function App() {
     <Shell module={module} onModule={setModule} syncOpen={syncOpen} onSyncOpen={setSyncOpen}>
       {module === "inicio" && <Home onOpenSync={() => setSyncOpen(true)} onModule={setModule} />}
       {module === "animales" && <AnimalsScreen />}
-      {module !== "inicio" && module !== "animales" && <Placeholder module={module} />}
+      {module !== "inicio" && module !== "animales" && <ModulePreview module={module} />}
     </Shell>
   );
 }

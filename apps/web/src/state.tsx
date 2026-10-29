@@ -27,7 +27,16 @@ export interface Counts {
   conflicto: number;
 }
 
+export interface Toast {
+  id: number;
+  message: string;
+  tone: "ok" | "info" | "warn";
+}
+
 interface AppState {
+  toasts: Toast[];
+  notify(message: string, tone?: Toast["tone"]): void;
+  dismissToast(id: number): void;
   session: SessionDto | null;
   orgId: string;
   role: Role | null;
@@ -67,6 +76,20 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [counts, setCounts] = useState<Counts>(ZERO);
   const [dataVersion, setDataVersion] = useState(0);
   const busy = useRef(false);
+  const [toasts, setToasts] = useState<Toast[]>([]);
+  const toastId = useRef(1);
+
+  const dismissToast = useCallback((id: number) => {
+    setToasts((t) => t.filter((x) => x.id !== id));
+  }, []);
+  const notify = useCallback(
+    (message: string, tone: Toast["tone"] = "ok") => {
+      const id = toastId.current++;
+      setToasts((t) => [...t.slice(-2), { id, message, tone }]);
+      window.setTimeout(() => dismissToast(id), 5000);
+    },
+    [dismissToast],
+  );
 
   const orgId = session?.memberships[0]?.organizationId ?? "";
   const role = session?.memberships[0]?.role ?? null;
@@ -235,6 +258,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const value = useMemo<AppState>(
     () => ({
+      toasts,
+      notify,
+      dismissToast,
       session,
       orgId,
       role,
@@ -251,6 +277,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
       refresh,
     }),
     [
+      toasts,
+      notify,
+      dismissToast,
       session,
       orgId,
       role,

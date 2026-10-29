@@ -7,7 +7,24 @@ import {
   uuidv7,
   validateRegistration,
 } from "@ganaderia/domain";
-import { type FormEvent, useEffect, useRef, useState } from "react";
+import {
+  Baby,
+  Building2,
+  Cloud,
+  CloudOff,
+  FileText,
+  GitBranch,
+  History,
+  PlusCircle,
+  Scale,
+  Scan,
+  Search,
+  Upload,
+  Weight,
+  X,
+} from "lucide-react";
+import { type FormEvent, type ReactNode, useEffect, useRef, useState } from "react";
+import { Kpi, PageHead } from "./components";
 import {
   CATEGORY_LABEL,
   REASON_LABEL,
@@ -35,18 +52,41 @@ function useFarms() {
   return farms;
 }
 
+/** Marca de especie: círculo con la inicial; color distinto por especie, nunca solo color. */
+function SpeciesBadge({ species, size = 36 }: { species: string; size?: number }) {
+  return (
+    <span
+      className={`sp-badge sp-${species}`}
+      style={{ width: size, height: size, fontSize: size * 0.4 }}
+      aria-hidden="true"
+    >
+      {species === "bufalino" ? "Bu" : "Bo"}
+    </span>
+  );
+}
+
+function SyncChip({ state }: { state: LocalAnimal["syncState"] }) {
+  const Icon = state === "sincronizado" ? Cloud : state === "pendiente" ? CloudOff : Scan;
+  return (
+    <span className={`chip chip-${state}`}>
+      <Icon size={12} aria-hidden="true" /> {SYNC_LABEL[state]}
+    </span>
+  );
+}
+
 export function AnimalsScreen() {
-  const { orgId, role, online, dataVersion, lastSync } = useApp();
+  const { orgId, role, online, dataVersion, lastSync, counts } = useApp();
   const farms = useFarms();
   const [q, setQ] = useState("");
   const [species, setSpecies] = useState("");
   const [category, setCategory] = useState("");
   const [farmId, setFarmId] = useState("");
-  const [rows, setRows] = useState<LocalAnimal[]>([]);
+  const [rows, setRows] = useState<LocalAnimal[] | null>(null);
   const [selected, setSelected] = useState<string | null>(null);
   const [registering, setRegistering] = useState(false);
   const [creatingFarm, setCreatingFarm] = useState(false);
   const [inv, setInv] = useState({ total: 0, bovino: 0, bufalino: 0 });
+  const wide = useMedia("(min-width: 1500px)");
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: dataVersion fuerza la relectura
   useEffect(() => {
@@ -65,31 +105,100 @@ export function AnimalsScreen() {
   const farmName = (id: string) => farms.find((f) => f.id === id)?.name ?? "—";
   const canRegister = role !== null && can(role, "animal.write");
   const canCreateFarm = role !== null && can(role, "farm.write");
+  const filtered = Boolean(q || species || category || farmId);
+  const source = `Fuente: registros de este dispositivo${lastSync ? "" : " · aún sin sincronizar"}`;
 
   return (
-    <section>
-      <p className="kicker">Animales</p>
-      <h1>Animales e inventario del hato</h1>
-      <p className="lead">
-        Registro e inventario del hato, con historial individual y control de movimientos.
-      </p>
+    <section className="page">
+      <PageHead
+        kicker="Animales"
+        title="Animales e inventario del hato"
+        lead="Registro e inventario del hato, con historial individual y control de movimientos."
+        actions={
+          <>
+            {canRegister && (
+              <button
+                type="button"
+                className="btn btn-primary"
+                disabled={farms.length === 0}
+                onClick={() => setRegistering(true)}
+              >
+                <PlusCircle size={18} aria-hidden="true" /> Registrar animal
+              </button>
+            )}
+            <button
+              type="button"
+              className="btn btn-ghost hide-mobile"
+              disabled
+              title="Disponible en la semana 12"
+            >
+              <Upload size={18} aria-hidden="true" /> Importar datos
+            </button>
+            <button
+              type="button"
+              className="btn btn-ghost hide-mobile"
+              disabled
+              title="Disponible en la semana 6"
+            >
+              <Scale size={18} aria-hidden="true" /> Iniciar pesaje
+            </button>
+          </>
+        }
+      />
 
-      <div className="cards cards-compact">
-        <article className="card">
-          <p className="card-label">Inventario activo</p>
-          <p className="figure">{num(inv.total)}</p>
-          <p className="card-meta">
-            animales · {num(inv.bovino)} bovinos, {num(inv.bufalino)} bufalinos
-          </p>
-          <p className="card-source">
-            Fuente: registros de este dispositivo{lastSync ? "" : " · aún sin sincronizar"}
-          </p>
-        </article>
+      <div className="kpis kpis-3">
+        <Kpi
+          tone="verde"
+          icon={<Weight size={20} aria-hidden="true" />}
+          label="Inventario activo"
+          value={num(inv.total)}
+          meta="animales"
+          source={source}
+        />
+        <Kpi
+          tone="azul"
+          icon={<SpeciesBadge species="bovino" size={28} />}
+          label="Bovinos"
+          value={num(inv.bovino)}
+          meta="animales activos"
+        />
+        <Kpi
+          tone="violeta"
+          icon={<SpeciesBadge species="bufalino" size={28} />}
+          label="Bufalinos"
+          value={num(inv.bufalino)}
+          meta="animales activos"
+        >
+          {counts.pendiente > 0 && (
+            <p className="kpi-note">{counts.pendiente} pendiente(s) de enviar incluido(s)</p>
+          )}
+        </Kpi>
       </div>
 
-      <div className="toolbar">
-        <label className="grow">
+      {farms.length === 0 && (
+        <div className="banner banner-info">
+          <Building2 size={18} aria-hidden="true" />
+          <span>
+            Este dispositivo aún no tiene fincas. Conéctese y sincronice para descargar las fincas
+            autorizadas{canCreateFarm ? ", o cree una nueva." : "."}
+          </span>
+          {canCreateFarm && (
+            <button
+              type="button"
+              className="btn btn-ghost btn-sm"
+              disabled={!online}
+              onClick={() => setCreatingFarm(true)}
+            >
+              Nueva finca
+            </button>
+          )}
+        </div>
+      )}
+
+      <div className="card filters">
+        <label className="search grow">
           <span className="sr-only">Buscar por identificación</span>
+          <Search size={18} aria-hidden="true" />
           <input
             type="search"
             placeholder="Buscar por arete o identificación"
@@ -127,87 +236,101 @@ export function AnimalsScreen() {
             ))}
           </select>
         </label>
-      </div>
-
-      <div className="actions">
-        {canRegister && (
+        {canCreateFarm && farms.length > 0 && (
           <button
             type="button"
-            className="btn btn-primary"
-            disabled={farms.length === 0}
-            onClick={() => setRegistering(true)}
-          >
-            Registrar animal
-          </button>
-        )}
-        {canCreateFarm && (
-          <button
-            type="button"
-            className="btn btn-ghost"
+            className="btn btn-ghost btn-sm"
             disabled={!online}
             title={online ? undefined : "Crear fincas requiere conexión"}
             onClick={() => setCreatingFarm(true)}
           >
-            Nueva finca
+            <Building2 size={16} aria-hidden="true" /> Nueva finca
           </button>
-        )}
-        {!online && canCreateFarm && (
-          <small className="hint">Crear fincas requiere conexión.</small>
         )}
       </div>
 
-      {farms.length === 0 && (
-        <p className="empty">
-          Este dispositivo aún no tiene fincas. Conéctese y sincronice para descargar las fincas
-          autorizadas
-          {canCreateFarm ? " o cree una nueva." : "."}
-        </p>
-      )}
-
-      <div className="split">
-        <div className="table-wrap">
-          <table>
-            <caption className="sr-only">Animales</caption>
-            <thead>
-              <tr>
-                <th scope="col">Identificación</th>
-                <th scope="col">Especie</th>
-                <th scope="col">Categoría</th>
-                <th scope="col">Finca</th>
-                <th scope="col">Estado</th>
-                <th scope="col">Sincronización</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((r) => (
-                <tr key={r.id} className={r.id === selected ? "selected" : ""}>
-                  <th scope="row" className="mono">
-                    <button type="button" className="row-btn" onClick={() => setSelected(r.id)}>
-                      {r.tag}
-                    </button>
-                  </th>
-                  <td>{SPECIES_LABEL[r.species]}</td>
-                  <td>{CATEGORY_LABEL[r.category]}</td>
-                  <td>{farmName(r.farmId)}</td>
-                  <td>{STATUS_LABEL[r.status]}</td>
-                  <td>
-                    <span className={`chip chip-${r.syncState}`}>{SYNC_LABEL[r.syncState]}</span>
-                  </td>
-                </tr>
-              ))}
-              {rows.length === 0 && (
-                <tr>
-                  <td colSpan={6} className="empty">
-                    {q || species || category || farmId
-                      ? "Ningún animal coincide con los filtros."
-                      : "Todavía no hay animales registrados."}
-                  </td>
-                </tr>
+      <div className={wide ? "split" : undefined}>
+        <div className="card table-card">
+          {rows === null ? (
+            <div className="skeleton-list" aria-busy="true">
+              <span />
+              <span />
+              <span />
+            </div>
+          ) : rows.length === 0 ? (
+            <div className="empty-state">
+              <Search size={28} aria-hidden="true" />
+              <p>
+                {filtered
+                  ? "Ningún animal coincide con los filtros."
+                  : "Todavía no hay animales registrados."}
+              </p>
+              {!filtered && canRegister && farms.length > 0 && (
+                <button
+                  type="button"
+                  className="btn btn-primary"
+                  onClick={() => setRegistering(true)}
+                >
+                  <PlusCircle size={18} aria-hidden="true" /> Registrar el primero
+                </button>
               )}
-            </tbody>
-          </table>
+            </div>
+          ) : (
+            <table>
+              <caption className="sr-only">Animales</caption>
+              <thead>
+                <tr>
+                  <th scope="col">Identificación</th>
+                  <th scope="col">Especie</th>
+                  <th scope="col">Categoría</th>
+                  <th scope="col">Ubicación</th>
+                  <th scope="col">Estado</th>
+                  <th scope="col">Sincronización</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((r) => (
+                  <tr key={r.id} className={r.id === selected ? "selected" : ""}>
+                    <th scope="row">
+                      <button type="button" className="row-btn" onClick={() => setSelected(r.id)}>
+                        <SpeciesBadge species={r.species} />
+                        <span className="mono">{r.tag}</span>
+                      </button>
+                    </th>
+                    <td data-label="Especie">{SPECIES_LABEL[r.species]}</td>
+                    <td data-label="Categoría">{CATEGORY_LABEL[r.category]}</td>
+                    <td data-label="Ubicación">{farmName(r.farmId)}</td>
+                    <td data-label="Estado">
+                      <span className="status">
+                        <span className={`dot dot-${r.status}`} />
+                        {STATUS_LABEL[r.status]}
+                      </span>
+                    </td>
+                    <td data-label="Sincronización">
+                      <SyncChip state={r.syncState} />
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
         </div>
-        <AnimalCard id={selected} farmName={farmName} />
+        {wide ? (
+          <AnimalCard id={selected} farmName={farmName} />
+        ) : (
+          selected && (
+            <>
+              <button
+                type="button"
+                className="backdrop"
+                aria-label="Cerrar ficha"
+                tabIndex={-1}
+                onClick={() => setSelected(null)}
+              />
+              <AnimalCard id={selected} farmName={farmName} onClose={() => setSelected(null)} />
+            </>
+          )
+        )}
       </div>
 
       {registering && <RegisterDialog onClose={() => setRegistering(false)} />}
@@ -216,11 +339,48 @@ export function AnimalsScreen() {
   );
 }
 
-function AnimalCard({ id, farmName }: { id: string | null; farmName(id: string): string }) {
+type Tab = "genealogia" | "movimientos" | "pesos" | "documentos";
+const TABS: { key: Tab; label: string; icon: ReactNode }[] = [
+  { key: "genealogia", label: "Genealogía", icon: <GitBranch size={15} aria-hidden="true" /> },
+  { key: "movimientos", label: "Movimientos", icon: <History size={15} aria-hidden="true" /> },
+  { key: "pesos", label: "Pesos", icon: <Scale size={15} aria-hidden="true" /> },
+  { key: "documentos", label: "Documentos", icon: <FileText size={15} aria-hidden="true" /> },
+];
+
+function Parent({ label, tag }: { label: string; tag: string | null }) {
+  return (
+    <div className={tag ? "tree-node" : "tree-node unknown"}>
+      <small>{label}</small>
+      <strong className="mono">{tag ?? "Desconocido"}</strong>
+    </div>
+  );
+}
+
+function useMedia(query: string): boolean {
+  const [on, setOn] = useState(() => window.matchMedia(query).matches);
+  useEffect(() => {
+    const m = window.matchMedia(query);
+    const h = () => setOn(m.matches);
+    m.addEventListener("change", h);
+    return () => m.removeEventListener("change", h);
+  }, [query]);
+  return on;
+}
+
+function AnimalCard({
+  id,
+  farmName,
+  onClose,
+}: {
+  id: string | null;
+  farmName(id: string): string;
+  onClose?: () => void;
+}) {
   const { dataVersion } = useApp();
   const [a, setA] = useState<AnimalDetail | null>(null);
-  const [mother, setMother] = useState<string>("Desconocida");
-  const [father, setFather] = useState<string>("Desconocido");
+  const [mother, setMother] = useState<string | null>(null);
+  const [father, setFather] = useState<string | null>(null);
+  const [tab, setTab] = useState<Tab>("genealogia");
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: dataVersion fuerza la relectura
   useEffect(() => {
@@ -232,14 +392,10 @@ function AnimalCard({ id, farmName }: { id: string | null; farmName(id: string):
       const d = await localdb.getAnimal(id);
       setA(d);
       setMother(
-        d?.motherId
-          ? ((await localdb.getAnimal(d.motherId))?.tag ?? "No descargada")
-          : "Desconocida",
+        d?.motherId ? ((await localdb.getAnimal(d.motherId))?.tag ?? "No descargada") : null,
       );
       setFather(
-        d?.fatherId
-          ? ((await localdb.getAnimal(d.fatherId))?.tag ?? "No descargado")
-          : "Desconocido",
+        d?.fatherId ? ((await localdb.getAnimal(d.fatherId))?.tag ?? "No descargado") : null,
       );
     })();
   }, [id, dataVersion]);
@@ -247,49 +403,133 @@ function AnimalCard({ id, farmName }: { id: string | null; farmName(id: string):
   if (!a) {
     return (
       <aside className="card sheet">
-        <h2>Ficha del animal</h2>
-        <p className="empty">Seleccione un animal para ver su ficha.</p>
+        <div className="empty-state">
+          <Search size={28} aria-hidden="true" />
+          <h2>Ficha del animal</h2>
+          <p>Seleccione un animal de la lista para ver su ficha e historia individual.</p>
+        </div>
       </aside>
     );
   }
   return (
-    <aside className="card sheet" aria-label="Ficha del animal">
-      <h2>Ficha del animal</h2>
-      <p className="figure mono">{a.tag}</p>
-      <span className={`chip chip-${a.syncState}`}>{SYNC_LABEL[a.syncState]}</span>
-      <dl className="kv">
-        <dt>Especie</dt>
-        <dd>{SPECIES_LABEL[a.species]}</dd>
-        <dt>Sexo</dt>
-        <dd>{SEX_LABEL[a.sex]}</dd>
-        <dt>Categoría</dt>
-        <dd>{CATEGORY_LABEL[a.category]}</dd>
-        <dt>Finca</dt>
-        <dd>{farmName(a.farmId)}</dd>
-        <dt>Estado</dt>
-        <dd>{STATUS_LABEL[a.status]}</dd>
-        <dt>Nacimiento</dt>
-        <dd>
-          {a.birthDate ? `${fecha(a.birthDate.date)} (${a.birthDate.precision})` : "No registrado"}
-        </dd>
-        <dt>Madre</dt>
-        <dd className="mono">{mother}</dd>
-        <dt>Padre</dt>
-        <dd className="mono">{father}</dd>
-      </dl>
-      <h3>Historia individual</h3>
-      {a.entry ? (
-        <ul className="timeline">
-          <li>
-            <strong>{REASON_LABEL[a.entry.reason]}</strong>
-            <span>{fecha(a.entry.occurredAt)}</span>
-            {a.entry.origin && <small>Procedencia: {a.entry.origin}</small>}
-          </li>
-        </ul>
-      ) : (
-        <p className="empty">Sin eventos.</p>
+    <aside className={onClose ? "drawer sheet-drawer" : "card sheet"} aria-label="Ficha del animal">
+      {onClose && (
+        <button
+          type="button"
+          className="icon-btn drawer-close"
+          aria-label="Cerrar ficha"
+          onClick={onClose}
+        >
+          <X size={20} />
+        </button>
       )}
-      {a.notes && <p className="hint">{a.notes}</p>}
+      <header className="sheet-head">
+        <SpeciesBadge species={a.species} size={56} />
+        <div>
+          <p className="card-label">Identificación</p>
+          <p className="sheet-tag mono">{a.tag}</p>
+        </div>
+        <span className="status status-pill">
+          <span className={`dot dot-${a.status}`} />
+          {STATUS_LABEL[a.status]}
+        </span>
+      </header>
+      <SyncChip state={a.syncState} />
+
+      <dl className="facts">
+        <div>
+          <dt>Especie</dt>
+          <dd>{SPECIES_LABEL[a.species]}</dd>
+        </div>
+        <div>
+          <dt>Sexo</dt>
+          <dd>{SEX_LABEL[a.sex]}</dd>
+        </div>
+        <div>
+          <dt>Categoría</dt>
+          <dd>{CATEGORY_LABEL[a.category]}</dd>
+        </div>
+        <div>
+          <dt>Ubicación</dt>
+          <dd>{farmName(a.farmId)}</dd>
+        </div>
+        <div>
+          <dt>Nacimiento</dt>
+          <dd>
+            {a.birthDate
+              ? `${fecha(a.birthDate.date)} (${a.birthDate.precision})`
+              : "No registrado"}
+          </dd>
+        </div>
+      </dl>
+
+      <div className="tabs" role="tablist" aria-label="Historia individual">
+        {TABS.map((t) => (
+          <button
+            key={t.key}
+            type="button"
+            role="tab"
+            id={`tab-${t.key}`}
+            aria-selected={tab === t.key}
+            aria-controls="tabpanel"
+            className={tab === t.key ? "tab-btn active" : "tab-btn"}
+            onClick={() => setTab(t.key)}
+          >
+            {t.icon}
+            {t.label}
+          </button>
+        ))}
+      </div>
+      <div id="tabpanel" role="tabpanel" aria-labelledby={`tab-${tab}`} className="tabpanel">
+        {tab === "genealogia" && (
+          <div className="tree">
+            <div className="tree-parents">
+              <Parent label="Padre" tag={father} />
+              <Parent label="Madre" tag={mother} />
+            </div>
+            <div className="tree-stem" aria-hidden="true" />
+            <div className="tree-node self">
+              <small>Este animal</small>
+              <strong className="mono">{a.tag}</strong>
+            </div>
+            {!mother && !father && (
+              <p className="hint">Ascendencia desconocida: no se completa con datos ficticios.</p>
+            )}
+          </div>
+        )}
+        {tab === "movimientos" &&
+          (a.entry ? (
+            <ul className="timeline">
+              <li>
+                <span className="tl-dot" aria-hidden="true">
+                  <Baby size={14} />
+                </span>
+                <div>
+                  <strong>Ingreso a la finca · {REASON_LABEL[a.entry.reason]}</strong>
+                  <span>{fecha(a.entry.occurredAt)}</span>
+                  {a.entry.origin && <small>Procedencia: {a.entry.origin}</small>}
+                </div>
+              </li>
+            </ul>
+          ) : (
+            <p className="empty">Sin movimientos registrados.</p>
+          ))}
+        {tab === "pesos" && (
+          <div className="empty-state">
+            <Scale size={26} aria-hidden="true" />
+            <p>Los pesajes medidos y estimados aparecerán aquí.</p>
+            <span className="chip chip-soon">Semana 6</span>
+          </div>
+        )}
+        {tab === "documentos" && (
+          <div className="empty-state">
+            <FileText size={26} aria-hidden="true" />
+            <p>Fotos de hierros y soportes del animal (imágenes y PDF hasta 10 MB).</p>
+            <span className="chip chip-soon">Semana 12</span>
+          </div>
+        )}
+      </div>
+      {a.notes && <p className="hint">Observaciones: {a.notes}</p>}
     </aside>
   );
 }
@@ -302,7 +542,7 @@ export function RegisterDialog(props: {
   initial?: AnimalRegisterPayload;
   replaceCommandId?: string;
 }) {
-  const { orgId, refresh, syncNow, online } = useApp();
+  const { orgId, refresh, syncNow, online, notify } = useApp();
   const farms = useFarms();
   const ref = useRef<HTMLDialogElement>(null);
   const init = props.initial;
@@ -407,6 +647,11 @@ export function RegisterDialog(props: {
         return;
       }
       await refresh();
+      notify(
+        online
+          ? `Animal ${payload.tag} guardado. Enviando al servidor…`
+          : `Animal ${payload.tag} guardado en este dispositivo. Se enviará al reconectar.`,
+      );
       close();
       if (online) void syncNow();
     } finally {
