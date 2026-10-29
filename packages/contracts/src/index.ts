@@ -48,12 +48,95 @@ export const AnimalRegisterPayload = z.object({
 });
 export type AnimalRegisterPayload = z.infer<typeof AnimalRegisterPayload>;
 
-export const CommandEnvelope = z.object({
+export const SupplyCategory = z.enum([
+  "alimento",
+  "medicamento",
+  "suplemento",
+  "fertilizante",
+  "material",
+]);
+export type SupplyCategory = z.infer<typeof SupplyCategory>;
+
+export const SupplyUnit = z.enum(["kg", "L", "dosis", "bulto", "unidad"]);
+export type SupplyUnit = z.infer<typeof SupplyUnit>;
+
+const qty = z.number().positive().max(1_000_000_000);
+
+export const SupplyCreatePayload = z.object({
   id: uuid,
+  name: z.string().trim().min(2).max(120),
+  category: SupplyCategory,
+  unit: SupplyUnit,
+  minStock: z.number().min(0).max(1_000_000_000).optional(),
+  notes: z.string().trim().max(300).optional(),
+});
+export type SupplyCreatePayload = z.infer<typeof SupplyCreatePayload>;
+
+export const StockReceivePayload = z.object({
+  supplyId: uuid,
+  farmId: uuid,
+  quantity: qty,
+  occurredOn: isoDate,
+  lotCode: z.string().trim().max(60).optional(),
+  expiresOn: isoDate.optional(),
+  /** Costo unitario en pesos colombianos. Solo lo ven los perfiles con acceso económico. */
+  unitCost: z.number().min(0).max(1_000_000_000).optional(),
+  supplier: z.string().trim().max(120).optional(),
+  note: z.string().trim().max(300).optional(),
+});
+export type StockReceivePayload = z.infer<typeof StockReceivePayload>;
+
+export const ConsumeTarget = z.object({
+  kind: z.enum(["lote", "actividad", "general"]),
+  label: z.string().trim().max(80).optional(),
+});
+export type ConsumeTarget = z.infer<typeof ConsumeTarget>;
+
+export const StockConsumePayload = z.object({
+  supplyId: uuid,
+  farmId: uuid,
+  quantity: qty,
+  occurredOn: isoDate,
+  target: ConsumeTarget,
+  note: z.string().trim().max(300).optional(),
+});
+export type StockConsumePayload = z.infer<typeof StockConsumePayload>;
+
+const base = { id: uuid, clientTs: z.string().datetime({ offset: true }) };
+
+export const AnimalCommand = z.object({
+  ...base,
   type: z.literal("animal.register"),
-  clientTs: z.string().datetime({ offset: true }),
   payload: AnimalRegisterPayload,
 });
+export type AnimalCommand = z.infer<typeof AnimalCommand>;
+
+export const SupplyCreateCommand = z.object({
+  ...base,
+  type: z.literal("supply.create"),
+  payload: SupplyCreatePayload,
+});
+export const StockReceiveCommand = z.object({
+  ...base,
+  type: z.literal("stock.receive"),
+  payload: StockReceivePayload,
+});
+export const StockConsumeCommand = z.object({
+  ...base,
+  type: z.literal("stock.consume"),
+  payload: StockConsumePayload,
+});
+export type SupplyCreateCommand = z.infer<typeof SupplyCreateCommand>;
+export type StockReceiveCommand = z.infer<typeof StockReceiveCommand>;
+export type StockConsumeCommand = z.infer<typeof StockConsumeCommand>;
+
+/** Cualquier comando que un dispositivo puede encolar. */
+export const CommandEnvelope = z.discriminatedUnion("type", [
+  AnimalCommand,
+  SupplyCreateCommand,
+  StockReceiveCommand,
+  StockConsumeCommand,
+]);
 export type CommandEnvelope = z.infer<typeof CommandEnvelope>;
 
 export const PushRequest = z.object({
@@ -97,9 +180,41 @@ export interface AnimalDto {
   entry: { reason: EntryReason; occurredAt: string; origin: string | null } | null;
 }
 
+export interface SupplyDto {
+  id: string;
+  organizationId: string;
+  name: string;
+  category: SupplyCategory;
+  unit: SupplyUnit;
+  minStock: number;
+  notes: string | null;
+}
+
+export interface StockMovementDto {
+  id: string;
+  organizationId: string;
+  farmId: string;
+  supplyId: string;
+  kind: "entrada" | "consumo";
+  quantity: number;
+  lotCode: string | null;
+  expiresOn: string | null;
+  /** Nulo para quien no tiene acceso económico. */
+  unitCost: number | null;
+  supplier: string | null;
+  target: ConsumeTarget | null;
+  occurredOn: string;
+  note: string | null;
+}
+
 export type Change =
   | { version: number; entity: "farm"; op: "upsert"; data: FarmDto }
-  | { version: number; entity: "animal"; op: "upsert"; data: AnimalDto };
+  | { version: number; entity: "animal"; op: "upsert"; data: AnimalDto }
+  | { version: number; entity: "supply"; op: "upsert"; data: SupplyDto }
+  | { version: number; entity: "stock_movement"; op: "upsert"; data: StockMovementDto };
+
+/** Las existencias de insumos son del conjunto de la organización: usan esta "finca" nula en el feed. */
+export const ORG_SCOPE_FARM_ID = "00000000-0000-0000-0000-000000000000";
 
 export interface PullResponse {
   changes: Change[];
@@ -151,5 +266,8 @@ export const ErrorCodes = {
   PADRE_INVALIDO: "PADRE_INVALIDO",
   FECHA_FUTURA: "FECHA_FUTURA",
   ID_EN_USO: "ID_EN_USO",
+  STOCK_INSUFICIENTE: "STOCK_INSUFICIENTE",
+  INSUMO_NO_EXISTE: "INSUMO_NO_EXISTE",
+  INSUMO_DUPLICADO: "INSUMO_DUPLICADO",
 } as const;
 export type ErrorCode = (typeof ErrorCodes)[keyof typeof ErrorCodes];

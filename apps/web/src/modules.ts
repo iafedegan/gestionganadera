@@ -275,7 +275,7 @@ export const MODULES: ModuleDef[] = [
     short: "Compras",
     icon: Package,
     group: "erp",
-    phase: "ERP 1",
+
     title: "Compras, proveedores e insumos",
     lead: "Controle lo que entra a la finca: alimentos, medicamentos, sales y materiales, con lote y vencimiento.",
     note: "Cada consumo se asigna a un lote o actividad, nunca a un animal individual si no se midió así.",

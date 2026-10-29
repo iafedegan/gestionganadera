@@ -14,6 +14,7 @@ import {
   KeyRound,
   LogOut,
   Menu,
+  Package,
   PawPrint,
   PlusCircle,
   RefreshCw,
@@ -27,7 +28,7 @@ import { type FormEvent, type ReactNode, useEffect, useState } from "react";
 import { Pasture } from "./Pasture";
 import { RegisterDialog } from "./animals";
 import { Kpi, PageHead } from "./components";
-import { CODE_LABEL, SPECIES_LABEL, fecha, fechaHora, num } from "./labels";
+import { CODE_LABEL, KIND_LABEL, fecha, fechaHora, num } from "./labels";
 import { type OutboxItem, localdb } from "./lib/localdb";
 import { lastEmail } from "./lib/session";
 import { MODULES, type ModuleDef, type ModuleKey, moduleByKey } from "./modules";
@@ -41,6 +42,7 @@ import {
   useSwipeDismiss,
 } from "./native";
 import { useApp } from "./state";
+import { statusOf } from "./supplies";
 
 export type { ModuleKey } from "./modules";
 
@@ -567,10 +569,21 @@ export function Home({
 }) {
   const { orgId, counts, dataVersion, lastSync, online, session, syncNow, syncing } = useApp();
   const [inv, setInv] = useState<{ total: number; bovino: number; bufalino: number } | null>(null);
+  const [stock, setStock] = useState({ low: 0, soon: 0, expired: 0 });
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: dataVersion fuerza la relectura
   useEffect(() => {
     void localdb.counts(orgId).then(setInv);
+    void localdb.supplyOverview({ orgId }).then((list) => {
+      const c = { low: 0, soon: 0, expired: 0 };
+      for (const s of list) {
+        const st = statusOf(s);
+        if (st === "bajo_minimo" || (st === "sin_existencia" && s.minStock > 0)) c.low++;
+        else if (st === "vence_pronto") c.soon++;
+        else if (st === "vencido") c.expired++;
+      }
+      setStock(c);
+    });
   }, [orgId, dataVersion]);
 
   const revisar = counts.rechazado + counts.conflicto;
@@ -591,6 +604,30 @@ export function Home({
       icon: <AlertTriangle size={20} />,
       title: `${revisar} registro(s) no se pudieron confirmar`,
       text: "Fueron rechazados o chocan con un dato ya confirmado. Corríjalos para que se envíen.",
+    });
+  }
+  if (stock.expired > 0) {
+    alerts.push({
+      tone: "error",
+      icon: <AlertTriangle size={20} />,
+      title: `${stock.expired} insumo(s) con lotes vencidos en bodega`,
+      text: "No se pueden consumir. Revíselos en Compras e insumos.",
+    });
+  }
+  if (stock.soon > 0) {
+    alerts.push({
+      tone: "warn",
+      icon: <Clock size={20} />,
+      title: `${stock.soon} insumo(s) vencen en los próximos 30 días`,
+      text: "Use primero los lotes que vencen antes (el sistema los descuenta así).",
+    });
+  }
+  if (stock.low > 0) {
+    alerts.push({
+      tone: "info",
+      icon: <Package size={20} />,
+      title: `${stock.low} insumo(s) por debajo del mínimo`,
+      text: "Conviene reponerlos antes de que falten.",
     });
   }
   if (counts.pendiente > 0) {
@@ -829,7 +866,8 @@ function SyncDrawer({ onClose }: { onClose(): void }) {
 
   async function fix(id: string) {
     const cmd = await localdb.outboxGetCommand(id);
-    if (cmd) setFixing({ payload: cmd.payload, commandId: id });
+    // Solo las altas de animales se corrigen en un formulario; el resto se descarta y se vuelve a capturar.
+    if (cmd?.type === "animal.register") setFixing({ payload: cmd.payload, commandId: id });
   }
 
   async function discard(id: string) {
@@ -912,8 +950,8 @@ function SyncDrawer({ onClose }: { onClose(): void }) {
             {items.map((it) => (
               <li key={it.id} className={`ob ob-${it.state}`}>
                 <div>
-                  <strong className="mono">{it.tag}</strong>
-                  <span className="ob-species"> · {SPECIES_LABEL[it.species] ?? it.species}</span>
+                  <strong className="mono">{it.label}</strong>
+                  <span className="ob-species"> · {KIND_LABEL[it.kind] ?? it.kind}</span>
                   <p className="ob-state">
                     {it.state === "pendiente" && "Pendiente de enviar"}
                     {it.state === "rechazado" &&
@@ -926,13 +964,15 @@ function SyncDrawer({ onClose }: { onClose(): void }) {
                 </div>
                 {(it.state === "rechazado" || it.state === "conflicto") && (
                   <div className="ob-actions">
-                    <button
-                      type="button"
-                      className="btn btn-ghost btn-sm"
-                      onClick={() => void fix(it.id)}
-                    >
-                      Corregir
-                    </button>
+                    {it.kind === "animal.register" && (
+                      <button
+                        type="button"
+                        className="btn btn-ghost btn-sm"
+                        onClick={() => void fix(it.id)}
+                      >
+                        Corregir
+                      </button>
+                    )}
                     <button
                       type="button"
                       className="btn btn-ghost btn-sm"

@@ -22,6 +22,33 @@ export const STATUS_LABEL: Record<string, string> = {
   muerto: "Muerto",
   otra_salida: "Otra salida",
 };
+export const KIND_LABEL: Record<string, string> = {
+  "animal.register": "Alta de animal",
+  "supply.create": "Nuevo insumo",
+  "stock.receive": "Recepción de insumo",
+  "stock.consume": "Consumo de insumo",
+};
+export const SUPPLY_CATEGORY_LABEL: Record<string, string> = {
+  alimento: "Alimento",
+  medicamento: "Medicamento",
+  suplemento: "Suplemento y sales",
+  fertilizante: "Fertilizante",
+  material: "Material",
+};
+export const UNIT_LABEL: Record<string, string> = {
+  kg: "kg",
+  L: "L",
+  dosis: "dosis",
+  bulto: "bultos",
+  unidad: "unidades",
+};
+export const STOCK_STATUS_LABEL: Record<string, string> = {
+  normal: "Normal",
+  bajo_minimo: "Bajo mínimo",
+  vence_pronto: "Vence pronto",
+  vencido: "Vencido",
+  sin_existencia: "Sin existencia",
+};
 export const SYNC_LABEL: Record<SyncState, string> = {
   pendiente: "Pendiente de enviar",
   sincronizado: "Sincronizado",
@@ -39,6 +66,9 @@ export const CODE_LABEL: Record<string, string> = {
   PADRE_INVALIDO: "Padre no válido",
   FECHA_FUTURA: "Fecha futura",
   ID_EN_USO: "Identificador en uso",
+  STOCK_INSUFICIENTE: "Existencia insuficiente",
+  INSUMO_NO_EXISTE: "Insumo no existe",
+  INSUMO_DUPLICADO: "Insumo duplicado",
 };
 
 const nf = new Intl.NumberFormat("es-CO");

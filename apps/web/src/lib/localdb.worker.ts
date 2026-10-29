@@ -1,5 +1,14 @@
 /// <reference lib="webworker" />
-import type { AnimalDto, Change, CommandEnvelope } from "@ganaderia/contracts";
+import type {
+  AnimalCommand,
+  AnimalDto,
+  Change,
+  CommandEnvelope,
+  ConsumeTarget,
+  StockConsumeCommand,
+  StockReceiveCommand,
+  SupplyCreateCommand,
+} from "@ganaderia/contracts";
 import sqlite3InitModule, { type Database } from "@sqlite.org/sqlite-wasm";
 
 /**
@@ -41,13 +50,49 @@ export interface AnimalDetail extends LocalAnimal {
 export interface OutboxItem {
   id: string;
   orgId: string;
-  animalId: string;
+  kind: CommandEnvelope["type"];
+  /** Texto corto para reconocer el registro (arete, nombre del insumo…). */
+  label: string;
   state: "pendiente" | "enviado" | "rechazado" | "conflicto";
   errorCode: string | null;
   errorMessage: string | null;
   createdAt: string;
-  tag: string;
-  species: string;
+}
+
+export interface SupplyLot {
+  lotCode: string | null;
+  expiresOn: string | null;
+  balance: number;
+}
+
+export interface SupplyOverview {
+  id: string;
+  name: string;
+  category: string;
+  unit: string;
+  minStock: number;
+  syncState: SyncState;
+  /** Existencia confirmada por el servidor. */
+  onHand: number;
+  /** Cambio por registros aún sin enviar (positivo recibe, negativo consume). */
+  pending: number;
+  lots: SupplyLot[];
+  nearestExpiry: string | null;
+}
+
+export interface StockRow {
+  id: string;
+  farmId: string;
+  kind: "entrada" | "consumo";
+  quantity: number;
+  lotCode: string | null;
+  expiresOn: string | null;
+  occurredOn: string;
+  unitCost: number | null;
+  supplier: string | null;
+  target: ConsumeTarget | null;
+  note: string | null;
+  pending: boolean;
 }
 
 const PBKDF2_ITERATIONS = 600_000;
@@ -115,11 +160,44 @@ const SCHEMA = `
     sync_state TEXT NOT NULL, payload BLOB NOT NULL);
   CREATE INDEX IF NOT EXISTS animal_tag ON animal (tag);
   CREATE INDEX IF NOT EXISTS animal_org ON animal (org_id, status);
+  CREATE TABLE IF NOT EXISTS supply (
+    id TEXT PRIMARY KEY, org_id TEXT NOT NULL, name TEXT NOT NULL, category TEXT NOT NULL,
+    unit TEXT NOT NULL, min_stock REAL NOT NULL DEFAULT 0, sync_state TEXT NOT NULL, payload BLOB NOT NULL);
+  CREATE TABLE IF NOT EXISTS stock_movement (
+    id TEXT PRIMARY KEY, org_id TEXT NOT NULL, farm_id TEXT NOT NULL, supply_id TEXT NOT NULL,
+    kind TEXT NOT NULL, quantity REAL NOT NULL, lot_code TEXT, expires_on TEXT, occurred_on TEXT NOT NULL,
+    payload BLOB NOT NULL);
+  CREATE INDEX IF NOT EXISTS stock_by_supply ON stock_movement (supply_id, farm_id);
+`;
+
+const OUTBOX = `
   CREATE TABLE IF NOT EXISTS outbox (
     seq INTEGER PRIMARY KEY AUTOINCREMENT, id TEXT NOT NULL UNIQUE, org_id TEXT NOT NULL,
-    animal_id TEXT NOT NULL, state TEXT NOT NULL, body BLOB NOT NULL,
+    kind TEXT NOT NULL, entity_id TEXT, label TEXT NOT NULL,
+    supply_id TEXT, farm_id TEXT, qty_delta REAL,
+    state TEXT NOT NULL, body BLOB NOT NULL,
     error_code TEXT, error_msg TEXT, created_at TEXT NOT NULL, sent_at TEXT);
 `;
+
+/** Versión 2: cola de comandos genérica (antes solo altas de animales) y tablas de insumos. */
+function migrate(d: Database): void {
+  const version = Number(d.selectValue("PRAGMA user_version"));
+  const legacy =
+    Number(
+      d.selectValue("SELECT count(*) FROM pragma_table_info('outbox') WHERE name = 'animal_id'"),
+    ) > 0;
+  if (legacy) d.exec("ALTER TABLE outbox RENAME TO outbox_v1");
+  d.exec(SCHEMA);
+  d.exec(OUTBOX);
+  if (legacy) {
+    d.exec(`INSERT INTO outbox (seq, id, org_id, kind, entity_id, label, state, body, error_code, error_msg, created_at, sent_at)
+            SELECT o.seq, o.id, o.org_id, 'animal.register', o.animal_id, coalesce(a.tag, '(sin arete)'),
+                   o.state, o.body, o.error_code, o.error_msg, o.created_at, o.sent_at
+              FROM outbox_v1 o LEFT JOIN animal a ON a.id = o.animal_id;
+            DROP TABLE outbox_v1;`);
+  }
+  if (version < 2) d.exec("PRAGMA user_version = 2");
+}
 
 async function openDb(userId: string): Promise<void> {
   if (db && currentUser === userId) return;
@@ -127,7 +205,7 @@ async function openDb(userId: string): Promise<void> {
   const sqlite3 = await sqlite3InitModule();
   const pool = await sqlite3.installOpfsSAHPoolVfs({ name: "ganaderia-pool", clearOnInit: false });
   db = new pool.OpfsSAHPoolDb(`/ganaderia-${userId}.db`);
-  db.exec(SCHEMA);
+  migrate(db);
   currentUser = userId;
 }
 
@@ -187,7 +265,9 @@ const api = {
   /** Borra los datos locales del usuario (uso: contraseña cambiada o cierre definitivo). */
   wipe(): void {
     const d = requireDb();
-    d.exec("DELETE FROM animal; DELETE FROM farm; DELETE FROM outbox; DELETE FROM meta;");
+    d.exec(
+      "DELETE FROM animal; DELETE FROM farm; DELETE FROM supply; DELETE FROM stock_movement; DELETE FROM outbox; DELETE FROM meta;",
+    );
   },
 
   getMeta(k: string): string | null {
@@ -208,7 +288,7 @@ const api = {
     scope: string;
   }): Promise<{ applied: number }> {
     const d = requireDb();
-    const prepared: { c: Change; payload?: Uint8Array }[] = [];
+    const prepared: { c: Change; payload?: Uint8Array<ArrayBuffer> }[] = [];
     for (const c of args.changes) {
       if (c.entity === "animal") {
         const { data } = c;
@@ -221,6 +301,21 @@ const api = {
               fatherId: data.fatherId,
               notes: data.notes,
               entry: data.entry,
+            }),
+          ),
+        });
+      } else if (c.entity === "supply") {
+        prepared.push({ c, payload: await seal(JSON.stringify({ notes: c.data.notes })) });
+      } else if (c.entity === "stock_movement") {
+        const m = c.data;
+        prepared.push({
+          c,
+          payload: await seal(
+            JSON.stringify({
+              unitCost: m.unitCost,
+              supplier: m.supplier,
+              target: m.target,
+              note: m.note,
             }),
           ),
         });
@@ -241,7 +336,7 @@ const api = {
               c.data.speciesPresent.join(","),
             ],
           });
-        } else {
+        } else if (c.entity === "animal") {
           const a = c.data;
           d.exec({
             sql: `INSERT INTO animal (id, org_id, farm_id, tag, species, sex, category, status, sync_state, payload)
@@ -258,7 +353,43 @@ const api = {
               a.sex,
               a.category,
               a.status,
-              payload as Uint8Array,
+              payload as Uint8Array<ArrayBuffer>,
+            ],
+          });
+        } else if (c.entity === "supply") {
+          const u = c.data;
+          d.exec({
+            sql: `INSERT INTO supply (id, org_id, name, category, unit, min_stock, sync_state, payload)
+                  VALUES (?,?,?,?,?,?,'sincronizado',?)
+                  ON CONFLICT (id) DO UPDATE SET name=excluded.name, category=excluded.category, unit=excluded.unit,
+                    min_stock=excluded.min_stock, sync_state='sincronizado', payload=excluded.payload`,
+            bind: [
+              u.id,
+              u.organizationId,
+              u.name,
+              u.category,
+              u.unit,
+              u.minStock,
+              payload as Uint8Array<ArrayBuffer>,
+            ],
+          });
+        } else {
+          const m = c.data;
+          d.exec({
+            sql: `INSERT OR REPLACE INTO stock_movement
+                  (id, org_id, farm_id, supply_id, kind, quantity, lot_code, expires_on, occurred_on, payload)
+                  VALUES (?,?,?,?,?,?,?,?,?,?)`,
+            bind: [
+              m.id,
+              m.organizationId,
+              m.farmId,
+              m.supplyId,
+              m.kind,
+              m.quantity,
+              m.lotCode,
+              m.expiresOn,
+              m.occurredOn,
+              payload as Uint8Array<ArrayBuffer>,
             ],
           });
         }
@@ -283,7 +414,7 @@ const api = {
   resetSynced(): void {
     const d = requireDb();
     d.exec(
-      "DELETE FROM animal WHERE sync_state = 'sincronizado'; DELETE FROM farm; DELETE FROM meta WHERE k IN ('cursor','scope');",
+      "DELETE FROM animal WHERE sync_state = 'sincronizado'; DELETE FROM supply WHERE sync_state = 'sincronizado'; DELETE FROM stock_movement; DELETE FROM farm; DELETE FROM meta WHERE k IN ('cursor','scope');",
     );
   },
 
@@ -380,7 +511,7 @@ const api = {
   /** Alta local: guarda el animal como pendiente y encola el comando en la misma transacción. */
   async enqueueRegister(args: {
     orgId: string;
-    command: CommandEnvelope;
+    command: AnimalCommand;
   }): Promise<{ ok: true } | { ok: false; code: string; message: string }> {
     const d = requireDb();
     const p = args.command.payload;
@@ -419,8 +550,8 @@ const api = {
         bind: [p.id, args.orgId, p.farmId, p.tag, p.species, p.sex, p.category, payload],
       });
       d.exec({
-        sql: "INSERT INTO outbox (id, org_id, animal_id, state, body, created_at) VALUES (?,?,?,'pendiente',?,?)",
-        bind: [args.command.id, args.orgId, p.id, body, new Date().toISOString()],
+        sql: "INSERT INTO outbox (id, org_id, kind, entity_id, label, state, body, created_at) VALUES (?,?,'animal.register',?,?,'pendiente',?,?)",
+        bind: [args.command.id, args.orgId, p.id, p.tag, body, new Date().toISOString()],
       });
       d.exec("COMMIT");
     } catch (err) {
@@ -465,7 +596,11 @@ const api = {
               ? "rechazado"
               : "conflicto";
         d.exec({
-          sql: "UPDATE animal SET sync_state = ? WHERE id = (SELECT animal_id FROM outbox WHERE id = ?)",
+          sql: "UPDATE animal SET sync_state = ? WHERE id = (SELECT entity_id FROM outbox WHERE id = ? AND kind = 'animal.register')",
+          bind: [animalState, r.id],
+        });
+        d.exec({
+          sql: "UPDATE supply SET sync_state = ? WHERE id = (SELECT entity_id FROM outbox WHERE id = ? AND kind = 'supply.create')",
           bind: [animalState, r.id],
         });
       }
@@ -478,21 +613,19 @@ const api = {
 
   outboxList(orgId: string): OutboxItem[] {
     const rows = requireDb().selectObjects(
-      `SELECT o.id, o.org_id, o.animal_id, o.state, o.error_code, o.error_msg, o.created_at, a.tag, a.species
-         FROM outbox o LEFT JOIN animal a ON a.id = o.animal_id
-        WHERE o.org_id = ? AND o.state <> 'enviado' ORDER BY o.seq DESC`,
+      `SELECT id, org_id, kind, label, state, error_code, error_msg, created_at
+         FROM outbox WHERE org_id = ? AND state <> 'enviado' ORDER BY seq DESC`,
       [orgId],
     ) as Record<string, string | null>[];
     return rows.map((r) => ({
       id: r.id as string,
       orgId: r.org_id as string,
-      animalId: r.animal_id as string,
+      kind: r.kind as OutboxItem["kind"],
+      label: r.label as string,
       state: r.state as OutboxItem["state"],
       errorCode: r.error_code ?? null,
       errorMessage: r.error_msg ?? null,
       createdAt: r.created_at as string,
-      tag: (r.tag as string | null) ?? "(sin arete)",
-      species: (r.species as string | null) ?? "",
     }));
   },
 
@@ -502,7 +635,11 @@ const api = {
     d.exec("BEGIN");
     try {
       d.exec({
-        sql: "DELETE FROM animal WHERE sync_state IN ('rechazado','conflicto','pendiente') AND id = (SELECT animal_id FROM outbox WHERE id = ?)",
+        sql: "DELETE FROM animal WHERE sync_state IN ('rechazado','conflicto','pendiente') AND id = (SELECT entity_id FROM outbox WHERE id = ? AND kind = 'animal.register')",
+        bind: [id],
+      });
+      d.exec({
+        sql: "DELETE FROM supply WHERE sync_state IN ('rechazado','conflicto','pendiente') AND id = (SELECT entity_id FROM outbox WHERE id = ? AND kind = 'supply.create')",
         bind: [id],
       });
       d.exec({ sql: "DELETE FROM outbox WHERE id = ?", bind: [id] });
@@ -520,6 +657,202 @@ const api = {
     }[];
     const r = rows[0];
     return r ? (JSON.parse(await unseal(r.body)) as CommandEnvelope) : null;
+  },
+
+  /** Alta local de un insumo: queda pendiente y se encola. */
+  async enqueueSupplyCreate(args: {
+    orgId: string;
+    command: SupplyCreateCommand;
+  }): Promise<{ ok: true } | { ok: false; code: string; message: string }> {
+    const d = requireDb();
+    const p = args.command.payload;
+    const dup = d.selectValue(
+      "SELECT id FROM supply WHERE org_id = ? AND lower(name) = lower(?) AND id <> ? LIMIT 1",
+      [args.orgId, p.name, p.id],
+    );
+    if (dup)
+      return { ok: false, code: "INSUMO_DUPLICADO", message: `Ya existe el insumo «${p.name}».` };
+    const payload = await seal(JSON.stringify({ notes: p.notes ?? null }));
+    const body = await seal(JSON.stringify(args.command));
+    d.exec("BEGIN");
+    try {
+      d.exec({
+        sql: `INSERT INTO supply (id, org_id, name, category, unit, min_stock, sync_state, payload)
+              VALUES (?,?,?,?,?,?,'pendiente',?)
+              ON CONFLICT (id) DO UPDATE SET name=excluded.name, category=excluded.category, unit=excluded.unit,
+                min_stock=excluded.min_stock, sync_state='pendiente', payload=excluded.payload`,
+        bind: [p.id, args.orgId, p.name, p.category, p.unit, p.minStock ?? 0, payload],
+      });
+      d.exec({
+        sql: "INSERT INTO outbox (id, org_id, kind, entity_id, label, state, body, created_at) VALUES (?,?,'supply.create',?,?,'pendiente',?,?)",
+        bind: [args.command.id, args.orgId, p.id, p.name, body, new Date().toISOString()],
+      });
+      d.exec("COMMIT");
+    } catch (err) {
+      d.exec("ROLLBACK");
+      throw err;
+    }
+    return { ok: true };
+  },
+
+  /** Recepción o consumo local. El consumo se valida contra la existencia vigente conocida. */
+  async enqueueStock(args: {
+    orgId: string;
+    label: string;
+    command: StockReceiveCommand | StockConsumeCommand;
+  }): Promise<{ ok: true } | { ok: false; code: string; message: string }> {
+    const d = requireDb();
+    const { command } = args;
+    const p = command.payload;
+    let delta = p.quantity;
+    if (command.type === "stock.consume") {
+      const lots = d.selectObjects(
+        `SELECT expires_on, sum(CASE kind WHEN 'entrada' THEN quantity ELSE -quantity END) AS bal
+           FROM stock_movement WHERE supply_id = ? AND farm_id = ?
+          GROUP BY lot_code, expires_on HAVING bal > 0`,
+        [p.supplyId, p.farmId],
+      ) as { expires_on: string | null; bal: number }[];
+      const vigente = lots
+        .filter((l) => !(l.expires_on && l.expires_on < command.payload.occurredOn))
+        .reduce((a, l) => a + l.bal, 0);
+      const pendiente = Number(
+        d.selectValue(
+          "SELECT coalesce(sum(qty_delta), 0) FROM outbox WHERE state = 'pendiente' AND supply_id = ? AND farm_id = ?",
+          [p.supplyId, p.farmId],
+        ),
+      );
+      const disponible = Math.round((vigente + pendiente) * 1000) / 1000;
+      if (p.quantity > disponible) {
+        return {
+          ok: false,
+          code: "STOCK_INSUFICIENTE",
+          message: `Existencia insuficiente: hay ${disponible} disponibles en este dispositivo.`,
+        };
+      }
+      delta = -p.quantity;
+    }
+    const body = await seal(JSON.stringify(command));
+    d.exec({
+      sql: `INSERT INTO outbox (id, org_id, kind, entity_id, label, supply_id, farm_id, qty_delta, state, body, created_at)
+            VALUES (?,?,?,?,?,?,?,?,'pendiente',?,?)`,
+      bind: [
+        command.id,
+        args.orgId,
+        command.type,
+        p.supplyId,
+        args.label,
+        p.supplyId,
+        p.farmId,
+        delta,
+        body,
+        new Date().toISOString(),
+      ],
+    });
+    return { ok: true };
+  },
+
+  /** Resumen de existencias por insumo: confirmado, pendiente, lotes y vencimiento más próximo. */
+  supplyOverview(args: { orgId: string; farmId?: string }): SupplyOverview[] {
+    const d = requireDb();
+    const farm = args.farmId ? " AND farm_id = ?" : "";
+    const fbind = args.farmId ? [args.orgId, args.farmId] : [args.orgId];
+    const supplies = d.selectObjects(
+      "SELECT id, name, category, unit, min_stock, sync_state FROM supply WHERE org_id = ? ORDER BY name",
+      [args.orgId],
+    ) as Record<string, string | number>[];
+    const lots = d.selectObjects(
+      `SELECT supply_id, lot_code, expires_on,
+              sum(CASE kind WHEN 'entrada' THEN quantity ELSE -quantity END) AS bal
+         FROM stock_movement WHERE org_id = ?${farm}
+        GROUP BY supply_id, lot_code, expires_on HAVING bal > 0.0005`,
+      fbind,
+    ) as { supply_id: string; lot_code: string | null; expires_on: string | null; bal: number }[];
+    const pend = d.selectObjects(
+      `SELECT supply_id, sum(qty_delta) AS delta FROM outbox
+        WHERE org_id = ? AND state = 'pendiente' AND supply_id IS NOT NULL${farm}
+        GROUP BY supply_id`,
+      fbind,
+    ) as { supply_id: string; delta: number }[];
+    return supplies.map((s) => {
+      const mine = lots
+        .filter((l) => l.supply_id === s.id)
+        .map((l) => ({
+          lotCode: l.lot_code,
+          expiresOn: l.expires_on,
+          balance: Math.round(l.bal * 1000) / 1000,
+        }))
+        .sort((a, b) => ((a.expiresOn ?? "9999") < (b.expiresOn ?? "9999") ? -1 : 1));
+      const expiries = mine.map((l) => l.expiresOn).filter((x): x is string => x !== null);
+      return {
+        id: s.id as string,
+        name: s.name as string,
+        category: s.category as string,
+        unit: s.unit as string,
+        minStock: Number(s.min_stock),
+        syncState: s.sync_state as SyncState,
+        onHand: Math.round(mine.reduce((a, l) => a + l.balance, 0) * 1000) / 1000,
+        pending:
+          Math.round(Number(pend.find((p) => p.supply_id === s.id)?.delta ?? 0) * 1000) / 1000,
+        lots: mine,
+        nearestExpiry: expiries.length ? (expiries.sort()[0] ?? null) : null,
+      };
+    });
+  },
+
+  /** Historial de un insumo: movimientos confirmados y registros pendientes de enviar. */
+  async stockMovements(args: { orgId: string; supplyId: string; limit?: number }): Promise<
+    StockRow[]
+  > {
+    const d = requireDb();
+    const rows = d.selectObjects(
+      `SELECT * FROM stock_movement WHERE org_id = ? AND supply_id = ?
+        ORDER BY occurred_on DESC, rowid DESC LIMIT ?`,
+      [args.orgId, args.supplyId, args.limit ?? 60],
+    ) as Record<string, unknown>[];
+    const out: StockRow[] = [];
+    for (const r of rows) {
+      const extra = JSON.parse(await unseal(r.payload as Uint8Array<ArrayBuffer>)) as {
+        unitCost: number | null;
+        supplier: string | null;
+        target: StockRow["target"];
+        note: string | null;
+      };
+      out.push({
+        id: r.id as string,
+        farmId: r.farm_id as string,
+        kind: r.kind as StockRow["kind"],
+        quantity: Number(r.quantity),
+        lotCode: (r.lot_code as string | null) ?? null,
+        expiresOn: (r.expires_on as string | null) ?? null,
+        occurredOn: r.occurred_on as string,
+        pending: false,
+        ...extra,
+      });
+    }
+    const pend = d.selectObjects(
+      "SELECT id, body FROM outbox WHERE org_id = ? AND state = 'pendiente' AND supply_id = ? ORDER BY seq DESC",
+      [args.orgId, args.supplyId],
+    ) as { id: string; body: Uint8Array<ArrayBuffer> }[];
+    const pending: StockRow[] = [];
+    for (const r of pend) {
+      const c = JSON.parse(await unseal(r.body)) as StockReceiveCommand | StockConsumeCommand;
+      const p = c.payload;
+      pending.push({
+        id: r.id,
+        farmId: p.farmId,
+        kind: c.type === "stock.receive" ? "entrada" : "consumo",
+        quantity: p.quantity,
+        lotCode: c.type === "stock.receive" ? (c.payload.lotCode ?? null) : null,
+        expiresOn: c.type === "stock.receive" ? (c.payload.expiresOn ?? null) : null,
+        occurredOn: p.occurredOn,
+        unitCost: c.type === "stock.receive" ? (c.payload.unitCost ?? null) : null,
+        supplier: c.type === "stock.receive" ? (c.payload.supplier ?? null) : null,
+        target: c.type === "stock.consume" ? c.payload.target : null,
+        note: p.note ?? null,
+        pending: true,
+      });
+    }
+    return [...pending, ...out];
   },
 
   outboxCount(orgId: string): { pendiente: number; rechazado: number; conflicto: number } {

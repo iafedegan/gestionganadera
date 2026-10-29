@@ -1,4 +1,4 @@
-import { type AnimalRegisterPayload, CommandEnvelope, type Species } from "@ganaderia/contracts";
+import { AnimalCommand, type AnimalRegisterPayload, type Species } from "@ganaderia/contracts";
 import {
   type ParentRef,
   can,
@@ -44,7 +44,7 @@ import { useApp } from "./state";
 
 type Farm = { id: string; code: string; name: string; species: string };
 
-function useFarms() {
+export function useFarms() {
   const { orgId, dataVersion } = useApp();
   const [farms, setFarms] = useState<Farm[]>([]);
   // biome-ignore lint/correctness/useExhaustiveDependencies: dataVersion fuerza la relectura
@@ -754,7 +754,7 @@ export function RegisterDialog(props: {
       clientTs: new Date().toISOString(),
       payload,
     };
-    const parsed = CommandEnvelope.safeParse(command);
+    const parsed = AnimalCommand.safeParse(command);
     if (!parsed.success) {
       setError(parsed.error.issues[0]?.message ?? "Revise los datos del formulario.");
       return;
@@ -1002,7 +1002,7 @@ export function RegisterDialog(props: {
   );
 }
 
-function Segmented<T extends string>(props: {
+export function Segmented<T extends string>(props: {
   legend: string;
   value: T;
   options: { value: T; label: string }[];

@@ -412,3 +412,219 @@ describe("fincas", () => {
     expect(no.statusCode).toBe(403);
   });
 });
+
+/* ───────────── ERP 1 · Insumos y existencias ───────────── */
+
+const env = (type: string, payload: Record<string, unknown>, id = uuidv7()) => ({
+  id,
+  type,
+  clientTs: new Date().toISOString(),
+  payload,
+});
+
+const newSupply = (name: string, extra: Record<string, unknown> = {}) =>
+  env("supply.create", {
+    id: uuidv7(),
+    name,
+    category: "suplemento",
+    unit: "kg",
+    minStock: 10,
+    ...extra,
+  });
+
+const receive = (
+  supplyId: string,
+  farmId: string,
+  quantity: number,
+  extra: Record<string, unknown> = {},
+) => env("stock.receive", { supplyId, farmId, quantity, occurredOn: "2026-10-01", ...extra });
+
+const consume = (
+  supplyId: string,
+  farmId: string,
+  quantity: number,
+  extra: Record<string, unknown> = {},
+) =>
+  env("stock.consume", {
+    supplyId,
+    farmId,
+    quantity,
+    occurredOn: "2026-10-20",
+    target: { kind: "lote", label: "Lote 1" },
+    ...extra,
+  });
+
+async function balances(orgId: string, supplyId: string) {
+  return db.tenant(orgId, (q) =>
+    q<{ lot_code: string | null; balance: number }>(
+      `SELECT lot_code, sum(CASE kind WHEN 'entrada' THEN quantity ELSE -quantity END)::float8 AS balance
+         FROM stock_movement WHERE supply_id = $1 GROUP BY lot_code ORDER BY lot_code`,
+      [supplyId],
+    ),
+  );
+}
+
+describe("insumos: catálogo y permisos", () => {
+  it("el propietario crea insumos; el operario no; el nombre no se repite", async () => {
+    const dueno = await loginAs("dueno-a@test.local");
+    const op = await loginAs("operario-a@test.local");
+    const ok = await push(dueno, orgA, [newSupply("Sal mineral")]);
+    expect(ok.body.results[0]?.status).toBe("accepted");
+    const no = await push(op, orgA, [newSupply("Melaza")]);
+    expect(no.body.results[0]).toMatchObject({ status: "rejected", code: "PERMISO_DENEGADO" });
+    const dup = await push(dueno, orgA, [newSupply("sal MINERAL")]);
+    expect(dup.body.results[0]).toMatchObject({ status: "conflict", code: "INSUMO_DUPLICADO" });
+  });
+
+  it("el catálogo llega a quien está restringido a una finca", async () => {
+    const solo = await loginAs("solo-finca2@test.local");
+    const p = await pull(solo, orgA);
+    expect(p.body.changes.some((c) => c.entity === "supply")).toBe(true);
+  });
+});
+
+describe("insumos: recepción y consumo FEFO", () => {
+  it("consume del lote que vence primero y deja el saldo correcto", async () => {
+    const dueno = await loginAs("dueno-a@test.local");
+    const s = newSupply("Vacuna aftosa", { category: "medicamento", unit: "dosis" });
+    await push(dueno, orgA, [s]);
+    const id = s.payload.id as string;
+    await push(dueno, orgA, [
+      receive(id, farmA, 100, { lotCode: "L-TARDE", expiresOn: "2027-06-01" }),
+      receive(id, farmA, 40, { lotCode: "L-PRONTO", expiresOn: "2026-12-15" }),
+    ]);
+    const res = await push(dueno, orgA, [consume(id, farmA, 60)]);
+    expect(res.body.results[0]?.status).toBe("accepted");
+    const b = await balances(orgA, id);
+    expect(b).toEqual([
+      { lot_code: "L-PRONTO", balance: 0 },
+      { lot_code: "L-TARDE", balance: 80 },
+    ]);
+  });
+
+  it("rechaza consumir más de lo disponible y no registra nada", async () => {
+    const dueno = await loginAs("dueno-a@test.local");
+    const s = newSupply("Concentrado");
+    await push(dueno, orgA, [s]);
+    const id = s.payload.id as string;
+    await push(dueno, orgA, [receive(id, farmA, 25)]);
+    const res = await push(dueno, orgA, [consume(id, farmA, 26)]);
+    expect(res.body.results[0]).toMatchObject({ status: "conflict", code: "STOCK_INSUFICIENTE" });
+    expect(await balances(orgA, id)).toEqual([{ lot_code: null, balance: 25 }]);
+  });
+
+  it("nunca consume un lote vencido", async () => {
+    const dueno = await loginAs("dueno-a@test.local");
+    const s = newSupply("Antibiótico", { category: "medicamento", unit: "L" });
+    await push(dueno, orgA, [s]);
+    const id = s.payload.id as string;
+    await push(dueno, orgA, [
+      receive(id, farmA, 10, {
+        occurredOn: "2026-01-01",
+        lotCode: "VIEJO",
+        expiresOn: "2026-06-01",
+      }),
+    ]);
+    const res = await push(dueno, orgA, [consume(id, farmA, 1)]);
+    expect(res.body.results[0]).toMatchObject({ status: "conflict", code: "STOCK_INSUFICIENTE" });
+    expect(res.body.results[0]).toMatchObject({ message: expect.stringContaining("vencidos") });
+  });
+
+  it("un reenvío no descuenta dos veces", async () => {
+    const dueno = await loginAs("dueno-a@test.local");
+    const s = newSupply("Fertilizante", { category: "fertilizante", unit: "bulto" });
+    await push(dueno, orgA, [s]);
+    const id = s.payload.id as string;
+    await push(dueno, orgA, [receive(id, farmA, 50)]);
+    const c = consume(id, farmA, 10);
+    await push(dueno, orgA, [c]);
+    await push(dueno, orgA, [c, c]);
+    expect(await balances(orgA, id)).toEqual([{ lot_code: null, balance: 40 }]);
+  });
+
+  it("rechaza fechas futuras, producto ya vencido al recibirlo e insumo inexistente", async () => {
+    const dueno = await loginAs("dueno-a@test.local");
+    const s = newSupply("Sal blanca");
+    await push(dueno, orgA, [s]);
+    const id = s.payload.id as string;
+    const fut = await push(dueno, orgA, [receive(id, farmA, 1, { occurredOn: "2999-01-01" })]);
+    expect(fut.body.results[0]).toMatchObject({ code: "FECHA_FUTURA" });
+    const venc = await push(dueno, orgA, [receive(id, farmA, 1, { expiresOn: "2026-01-01" })]);
+    expect(venc.body.results[0]).toMatchObject({ code: "VALIDACION" });
+    const nada = await push(dueno, orgA, [receive(uuidv7(), farmA, 1)]);
+    expect(nada.body.results[0]).toMatchObject({ code: "INSUMO_NO_EXISTE" });
+  });
+
+  it("los movimientos no se pueden modificar ni borrar", async () => {
+    await expect(db.admin((q) => q("UPDATE stock_movement SET quantity = 1"))).rejects.toThrow(
+      /solo agregar/,
+    );
+    await expect(db.admin((q) => q("DELETE FROM stock_movement"))).rejects.toThrow(/solo agregar/);
+  });
+});
+
+describe("insumos: permisos por finca, costos y aislamiento", () => {
+  it("el operario recibe y consume, pero no puede registrar costos", async () => {
+    const dueno = await loginAs("dueno-a@test.local");
+    const op = await loginAs("operario-a@test.local");
+    const s = newSupply("Pasto de corte", { category: "alimento" });
+    await push(dueno, orgA, [s]);
+    const id = s.payload.id as string;
+    const r = await push(op, orgA, [receive(id, farmA, 30, { unitCost: 999 })]);
+    expect(r.body.results[0]?.status).toBe("accepted");
+    const costos = await db.tenant(orgA, (q) =>
+      q<{ unit_cost: string | null }>("SELECT unit_cost FROM stock_movement WHERE supply_id = $1", [
+        id,
+      ]),
+    );
+    expect(costos[0]?.unit_cost).toBeNull();
+  });
+
+  it("el costo solo llega a quien tiene acceso económico", async () => {
+    const dueno = await loginAs("dueno-a@test.local");
+    const op = await loginAs("operario-a@test.local");
+    const s = newSupply("Medicamento caro", { category: "medicamento", unit: "dosis" });
+    await push(dueno, orgA, [s]);
+    const id = s.payload.id as string;
+    await push(dueno, orgA, [
+      receive(id, farmA, 5, { unitCost: 12500, supplier: "Droguería Demo" }),
+    ]);
+    const mov = (p: Awaited<ReturnType<typeof pull>>) =>
+      p.body.changes.find((c) => c.entity === "stock_movement" && c.data.supplyId === id) as
+        | { data: { unitCost: number | null; supplier: string | null } }
+        | undefined;
+    expect(mov(await pull(dueno, orgA))?.data.unitCost).toBe(12500);
+    const vistoPorOperario = mov(await pull(op, orgA));
+    expect(vistoPorOperario).toBeDefined();
+    expect(vistoPorOperario?.data.unitCost).toBeNull();
+  });
+
+  it("un usuario de una finca no mueve existencias de otra", async () => {
+    const dueno = await loginAs("dueno-a@test.local");
+    const solo = await loginAs("solo-finca2@test.local");
+    const s = newSupply("Mineral finca 2");
+    await push(dueno, orgA, [s]);
+    const id = s.payload.id as string;
+    const no = await push(solo, orgA, [receive(id, farmA, 5)]);
+    expect(no.body.results[0]).toMatchObject({ status: "rejected", code: "PERMISO_DENEGADO" });
+    const si = await push(solo, orgA, [receive(id, farmA2, 5)]);
+    expect(si.body.results[0]?.status).toBe("accepted");
+    const pa = await pull(solo, orgA);
+    const movs = pa.body.changes.filter((c) => c.entity === "stock_movement");
+    expect(movs.every((c) => c.data.farmId === farmA2)).toBe(true);
+  });
+
+  it("otra organización no ve ni usa los insumos ajenos", async () => {
+    const dueno = await loginAs("dueno-a@test.local");
+    const b = await loginAs("dueno-b@test.local");
+    const s = newSupply("Insumo privado de A");
+    await push(dueno, orgA, [s]);
+    const id = s.payload.id as string;
+    const res = await push(b, orgB, [receive(id, farmB, 5)]);
+    expect(res.body.results[0]).toMatchObject({ status: "rejected", code: "INSUMO_NO_EXISTE" });
+    const pb = await pull(b, orgB);
+    expect(pb.body.changes.some((c) => c.entity === "supply" && c.data.id === id)).toBe(false);
+    const filas = await db.tenant(orgB, (q) => q("SELECT 1 FROM supply WHERE id = $1", [id]));
+    expect(filas).toHaveLength(0);
+  });
+});

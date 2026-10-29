@@ -5,6 +5,8 @@ export type {
   Keystore,
   LocalAnimal,
   OutboxItem,
+  StockRow,
+  SupplyOverview,
   SyncState,
 } from "./localdb.worker";
 

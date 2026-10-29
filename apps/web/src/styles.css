@@ -2428,3 +2428,124 @@ button.user {
   min-height: 0;
   scrollbar-width: thin;
 }
+
+/* ═════════ ERP 1 · Insumos ═════════ */
+.chip-normal {
+  background: #dff1e6;
+  color: #17603a;
+}
+.chip-bajo_minimo,
+.chip-vence_pronto {
+  background: #f7ebc4;
+  color: #5e4809;
+}
+.chip-vencido {
+  background: #f9dcd8;
+  color: #8a1f14;
+}
+.chip-sin_existencia {
+  background: #e7e6e0;
+  color: #4a4a44;
+}
+.banner-error {
+  background: #fbe5e2;
+  color: #7c1d12;
+  border: 1px solid #f0bcb5;
+  border-radius: var(--radio);
+  padding: 12px 16px;
+}
+.cat-badge {
+  color: var(--i, var(--verde-i));
+  background: var(--t, var(--verde-t));
+}
+.cat-alimento {
+  --t: var(--verde-t);
+  --i: var(--verde-i);
+}
+.cat-medicamento {
+  --t: var(--azul-t);
+  --i: var(--azul-i);
+}
+.cat-suplemento {
+  --t: var(--violeta-t);
+  --i: var(--violeta-i);
+}
+.cat-fertilizante {
+  --t: var(--ambar-t);
+  --i: var(--ambar-i);
+}
+.cat-material {
+  --t: #e7e6e0;
+  --i: #4a4a44;
+}
+.sheet-name {
+  font-family: var(--fuente-titular);
+  font-size: 1.4rem;
+  line-height: 1.15;
+}
+.figure.on-hand {
+  font-size: 2.2rem;
+  margin: 10px 0 0;
+}
+.detail-actions {
+  display: flex;
+  gap: 10px;
+  margin: 12px 0 4px;
+  flex-wrap: wrap;
+}
+.pend {
+  color: var(--texto-suave);
+}
+.lots {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+.lot {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 2px 12px;
+  padding: 10px 12px;
+  border: var(--filete);
+  border-radius: var(--radio);
+  font-size: 0.9rem;
+}
+.lot span:nth-child(2) {
+  color: var(--texto-suave);
+  grid-row: 2;
+}
+.lot strong {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+  align-self: center;
+}
+.lot .chip {
+  grid-column: 1;
+  justify-self: start;
+}
+.lot.expired {
+  border-color: #e3a49b;
+  background: #fdf3f1;
+}
+.tl-dot.in {
+  background: var(--verde-t);
+  color: var(--verde-i);
+}
+.tl-dot.out {
+  background: var(--ambar-t);
+  color: var(--ambar-i);
+}
+.moves {
+  max-height: 340px;
+  overflow-y: auto;
+}
+@media (max-width: 900px) {
+  .qa-wide {
+    grid-column: 1 / -1;
+  }
+  .table-card .pend {
+    display: none;
+  }
+}

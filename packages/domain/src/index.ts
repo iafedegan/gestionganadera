@@ -140,20 +140,33 @@ export type Permission =
   | "animal.read"
   | "animal.write"
   | "economy.read"
+  | "supply.write"
+  | "stock.write"
   | "audit.read";
 
 const MATRIX: Record<Role, readonly Permission[]> = {
-  admin_entidad: ["farm.read", "farm.write", "animal.read", "animal.write", "audit.read"],
+  admin_entidad: [
+    "farm.read",
+    "farm.write",
+    "animal.read",
+    "animal.write",
+    "supply.write",
+    "stock.write",
+    "audit.read",
+  ],
   propietario: [
     "farm.read",
     "farm.write",
     "animal.read",
     "animal.write",
     "economy.read",
+    "supply.write",
+    "stock.write",
     "audit.read",
   ],
   // TDR: operario con consulta mínima y captura de eventos autorizados; sin administración.
-  operario: ["farm.read", "animal.read"],
+  // Puede recibir y consumir insumos en bodega, pero no crear el catálogo ni ver costos.
+  operario: ["farm.read", "animal.read", "stock.write"],
   // TDR: técnico con consulta y registro técnico; sin acceso económico por defecto.
   tecnico: ["farm.read", "animal.read"],
 };
@@ -169,3 +182,113 @@ export const ROLE_LABEL: Record<Role, string> = {
   operario: "Operario",
   tecnico: "Técnico o asesor",
 };
+
+/* ───────────── Insumos y existencias (ERP 1) ───────────── */
+
+/** Redondea a 3 decimales: evita acumular error de punto flotante en cantidades. */
+export const round3 = (n: number): number => Math.round((n + Number.EPSILON) * 1000) / 1000;
+
+export interface StockLot {
+  lotCode: string | null;
+  expiresOn: string | null;
+  balance: number;
+}
+
+export interface FefoAllocation {
+  lotCode: string | null;
+  expiresOn: string | null;
+  quantity: number;
+}
+
+export interface FefoResult {
+  ok: boolean;
+  allocations: FefoAllocation[];
+  /** Cantidad disponible para consumir (sin contar lotes vencidos). */
+  available: number;
+  /** Saldo en lotes vencidos, que nunca se consume. */
+  expired: number;
+}
+
+/**
+ * Asigna un consumo a los lotes que vencen primero (FEFO). Los lotes vencidos a la
+ * fecha del consumo no se usan. Si no alcanza, `ok` es falso y no se asigna nada.
+ */
+export function allocateFefo(lots: StockLot[], quantity: number, asOf: string): FefoResult {
+  const live = lots.filter((l) => l.balance > 0 && !(l.expiresOn && l.expiresOn < asOf));
+  const expired = round3(
+    lots
+      .filter((l) => l.balance > 0 && l.expiresOn && l.expiresOn < asOf)
+      .reduce((a, l) => a + l.balance, 0),
+  );
+  const available = round3(live.reduce((a, l) => a + l.balance, 0));
+  if (round3(quantity) > available) return { ok: false, allocations: [], available, expired };
+
+  // Primero los que vencen antes; los que no tienen vencimiento, al final.
+  const sorted = [...live].sort((a, b) => {
+    if (a.expiresOn === b.expiresOn) return (a.lotCode ?? "").localeCompare(b.lotCode ?? "");
+    if (a.expiresOn === null) return 1;
+    if (b.expiresOn === null) return -1;
+    return a.expiresOn < b.expiresOn ? -1 : 1;
+  });
+  let left = round3(quantity);
+  const allocations: FefoAllocation[] = [];
+  for (const lot of sorted) {
+    if (left <= 0) break;
+    const take = round3(Math.min(lot.balance, left));
+    allocations.push({ lotCode: lot.lotCode, expiresOn: lot.expiresOn, quantity: take });
+    left = round3(left - take);
+  }
+  return { ok: true, allocations, available, expired };
+}
+
+export interface StockAlertInput {
+  onHand: number;
+  minStock: number;
+  /** Vencimiento más próximo entre lotes con saldo. */
+  nearestExpiry: string | null;
+  today: string;
+  /** Días de anticipación para avisar un vencimiento. */
+  warnDays?: number;
+}
+
+export type StockStatus = "normal" | "bajo_minimo" | "vence_pronto" | "vencido" | "sin_existencia";
+
+const addDays = (iso: string, days: number): string => {
+  const [y, m, d] = iso.split("-").map(Number) as [number, number, number];
+  const t = new Date(Date.UTC(y, m - 1, d + days));
+  return t.toISOString().slice(0, 10);
+};
+
+/** Estado de un insumo; el vencimiento pesa más que el mínimo porque es un riesgo, no un trámite. */
+export function stockStatus(i: StockAlertInput): StockStatus {
+  if (i.onHand <= 0) return "sin_existencia";
+  if (i.nearestExpiry && i.nearestExpiry < i.today) return "vencido";
+  if (i.nearestExpiry && i.nearestExpiry <= addDays(i.today, i.warnDays ?? 30))
+    return "vence_pronto";
+  if (i.minStock > 0 && i.onHand < i.minStock) return "bajo_minimo";
+  return "normal";
+}
+
+export interface StockReceiveInput {
+  quantity: number;
+  occurredOn: string;
+  expiresOn?: string | undefined;
+}
+
+/** Reglas de una recepción de insumos. */
+export function validateStockReceive(
+  input: StockReceiveInput,
+  ctx: { today: string },
+): DomainIssue[] {
+  const issues: DomainIssue[] = [];
+  if (input.occurredOn > ctx.today) {
+    issues.push({ code: ErrorCodes.FECHA_FUTURA, message: "La fecha de recepción es futura." });
+  }
+  if (input.expiresOn && input.expiresOn < input.occurredOn) {
+    issues.push({
+      code: ErrorCodes.VALIDACION,
+      message: "El producto ya estaba vencido al recibirlo.",
+    });
+  }
+  return issues;
+}

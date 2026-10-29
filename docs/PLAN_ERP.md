@@ -15,7 +15,7 @@ Principio: una compra, un consumo, una venta o un jornal **nunca crea un dato pr
 | Operación del hato | Inicio, Animales | Disponible |
 | | Producción, Reproducción, Sanidad | Planificado (semanas 6 a 8) |
 | | Pasturas y alimentación, Economía, Asistencia técnica | Planificado (semana 11 y Fase 2) |
-| **ERP** | **Compras e insumos** | ERP 1 |
+| **ERP** | **Compras e insumos** | **ERP 1 · primera etapa disponible** (catálogo, recepción, consumo FEFO, alertas); faltan proveedores y órdenes de compra |
 | | **Ventas y clientes** | ERP 2 |
 | | **Personal** · **Maquinaria y activos** | ERP 3 |
 | | **Contabilidad y fiscal** (incluye costos y rentabilidad) | ERP 4 |
