@@ -39,6 +39,7 @@ import {
 } from "./labels";
 import { ApiError, api } from "./lib/api";
 import { type AnimalDetail, type LocalAnimal, localdb } from "./lib/localdb";
+import { useMedia, useSwipeDismiss } from "./native";
 import { useApp } from "./state";
 
 type Farm = { id: string; code: string; name: string; species: string };
@@ -90,6 +91,7 @@ export function AnimalsScreen() {
   const wide = useMedia("(min-width: 1500px)");
   const mobile = useMedia("(max-width: 900px)");
   const [filtersOpen, setFiltersOpen] = useState(false);
+  const filterSwipe = useSwipeDismiss<HTMLElement>(() => setFiltersOpen(false));
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: dataVersion fuerza la relectura
   useEffect(() => {
@@ -394,7 +396,13 @@ export function AnimalsScreen() {
             tabIndex={-1}
             onClick={() => setFiltersOpen(false)}
           />
-          <aside className="sheet-panel filter-sheet" aria-label="Filtros">
+          <aside
+            className="sheet-panel filter-sheet"
+            aria-label="Filtros"
+            ref={filterSwipe.ref}
+            {...filterSwipe.bind}
+          >
+            <span className="grabber" aria-hidden="true" />
             <div className="drawer-head">
               <h2>Filtros</h2>
               <button
@@ -483,17 +491,6 @@ function Parent({ label, tag }: { label: string; tag: string | null }) {
   );
 }
 
-function useMedia(query: string): boolean {
-  const [on, setOn] = useState(() => window.matchMedia(query).matches);
-  useEffect(() => {
-    const m = window.matchMedia(query);
-    const h = () => setOn(m.matches);
-    m.addEventListener("change", h);
-    return () => m.removeEventListener("change", h);
-  }, [query]);
-  return on;
-}
-
 function AnimalCard({
   id,
   farmName,
@@ -508,6 +505,7 @@ function AnimalCard({
   const [mother, setMother] = useState<string | null>(null);
   const [father, setFather] = useState<string | null>(null);
   const [tab, setTab] = useState<Tab>("genealogia");
+  const swipe = useSwipeDismiss<HTMLElement>(() => onClose?.());
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: dataVersion fuerza la relectura
   useEffect(() => {
@@ -539,7 +537,12 @@ function AnimalCard({
     );
   }
   return (
-    <aside className={onClose ? "drawer sheet-drawer" : "card sheet"} aria-label="Ficha del animal">
+    <aside
+      className={onClose ? "drawer sheet-drawer" : "card sheet"}
+      aria-label="Ficha del animal"
+      ref={swipe.ref}
+      {...(onClose ? swipe.bind : {})}
+    >
       {onClose && (
         <button
           type="button"

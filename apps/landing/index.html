@@ -1,0 +1,490 @@
+<!doctype html>
+<html lang="es-CO">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#05100B" />
+    <title>Gestión Ganadera · El ERP ganadero que funciona sin internet</title>
+    <meta
+      name="description"
+      content="Plataforma de gestión ganadera para bovinos y bufalinos: inventario, producción, reproducción, sanidad y ERP. Funciona en el potrero, sin señal, con datos cifrados."
+    />
+    <meta property="og:title" content="Gestión Ganadera · El ERP ganadero que funciona sin internet" />
+    <meta
+      property="og:description"
+      content="Del potrero al balance: animales, producción, sanidad, compras, ventas y costos en un solo sistema. También sin conexión."
+    />
+    <meta property="og:type" content="website" />
+    <link rel="icon" href="/icon.svg" type="image/svg+xml" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+  </head>
+  <body>
+    <a class="skip" href="#contenido">Ir al contenido</a>
+
+    <header class="nav" id="top">
+      <div class="wrap nav-in">
+        <a class="logo" href="#top" aria-label="Gestión Ganadera, inicio">
+          <span class="mark" aria-hidden="true"></span>
+          <span>Gestión Ganadera</span>
+        </a>
+        <nav class="nav-links" id="menu" aria-label="Secciones">
+          <a href="#plataforma">Plataforma</a>
+          <a href="#sin-conexion">Sin conexión</a>
+          <a href="#erp">ERP</a>
+          <a href="#seguridad">Seguridad</a>
+          <a href="#ruta">Ruta</a>
+          <a href="#preguntas">Preguntas</a>
+        </nav>
+        <div class="nav-cta">
+          <a class="btn btn-gold btn-sm" data-app-link href="#">Ingresar</a>
+          <button class="burger" type="button" aria-label="Abrir menú" aria-expanded="false" aria-controls="menu">
+            <i data-lucide="menu"></i>
+          </button>
+        </div>
+      </div>
+    </header>
+
+    <main id="contenido">
+      <!-- ───── Héroe ───── -->
+      <section class="hero">
+        <div class="wrap hero-in">
+          <div class="hero-copy">
+            <p class="kicker">Gestión ganadera · Bovinos y bufalinos</p>
+            <h1>Su finca bajo control.<br /><em>Con o sin señal.</em></h1>
+            <p class="lead">
+              Un solo sistema para el hato y para el negocio: animales, producción, reproducción y sanidad en el
+              potrero, y compras, ventas y costos en la oficina. Registre sin internet; todo se sincroniza al volver
+              la señal.
+            </p>
+            <div class="cta-row">
+              <a class="btn btn-gold" data-app-link href="#">Ingresar a la plataforma</a>
+              <a class="btn btn-line" href="#plataforma">Ver cómo funciona</a>
+            </div>
+            <ul class="hero-facts" aria-label="Datos clave">
+              <li><strong>2 especies</strong><span>con parámetros propios</span></li>
+              <li><strong>72 h</strong><span>de trabajo sin conexión</span></li>
+              <li><strong>Con fuente</strong><span>cada cifra indica su origen</span></li>
+            </ul>
+          </div>
+
+          <div class="hero-visual" aria-hidden="true">
+            <div class="phone">
+              <div class="phone-notch"></div>
+              <div class="screen">
+                <div class="s-top">
+                  <span class="mark mark-s"></span>
+                  <span class="s-pill"><i data-lucide="wifi-off"></i> Sin conexión · 3 por enviar</span>
+                </div>
+                <p class="s-kicker">JUEVES, 29 DE OCTUBRE DE 2026</p>
+                <p class="s-title">Buenas tardes,<br />Propietario</p>
+                <div class="s-card s-green">
+                  <span class="s-label"><i data-lucide="paw-print"></i> Inventario del hato</span>
+                  <span class="s-big">248</span>
+                  <span class="s-meta">animales activos · 201 bovinos, 47 bufalinos</span>
+                  <span class="s-bar"><i></i></span>
+                  <span class="s-src">Fuente: registros de este dispositivo</span>
+                </div>
+                <div class="s-row">
+                  <div class="s-card s-blue"><span class="s-label">Producción</span><span class="s-dash"></span></div>
+                  <div class="s-card s-amber"><span class="s-label">Reproducción</span><span class="s-dash"></span></div>
+                </div>
+                <div class="s-tabs">
+                  <span class="on"><i data-lucide="home"></i>Inicio</span>
+                  <span><i data-lucide="paw-print"></i>Animales</span>
+                  <span><i data-lucide="bar-chart-3"></i>Producción</span>
+                  <span><i data-lucide="menu"></i>Más</span>
+                </div>
+              </div>
+            </div>
+            <div class="float f1">
+              <i data-lucide="check-circle-2"></i>
+              <div><strong>BOV-014 guardado</strong><span>Se enviará al reconectar</span></div>
+            </div>
+            <div class="float f2">
+              <i data-lucide="shield-check"></i>
+              <div><strong>Retiro de leche activo</strong><span>Verifique antes de destinar</span></div>
+            </div>
+            <p class="demo-note">Vista conceptual · Datos de ejemplo</p>
+          </div>
+        </div>
+        <svg class="hills" viewBox="0 0 1440 140" preserveAspectRatio="none" aria-hidden="true">
+          <path d="M0 80 C220 20 420 40 640 70 S1100 110 1440 50 V140 H0Z" fill="#0a2418" />
+          <path d="M0 110 C260 70 520 90 760 108 S1180 120 1440 92 V140 H0Z" fill="#0d3022" />
+        </svg>
+      </section>
+
+      <!-- ───── Problema ───── -->
+      <section class="sec sec-tight">
+        <div class="wrap three">
+          <article class="point reveal">
+            <i data-lucide="signal-zero"></i>
+            <h2>El potrero no tiene señal</h2>
+            <p>Las libretas y las hojas de cálculo viven donde hay internet. Aquí la captura ocurre donde pasa el trabajo.</p>
+          </article>
+          <article class="point reveal">
+            <i data-lucide="files"></i>
+            <h2>Datos regados por todas partes</h2>
+            <p>Inventario en un archivo, sanidad en un cuaderno, costos en la cabeza. Aquí todo cuelga del mismo animal.</p>
+          </article>
+          <article class="point reveal">
+            <i data-lucide="circle-help"></i>
+            <h2>Cifras que nadie puede explicar</h2>
+            <p>Un número sin origen no sirve para decidir. Aquí cada indicador muestra de qué registros sale.</p>
+          </article>
+        </div>
+      </section>
+
+      <!-- ───── Plataforma ───── -->
+      <section class="sec" id="plataforma">
+        <div class="wrap">
+          <header class="sec-head reveal">
+            <p class="kicker">La plataforma</p>
+            <h2>Todo el hato, en ocho módulos</h2>
+            <p class="lead">
+              Empezamos por lo que se hace cada día en la finca y crecemos por fases, sin rehacer lo anterior. Esto es lo
+              que ya funciona y lo que viene.
+            </p>
+          </header>
+          <div class="grid mods">
+            <article class="mod reveal">
+              <span class="tag on">Disponible</span>
+              <i data-lucide="home"></i>
+              <h3>Inicio</h3>
+              <p>Inventario, alertas con su origen y estado del dispositivo, para priorizar el día.</p>
+            </article>
+            <article class="mod reveal">
+              <span class="tag on">Disponible</span>
+              <i data-lucide="paw-print"></i>
+              <h3>Animales</h3>
+              <p>Ficha, genealogía, entradas y salidas, con historia individual que no se borra.</p>
+            </article>
+            <article class="mod reveal">
+              <span class="tag">En construcción</span>
+              <i data-lucide="bar-chart-3"></i>
+              <h3>Producción</h3>
+              <p>Leche en litros y pesos en kilogramos, medidos o estimados, sin duplicar totales.</p>
+            </article>
+            <article class="mod reveal">
+              <span class="tag">En construcción</span>
+              <i data-lucide="venus-and-mars"></i>
+              <h3>Reproducción</h3>
+              <p>Servicio, diagnóstico, parto y cría vinculada, con parámetros por especie.</p>
+            </article>
+            <article class="mod reveal">
+              <span class="tag">En construcción</span>
+              <i data-lucide="shield-check"></i>
+              <h3>Sanidad</h3>
+              <p>Vacunación, tratamientos y retiros de leche y carne, con advertencia antes de vender.</p>
+            </article>
+            <article class="mod reveal">
+              <span class="tag">En el plan</span>
+              <i data-lucide="sprout"></i>
+              <h3>Pasturas y alimentación</h3>
+              <p>Potreros, oferta forrajera y dietas versionadas, con supuestos siempre visibles.</p>
+            </article>
+            <article class="mod reveal">
+              <span class="tag">En construcción</span>
+              <i data-lucide="coins"></i>
+              <h3>Economía</h3>
+              <p>Ingresos y egresos con soporte. El saldo es «de movimientos registrados», no utilidad.</p>
+            </article>
+            <article class="mod reveal">
+              <span class="tag">En el plan</span>
+              <i data-lucide="users"></i>
+              <h3>Asistencia técnica</h3>
+              <p>Visitas, recomendaciones y acceso del asesor solo a lo que usted autorice.</p>
+            </article>
+          </div>
+        </div>
+      </section>
+
+      <!-- ───── Sin conexión ───── -->
+      <section class="sec sec-alt" id="sin-conexion">
+        <div class="wrap split">
+          <div class="reveal">
+            <p class="kicker">Funciona sin internet</p>
+            <h2>Hecha para el potrero, no para la oficina</h2>
+            <p class="lead">
+              La aplicación guarda todo en el dispositivo, cifrado con su contraseña, y envía los registros cuando hay
+              señal. Un reintento nunca duplica un animal.
+            </p>
+            <ul class="checks">
+              <li><i data-lucide="check"></i> Entre con su contraseña hasta 72 horas sin conexión.</li>
+              <li><i data-lucide="check"></i> Una cola visible muestra pendientes, rechazados y conflictos.</li>
+              <li><i data-lucide="check"></i> Si dos datos chocan, nada se sobrescribe en silencio: usted decide.</li>
+              <li><i data-lucide="check"></i> Se instala en el celular y abre a pantalla completa, como una app.</li>
+            </ul>
+          </div>
+          <ol class="steps reveal">
+            <li>
+              <span class="n">1</span>
+              <div><h3>Registre en el campo</h3><p>Escanee o escriba el arete y guarde. Sin señal, sin esperas.</p></div>
+            </li>
+            <li>
+              <span class="n">2</span>
+              <div><h3>Queda guardado y cifrado</h3><p>El registro espera en el dispositivo, con su identificador único.</p></div>
+            </li>
+            <li>
+              <span class="n">3</span>
+              <div><h3>Se sincroniza al volver la señal</h3><p>El servidor valida otra vez cada dato y responde registro por registro.</p></div>
+            </li>
+          </ol>
+        </div>
+      </section>
+
+      <!-- ───── ERP ───── -->
+      <section class="sec" id="erp">
+        <div class="wrap">
+          <header class="sec-head reveal">
+            <p class="kicker">ERP ganadero</p>
+            <h2>Del potrero al balance</h2>
+            <p class="lead">
+              Un ERP normal no sabe qué es un lote, un retiro de leche ni un parto. Este nace del animal: cada compra,
+              consumo, venta o jornal se enlaza al hato que lo originó.
+            </p>
+          </header>
+          <div class="grid erp">
+            <article class="erp-card reveal">
+              <span class="tag">ERP 1</span>
+              <i data-lucide="package"></i>
+              <h3>Compras e insumos</h3>
+              <ul>
+                <li>Bodegas con lote de producto y vencimiento</li>
+                <li>Órdenes de compra y aprobación por monto</li>
+                <li>Cada medicamento aplicado hereda su retiro</li>
+              </ul>
+            </article>
+            <article class="erp-card reveal">
+              <span class="tag">ERP 2</span>
+              <i data-lucide="store"></i>
+              <h3>Ventas y clientes</h3>
+              <ul>
+                <li>Venta de animales con alerta de retiro</li>
+                <li>Entrega de leche conciliada con el ordeño</li>
+                <li>Cuentas por cobrar por cliente</li>
+              </ul>
+            </article>
+            <article class="erp-card reveal">
+              <span class="tag">ERP 3</span>
+              <i data-lucide="tractor"></i>
+              <h3>Personal y maquinaria</h3>
+              <ul>
+                <li>Turnos, jornales y labores por lote</li>
+                <li>Hoja de vida y mantenimiento de equipos</li>
+                <li>Capacitaciones con vencimiento</li>
+              </ul>
+            </article>
+            <article class="erp-card reveal">
+              <span class="tag">ERP 4</span>
+              <i data-lucide="calculator"></i>
+              <h3>Contabilidad y costos</h3>
+              <ul>
+                <li>Costo por animal, lote, litro y kilogramo</li>
+                <li>Cierres versionados y exportación al contador</li>
+                <li>Facturación electrónica con proveedor autorizado</li>
+              </ul>
+            </article>
+          </div>
+          <p class="fine reveal">
+            Los módulos ERP están en el plan de desarrollo y todavía no están disponibles. La facturación electrónica y
+            la nómina legal se integrarán con proveedores autorizados.
+          </p>
+        </div>
+      </section>
+
+      <!-- ───── Datos con fuente ───── -->
+      <section class="sec sec-alt">
+        <div class="wrap split split-rev">
+          <figure class="proof reveal" aria-label="Ejemplo de una cifra con su fuente">
+            <p class="p-kicker">INVENTARIO ACTIVO · BOVINOS Y BUFALINOS</p>
+            <p class="p-title">Los bovinos son el 81 % del hato</p>
+            <p class="p-fig">201</p>
+            <p class="p-unit">cabezas bovinas · 29 de octubre de 2026</p>
+            <div class="p-bar"><i></i></div>
+            <p class="p-src">Fuente: registros de la finca · <u>Ver los 248 registros</u></p>
+            <figcaption>Vista conceptual · Datos de ejemplo</figcaption>
+          </figure>
+          <div class="reveal">
+            <p class="kicker">Un dato se firma</p>
+            <h2>Cada cifra dice de dónde sale</h2>
+            <p class="lead">
+              Unidad, período y fuente en cada número. Lo que falta no se muestra como cero. Lo estimado se distingue de
+              lo medido. Así las decisiones se pueden defender.
+            </p>
+            <ul class="checks">
+              <li><i data-lucide="check"></i> Un clic lleva de la cifra a los registros que la componen.</li>
+              <li><i data-lucide="check"></i> Observado, estimado y proyectado, siempre diferenciados.</li>
+              <li><i data-lucide="check"></i> Bovinos y bufalinos nunca comparten parámetros por defecto.</li>
+            </ul>
+          </div>
+        </div>
+      </section>
+
+      <!-- ───── Seguridad ───── -->
+      <section class="sec" id="seguridad">
+        <div class="wrap">
+          <header class="sec-head reveal">
+            <p class="kicker">Seguridad y propiedad de los datos</p>
+            <h2>Sus datos son suyos</h2>
+            <p class="lead">Seguridad pensada desde el diseño, no añadida al final.</p>
+          </header>
+          <div class="grid sec-grid">
+            <article class="sec-card reveal">
+              <i data-lucide="lock-keyhole"></i>
+              <h3>Cifrado en el dispositivo</h3>
+              <p>La copia local se cifra con una clave derivada de su contraseña. Si se pierde el equipo, los datos no se leen.</p>
+              <span class="tag on">Disponible</span>
+            </article>
+            <article class="sec-card reveal">
+              <i data-lucide="building-2"></i>
+              <h3>Aislamiento por organización</h3>
+              <p>Cada organización y finca queda separada también en la base de datos, no solo en la pantalla.</p>
+              <span class="tag on">Disponible</span>
+            </article>
+            <article class="sec-card reveal">
+              <i data-lucide="history"></i>
+              <h3>Historia que no se borra</h3>
+              <p>Los eventos no se editan ni se eliminan: se corrigen con un nuevo registro. La auditoría se encadena por huella.</p>
+              <span class="tag on">Disponible</span>
+            </article>
+            <article class="sec-card reveal">
+              <i data-lucide="user-check"></i>
+              <h3>Permisos por rol y finca</h3>
+              <p>Propietario, operario y técnico ven y hacen solo lo que les corresponde. El acceso económico se otorga aparte.</p>
+              <span class="tag on">Disponible</span>
+            </article>
+            <article class="sec-card reveal">
+              <i data-lucide="smartphone-nfc"></i>
+              <h3>Doble factor para administradores</h3>
+              <p>Segundo factor obligatorio para los perfiles con más poder.</p>
+              <span class="tag">En construcción</span>
+            </article>
+            <article class="sec-card reveal">
+              <i data-lucide="download"></i>
+              <h3>Exportación completa</h3>
+              <p>Sus datos, relaciones y adjuntos, descargables para reconstruirlos fuera del sistema.</p>
+              <span class="tag">En construcción</span>
+            </article>
+          </div>
+        </div>
+      </section>
+
+      <!-- ───── Roles ───── -->
+      <section class="sec sec-alt">
+        <div class="wrap">
+          <header class="sec-head reveal">
+            <p class="kicker">Para cada persona de la finca</p>
+            <h2>Cada quien ve lo suyo</h2>
+          </header>
+          <div class="grid roles">
+            <article class="role reveal"><i data-lucide="crown"></i><h3>Propietario</h3><p>Ve el resumen de sus fincas, aprueba y decide qué ve cada persona.</p></article>
+            <article class="role reveal"><i data-lucide="clipboard-list"></i><h3>Administrador de finca</h3><p>Programa el manejo, registra eventos y concilia lo que se planeó con lo ejecutado.</p></article>
+            <article class="role reveal"><i data-lucide="hand"></i><h3>Operario</h3><p>Captura en el campo con pocos toques, incluso sin señal, sin acceso a lo administrativo.</p></article>
+            <article class="role reveal"><i data-lucide="stethoscope"></i><h3>Técnico o asesor</h3><p>Consulta y recomienda solo en las fincas y fechas que se le autoricen.</p></article>
+          </div>
+        </div>
+      </section>
+
+      <!-- ───── Ruta ───── -->
+      <section class="sec" id="ruta">
+        <div class="wrap">
+          <header class="sec-head reveal">
+            <p class="kicker">Ruta de desarrollo</p>
+            <h2>Crece por fases, sin rehacer</h2>
+            <p class="lead">Primero lo operativo y confiable; después el negocio; después las integraciones y la inteligencia.</p>
+          </header>
+          <ol class="road">
+            <li class="reveal done">
+              <span class="r-dot"></span>
+              <h3>Base</h3>
+              <p>Acceso, fincas, animales, trabajo sin conexión y sincronización.</p>
+              <span class="tag on">Hecho</span>
+            </li>
+            <li class="reveal now">
+              <span class="r-dot"></span>
+              <h3>Fase 1 · Operación</h3>
+              <p>Producción, reproducción, sanidad, tareas, economía simple, reportes e importación inicial.</p>
+              <span class="tag">En curso</span>
+            </li>
+            <li class="reveal">
+              <span class="r-dot"></span>
+              <h3>Fase 2 · Gestión técnica y ERP</h3>
+              <p>Pasturas, dietas, visitas técnicas, compras e insumos, ventas y costos.</p>
+              <span class="tag">Planificada</span>
+            </li>
+            <li class="reveal">
+              <span class="r-dot"></span>
+              <h3>Fase 3 · Integraciones</h3>
+              <p>API documentada, básculas, lectores y sistemas institucionales, previo acuerdo de datos.</p>
+              <span class="tag">Planificada</span>
+            </li>
+            <li class="reveal">
+              <span class="r-dot"></span>
+              <h3>Fase 4 · Asistente con fuentes</h3>
+              <p>Consultas en lenguaje natural y captura por voz, siempre con revisión humana.</p>
+              <span class="tag">Planificada</span>
+            </li>
+          </ol>
+        </div>
+      </section>
+
+      <!-- ───── Preguntas ───── -->
+      <section class="sec sec-alt" id="preguntas">
+        <div class="wrap narrow">
+          <header class="sec-head reveal">
+            <p class="kicker">Preguntas frecuentes</p>
+            <h2>Lo que suelen preguntar</h2>
+          </header>
+          <div class="faq reveal">
+            <details>
+              <summary>¿De verdad funciona sin internet?</summary>
+              <p>Sí. Los registros se guardan cifrados en el dispositivo y se envían cuando hay señal. Puede ingresar sin conexión hasta 72 horas después de su último inicio de sesión en línea; con conexión, ese permiso se renueva solo.</p>
+            </details>
+            <details>
+              <summary>¿Sirve para bovinos y búfalos?</summary>
+              <p>Sí. La especie es parte del modelo: gestación, controles y retiros se manejan por especie y no se trasladan de bovinos a bufalinos sin validación técnica.</p>
+            </details>
+            <details>
+              <summary>¿Se conecta con el ICA o SINIGAN?</summary>
+              <p>Hoy no se presume ninguna integración. Está planeado un asistente que prepara el paquete de datos de una movilización y lo vincula al registro; un conector directo depende de acuerdos y permisos con la entidad.</p>
+            </details>
+            <details>
+              <summary>¿Qué pasa con la facturación electrónica y la nómina?</summary>
+              <p>Se plantean como integración con proveedores autorizados, no como desarrollo propio. Están en la última fase del ERP.</p>
+            </details>
+            <details>
+              <summary>¿Puedo llevarme mis datos?</summary>
+              <p>Es un requisito del diseño: exportación completa de tablas, relaciones, auditoría y adjuntos para reconstruir la información fuera del sistema. Está en construcción.</p>
+            </details>
+            <details>
+              <summary>¿Se instala en el celular?</summary>
+              <p>Sí, como aplicación web instalable: en Android desde el navegador, y en iPhone con «Compartir» y «Añadir a pantalla de inicio». Abre a pantalla completa.</p>
+            </details>
+          </div>
+        </div>
+      </section>
+
+      <!-- ───── Cierre ───── -->
+      <section class="final">
+        <div class="wrap final-in reveal">
+          <h2>Ordene su hato hoy.<br /><em>Funciona donde usted trabaja.</em></h2>
+          <p class="lead">Ingrese a la plataforma y registre su primer animal, con o sin conexión.</p>
+          <div class="cta-row center">
+            <a class="btn btn-gold" data-app-link href="#">Ingresar a la plataforma</a>
+            <a class="btn btn-line" data-contact hidden href="#">Solicitar una demostración</a>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="foot">
+      <div class="wrap foot-in">
+        <a class="logo" href="#top"><span class="mark" aria-hidden="true"></span><span>Gestión Ganadera</span></a>
+        <p>Sistema integral de gestión para bovinos y bufalinos.</p>
+        <p class="fine">Las capturas son vistas conceptuales con datos de ejemplo. Las funciones marcadas «En construcción» o «En el plan» aún no están disponibles.</p>
+      </div>
+    </footer>
+
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

@@ -13,7 +13,18 @@
     <title>Sistema Integral de Gestión Ganadera</title>
   </head>
   <body>
-    <div id="root"></div>
+    <style>
+      body { margin: 0; }
+      .splash { position: fixed; inset: 0; display: grid; place-content: center; justify-items: center; gap: 18px;
+        background: radial-gradient(120% 80% at 50% 0%, #14553d 0%, #0f3d2e 55%, #092a1f 100%); color: #f4f2e9;
+        font-family: Georgia, serif; }
+      .splash i { width: 76px; height: 76px; border-radius: 50%; background: #f6f8f3;
+        box-shadow: inset 0 0 0 14px #0f3d2e, inset 0 0 0 20px #d8b558, 0 0 0 3px rgb(216 181 88 / .35);
+        animation: splash-pulse 1.4s ease-in-out infinite; }
+      .splash p { margin: 0; font-size: 1.3rem; letter-spacing: .02em; }
+      @keyframes splash-pulse { 50% { transform: scale(1.06); opacity: .85; } }
+    </style>
+    <div id="root"><div class="splash"><i></i><p>Gestión Ganadera</p></div></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

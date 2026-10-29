@@ -64,6 +64,31 @@ importers:
         specifier: ^3.2.0
         version: 3.2.7(@types/node@22.20.5)(terser@5.51.2)(tsx@4.23.15)
 
+  apps/landing:
+    dependencies:
+      '@fontsource-variable/inter':
+        specifier: ^5.3.0
+        version: 5.3.0
+      '@fontsource/jetbrains-mono':
+        specifier: ^5.3.0
+        version: 5.3.0
+      '@fontsource/playfair-display':
+        specifier: ^5.3.0
+        version: 5.3.0
+      '@ganaderia/ui':
+        specifier: workspace:*
+        version: link:../../packages/ui
+      lucide:
+        specifier: ^1.64.0
+        version: 1.64.0
+    devDependencies:
+      typescript:
+        specifier: ^5.8.0
+        version: 5.9.3
+      vite:
+        specifier: ^7.0.0
+        version: 7.3.7(@types/node@22.20.5)(terser@5.51.2)(tsx@4.23.15)
+
   apps/web:
     dependencies:
       '@fontsource-variable/inter':
@@ -1932,6 +1957,9 @@ packages:
     peerDependenciesMeta:
       '@types/react':
         optional: true
+
+  lucide@1.64.0:
+    resolution: {integrity: sha512-2k481p+2dnI88E5chX8D1niwJzar/0EMFZwS93E/umHVxl+Po5uoDIGuo64Ij3a35YaD1J6EsWulDzKaod5wOw==}
 
   magic-string@0.30.21:
     resolution: {integrity: sha512-vd2F4YUyEXKGcLHoq+TEyCjxueSeHnFxyyjNp80yg0XV4vUhnDer/lvvlqM/arB5bXQN5K2/3oinyCRyx8T2CQ==}
@@ -4456,6 +4484,8 @@ snapshots:
       react: 19.3.1
     optionalDependencies:
       '@types/react': 19.3.0
+
+  lucide@1.64.0: {}
 
   magic-string@0.30.21:
     dependencies:

@@ -1,6 +1,7 @@
 import {
   Baby,
   BarChart3,
+  Calculator,
   CalendarDays,
   ClipboardList,
   Coins,
@@ -12,14 +13,18 @@ import {
   type LucideIcon,
   Map as MapIcon,
   Milk,
+  Package,
   PawPrint,
   Scale,
   Scan,
   ShieldCheck,
   Sprout,
   Stethoscope,
+  Store,
+  Tractor,
   TrendingUp,
   Users,
+  UsersRound,
   VenusAndMars,
   Wheat,
 } from "lucide-react";
@@ -32,7 +37,12 @@ export type ModuleKey =
   | "sanidad"
   | "pasturas"
   | "economia"
-  | "asistencia";
+  | "asistencia"
+  | "compras"
+  | "ventas"
+  | "personal"
+  | "activos"
+  | "contabilidad";
 
 export interface PreviewCard {
   icon: LucideIcon;
@@ -48,6 +58,8 @@ export interface ModuleDef {
   label: string;
   short: string;
   icon: LucideIcon;
+  /** Grupo de la navegación: operación del hato (por defecto) o gestión empresarial (ERP). */
+  group?: "erp";
   /** Semana o fase del plan en que se activa; vacío si ya está disponible. */
   phase?: string;
   title?: string;
@@ -254,6 +266,175 @@ export const MODULES: ModuleDef[] = [
         text: "Permisos por módulo con vigencia, revocables en cualquier momento.",
         when: "Fase 2",
         tone: "ambar",
+      },
+    ],
+  },
+  {
+    key: "compras",
+    label: "Compras e insumos",
+    short: "Compras",
+    icon: Package,
+    group: "erp",
+    phase: "ERP 1",
+    title: "Compras, proveedores e insumos",
+    lead: "Controle lo que entra a la finca: alimentos, medicamentos, sales y materiales, con lote y vencimiento.",
+    note: "Cada consumo se asigna a un lote o actividad, nunca a un animal individual si no se midió así.",
+    cards: [
+      {
+        icon: Package,
+        title: "Inventario de insumos",
+        text: "Existencias por bodega con lote de producto, vencimiento y costo promedio.",
+        when: "ERP 1",
+        tone: "verde",
+      },
+      {
+        icon: Store,
+        title: "Proveedores y órdenes de compra",
+        text: "Cotización, orden, recepción y soporte; aprobación por monto.",
+        when: "ERP 1",
+        tone: "azul",
+      },
+      {
+        icon: ShieldCheck,
+        title: "Consumo trazable",
+        text: "Vincula la aplicación de un medicamento con su lote de producto y su retiro.",
+        when: "ERP 1",
+        tone: "ambar",
+      },
+    ],
+  },
+  {
+    key: "ventas",
+    label: "Ventas y clientes",
+    short: "Ventas",
+    icon: Store,
+    group: "erp",
+    phase: "ERP 2",
+    title: "Ventas, clientes y entregas",
+    lead: "Animales, leche y otros productos: cliente, precio, entrega y cobro en un solo flujo.",
+    note: "Una venta con retiro de carne activo exige revisión autorizada antes de confirmarse.",
+    cards: [
+      {
+        icon: Users,
+        title: "Clientes y compradores",
+        text: "Plantas de beneficio, subastas, acopiadores y queserías, con su historial.",
+        when: "ERP 2",
+        tone: "violeta",
+      },
+      {
+        icon: Milk,
+        title: "Entrega y liquidación de leche",
+        text: "Volumen entregado, calidad y conciliación contra lo ordeñado.",
+        when: "ERP 2",
+        tone: "azul",
+      },
+      {
+        icon: Coins,
+        title: "Cuentas por cobrar",
+        text: "Saldos por cliente, vencimientos y recaudos vinculados a cada venta.",
+        when: "ERP 2",
+        tone: "verde",
+      },
+    ],
+  },
+  {
+    key: "personal",
+    label: "Personal",
+    short: "Personal",
+    icon: UsersRound,
+    group: "erp",
+    phase: "ERP 3",
+    title: "Personal, turnos y jornales",
+    lead: "Quién trabaja en cada finca, en qué turno y qué tareas tiene asignadas.",
+    note: "La liquidación legal de nómina queda fuera del alcance actual y se evaluará con un proveedor especializado.",
+    cards: [
+      {
+        icon: UsersRound,
+        title: "Trabajadores y turnos",
+        text: "Fichas, vinculación, turnos de ordeño y asignación a fincas.",
+        when: "ERP 3",
+        tone: "verde",
+      },
+      {
+        icon: ClipboardList,
+        title: "Jornales y labores",
+        text: "Registro de labores por lote o actividad y su costo de mano de obra.",
+        when: "ERP 3",
+        tone: "ambar",
+      },
+      {
+        icon: FileText,
+        title: "Capacitaciones y dotación",
+        text: "Cursos, certificados con vencimiento y entregas de dotación.",
+        when: "ERP 3",
+        tone: "azul",
+      },
+    ],
+  },
+  {
+    key: "activos",
+    label: "Maquinaria y activos",
+    short: "Activos",
+    icon: Tractor,
+    group: "erp",
+    phase: "ERP 3",
+    title: "Maquinaria, equipos e infraestructura",
+    lead: "Tractores, equipos de ordeño, cercas, pozos y bebederos, con su mantenimiento.",
+    cards: [
+      {
+        icon: Tractor,
+        title: "Hoja de vida del equipo",
+        text: "Ficha, horas de uso, combustible y costo por equipo.",
+        when: "ERP 3",
+        tone: "ambar",
+      },
+      {
+        icon: CalendarDays,
+        title: "Mantenimiento programado",
+        text: "Plan preventivo con alertas por fecha o por horas de uso.",
+        when: "ERP 3",
+        tone: "azul",
+      },
+      {
+        icon: MapIcon,
+        title: "Infraestructura",
+        text: "Cercas, corrales, bebederos y pozos asociados a cada potrero.",
+        when: "ERP 3",
+        tone: "verde",
+      },
+    ],
+  },
+  {
+    key: "contabilidad",
+    label: "Contabilidad y fiscal",
+    short: "Contabilidad",
+    icon: Calculator,
+    group: "erp",
+    phase: "ERP 4",
+    title: "Contabilidad, impuestos y facturación",
+    lead: "Cuentas por pagar y cobrar, centros de costo, cierres y exportación a su contador.",
+    note: "La facturación electrónica y la contabilidad tributaria completa requieren un proveedor autorizado; se evalúa como integración, no como desarrollo propio.",
+    cards: [
+      {
+        icon: Calculator,
+        title: "Plan de cuentas y cierres",
+        text: "Centros de costo, cierres versionados y exportación para el contador.",
+        when: "ERP 4",
+        tone: "violeta",
+      },
+      {
+        icon: FileText,
+        title: "Facturación electrónica",
+        text: "Emisión a través de un proveedor tecnológico autorizado.",
+        when: "ERP 4",
+        tone: "azul",
+      },
+      {
+        icon: TrendingUp,
+        title: "Costos y rentabilidad",
+        text: "Costo por animal, lote, litro y kilogramo, con fórmula, período y datos visibles.",
+        when: "ERP 4",
+        tone: "verde",
       },
     ],
   },

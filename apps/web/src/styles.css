@@ -20,6 +20,7 @@
 }
 html {
   -webkit-text-size-adjust: 100%;
+  background: var(--lienzo);
 }
 body {
   margin: 0;
@@ -2140,4 +2141,290 @@ body {
     transform: translateY(24px);
     opacity: 0;
   }
+}
+
+/* ═════════ Sensación de app nativa ═════════ */
+.grabber,
+.ptr,
+.install-nudge,
+.boot,
+.brand-mini {
+  display: none;
+}
+.screen {
+  animation: screen-in 240ms var(--curva);
+}
+@keyframes screen-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
+.boot {
+  position: fixed;
+  inset: 0;
+  z-index: 300;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: 16px;
+  background: radial-gradient(120% 80% at 50% 0%, #14553d 0%, #0f3d2e 55%, #092a1f 100%);
+  color: var(--marfil);
+  font-family: var(--fuente-titular);
+  font-size: 1.2rem;
+  animation: fade-in 180ms var(--curva);
+}
+.brand-big {
+  width: 76px;
+  height: 76px;
+  box-shadow: inset 0 0 0 14px #0f3d2e, inset 0 0 0 20px var(--oro), 0 0 0 3px
+    rgb(216 181 88 / 0.35);
+  animation: splash-pulse 1.4s ease-in-out infinite;
+}
+@keyframes splash-pulse {
+  50% {
+    transform: scale(1.06);
+    opacity: 0.85;
+  }
+}
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+}
+button.user {
+  background: none;
+  border: 0;
+  border-left: 1px solid var(--borde);
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: default;
+}
+
+@media (hover: none) {
+  .btn-primary:not(:disabled):hover {
+    transform: none;
+    box-shadow: none;
+  }
+  .card:hover {
+    border-color: var(--filete-color, inherit);
+  }
+}
+
+@media (max-width: 900px) {
+  /* Se comporta como app: sin selección accidental, sin resaltado, sin barras de desplazamiento */
+  body {
+    -webkit-user-select: none;
+    user-select: none;
+    -webkit-touch-callout: none;
+    background: var(--lienzo);
+  }
+  input,
+  textarea,
+  .mono,
+  .kv dd,
+  .facts dd {
+    -webkit-user-select: text;
+    user-select: text;
+  }
+  html {
+    scrollbar-width: none;
+  }
+  ::-webkit-scrollbar {
+    display: none;
+  }
+  .install-nudge {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 12px 12px 12px 14px;
+    margin-bottom: 18px;
+    background: var(--verde-t);
+    border: 1px solid color-mix(in srgb, var(--verde-i) 30%, transparent);
+    border-radius: 14px;
+    font-size: 0.86rem;
+  }
+  .install-nudge > div {
+    flex: 1;
+  }
+  .install-nudge p {
+    margin-top: 2px;
+    color: var(--texto-suave);
+  }
+  .install-nudge svg {
+    display: inline;
+    vertical-align: -2px;
+  }
+  .login-hero {
+    padding-top: calc(22px + env(safe-area-inset-top));
+  }
+
+  /* Cabecera tipo iOS: marca a la izquierda, título compacto al desplazarse */
+  .brand-mini {
+    display: inline-block;
+    width: 32px;
+    height: 32px;
+    margin: 0 4px;
+    box-shadow: inset 0 0 0 6px var(--verde-botella), inset 0 0 0 8px var(--oro);
+    background: #f6f8f3;
+  }
+  .topbar {
+    min-height: 56px;
+    padding-bottom: 6px;
+    background: color-mix(in srgb, var(--lienzo) 82%, transparent);
+    backdrop-filter: blur(18px) saturate(1.6);
+    -webkit-backdrop-filter: blur(18px) saturate(1.6);
+    border-bottom-color: transparent;
+    transition: border-color 200ms var(--curva);
+  }
+  .scrolled .topbar {
+    border-bottom-color: var(--borde);
+  }
+  .topbar-title {
+    opacity: 0;
+    transform: translateY(4px);
+    transition: opacity 200ms var(--curva), transform 200ms var(--curva);
+  }
+  .scrolled .topbar-title {
+    opacity: 1;
+    transform: none;
+  }
+  .topbar-title span {
+    display: none;
+  }
+  .topbar-title strong {
+    font-size: 1.05rem;
+  }
+  button.user {
+    cursor: pointer;
+    padding: 0;
+    border: 0;
+    margin: 0;
+    border-radius: 50%;
+  }
+  .page-head .kicker {
+    margin-bottom: 4px;
+  }
+  .page-head h1 {
+    font-size: 2rem;
+    letter-spacing: -0.01em;
+  }
+
+  /* Tirar para sincronizar */
+  .ptr {
+    display: grid;
+    place-items: center;
+    overflow: hidden;
+    color: var(--verde-i);
+    transition: height 180ms var(--curva);
+  }
+
+  /* Barra inferior translúcida */
+  .bottom-nav {
+    background: color-mix(in srgb, var(--lienzo) 84%, transparent);
+    backdrop-filter: blur(20px) saturate(1.6);
+    -webkit-backdrop-filter: blur(20px) saturate(1.6);
+    border-top: 1px solid var(--borde);
+    box-shadow: none;
+    padding-bottom: calc(4px + env(safe-area-inset-bottom));
+  }
+  .tab {
+    position: relative;
+    color: var(--texto-suave);
+    transition: color 160ms var(--curva);
+  }
+  .tab.active {
+    color: var(--verde-botella);
+  }
+  .tab.active svg {
+    color: var(--verde-botella);
+    stroke-width: 2.4;
+  }
+  .tab.active::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 50%;
+    width: 28px;
+    height: 3px;
+    margin-left: -14px;
+    border-radius: 0 0 3px 3px;
+    background: var(--oro);
+  }
+  .tab:focus-visible {
+    outline-color: var(--verde-botella);
+  }
+
+  /* Hojas inferiores con asa y gesto de arrastre */
+  .grabber {
+    display: block;
+    width: 40px;
+    height: 5px;
+    margin: -8px auto 10px;
+    border-radius: 3px;
+    background: color-mix(in srgb, var(--verde-botella) 22%, transparent);
+  }
+  .sheet-panel,
+  .drawer.sync-drawer,
+  .drawer.sheet-drawer {
+    touch-action: pan-y;
+    will-change: transform;
+    background: color-mix(in srgb, var(--superficie) 96%, transparent);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+  }
+  .drawer.sync-drawer {
+    top: auto;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    width: auto;
+    max-height: 92dvh;
+    border-left: 0;
+    border-radius: 18px 18px 0 0;
+    padding: 18px 18px calc(24px + env(safe-area-inset-bottom));
+    animation: sheet-up 280ms var(--curva);
+  }
+  .drawer.sheet-drawer::before {
+    display: none;
+  }
+  .backdrop {
+    animation: fade-in 200ms var(--curva);
+    -webkit-backdrop-filter: blur(2px);
+    backdrop-filter: blur(2px);
+  }
+
+  /* Botón flotante por encima de la barra */
+  .fab {
+    bottom: calc(72px + env(safe-area-inset-bottom));
+  }
+  .content {
+    padding-bottom: calc(100px + env(safe-area-inset-bottom));
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .screen,
+  .boot,
+  .brand-big {
+    animation: none;
+  }
+}
+
+.nav-group {
+  margin: 14px 12px 6px;
+  font-size: 0.66rem;
+  font-weight: 600;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--niebla);
+}
+.nav-sheet .nav-group {
+  color: var(--texto-suave);
+}
+.sidebar nav {
+  overflow-y: auto;
+  min-height: 0;
+  scrollbar-width: thin;
 }

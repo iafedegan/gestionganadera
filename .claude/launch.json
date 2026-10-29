@@ -18,6 +18,12 @@
       "runtimeExecutable": "/Users/edgar/.local/bin/pnpm",
       "runtimeArgs": ["--filter", "@ganaderia/spike-s0", "dev"],
       "port": 5174
+    },
+    {
+      "name": "landing",
+      "runtimeExecutable": "/Users/edgar/.local/bin/pnpm",
+      "runtimeArgs": ["--filter", "@ganaderia/landing", "dev"],
+      "port": 5175
     }
   ]
 }

@@ -17,6 +17,8 @@ import {
   PawPrint,
   PlusCircle,
   RefreshCw,
+  Share,
+  SquarePlus,
   Wifi,
   WifiOff,
   X,
@@ -29,6 +31,15 @@ import { CODE_LABEL, SPECIES_LABEL, fecha, fechaHora, num } from "./labels";
 import { type OutboxItem, localdb } from "./lib/localdb";
 import { lastEmail } from "./lib/session";
 import { MODULES, type ModuleDef, type ModuleKey, moduleByKey } from "./modules";
+import {
+  haptic,
+  isStandalone,
+  useInstall,
+  useMedia,
+  usePullToRefresh,
+  useScrolled,
+  useSwipeDismiss,
+} from "./native";
 import { useApp } from "./state";
 
 export type { ModuleKey } from "./modules";
@@ -55,6 +66,15 @@ export function Login() {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [showPw, setShowPw] = useState(false);
+  const install = useInstall();
+  const mobile = useMedia("(max-width: 900px)");
+  const [nudgeOff, setNudgeOff] = useState(() => {
+    try {
+      return localStorage.getItem("gg.installNudge") === "off";
+    } catch {
+      return false;
+    }
+  });
 
   async function submit(e: FormEvent) {
     e.preventDefault();
@@ -67,6 +87,12 @@ export function Login() {
 
   return (
     <main className="login">
+      {busy && (
+        <output className="boot">
+          <span className="brand-mark brand-big" aria-hidden="true" />
+          <p>Abriendo su finca…</p>
+        </output>
+      )}
       <section className="login-hero">
         <div className="login-hero-top">
           <span className="brand-mark" aria-hidden="true" />
@@ -94,6 +120,45 @@ export function Login() {
       </section>
 
       <section className="login-panel">
+        {mobile && !isStandalone() && !nudgeOff && (install.canInstall || install.iosHint) && (
+          <div className="install-nudge">
+            <div>
+              <strong>Úsela como una app</strong>
+              {install.canInstall ? (
+                <p>Instálela en su celular: abre a pantalla completa y funciona sin internet.</p>
+              ) : (
+                <p>
+                  Toque <Share size={14} aria-label="Compartir" /> y luego{" "}
+                  <SquarePlus size={14} aria-hidden="true" /> «Añadir a pantalla de inicio».
+                </p>
+              )}
+            </div>
+            {install.canInstall && (
+              <button
+                type="button"
+                className="btn btn-primary btn-sm"
+                onClick={() => void install.prompt()}
+              >
+                Instalar
+              </button>
+            )}
+            <button
+              type="button"
+              className="icon-btn"
+              aria-label="Ocultar"
+              onClick={() => {
+                setNudgeOff(true);
+                try {
+                  localStorage.setItem("gg.installNudge", "off");
+                } catch {
+                  /* sin almacenamiento */
+                }
+              }}
+            >
+              <X size={18} />
+            </button>
+          </div>
+        )}
         <form className="login-card" onSubmit={submit} aria-labelledby="login-title">
           <p className="kicker">Sistema Integral de Gestión Ganadera</p>
           <h1 id="login-title">Ingrese a su finca</h1>
@@ -155,8 +220,14 @@ function NavList(props: {
 }) {
   return (
     <ul className={props.variant === "sheet" ? "nav-list nav-sheet" : "nav-list"}>
-      {MODULES.map((m) => (
-        <li key={m.key}>
+      {MODULES.map((m, i) => (
+        <li
+          key={m.key}
+          className={m.group && MODULES[i - 1]?.group !== m.group ? "nav-first-erp" : undefined}
+        >
+          {m.group && MODULES[i - 1]?.group !== m.group && (
+            <p className="nav-group">Gestión empresarial · ERP</p>
+          )}
           <button
             type="button"
             className={m.key === props.active ? "nav active" : "nav"}
@@ -171,30 +242,6 @@ function NavList(props: {
       ))}
     </ul>
   );
-}
-
-function useInstall() {
-  const [evt, setEvt] = useState<(Event & { prompt(): Promise<void> }) | null>(null);
-  useEffect(() => {
-    const h = (e: Event) => {
-      e.preventDefault();
-      setEvt(e as Event & { prompt(): Promise<void> });
-    };
-    window.addEventListener("beforeinstallprompt", h);
-    return () => window.removeEventListener("beforeinstallprompt", h);
-  }, []);
-  const standalone =
-    window.matchMedia("(display-mode: standalone)").matches ||
-    (navigator as unknown as { standalone?: boolean }).standalone === true;
-  const ios = /iPhone|iPad|iPod/.test(navigator.userAgent);
-  return {
-    canInstall: evt !== null && !standalone,
-    iosHint: ios && !standalone,
-    prompt: async () => {
-      await evt?.prompt();
-      setEvt(null);
-    },
-  };
 }
 
 const BOTTOM: ModuleKey[] = ["inicio", "animales", "produccion", "reproduccion"];
@@ -221,6 +268,10 @@ export function Shell(props: {
   } = useApp();
   const [more, setMore] = useState(false);
   const install = useInstall();
+  const mobile = useMedia("(max-width: 900px)");
+  const scrolled = useScrolled();
+  const ptr = usePullToRefresh(() => syncNow().then(() => undefined), mobile);
+  const moreSwipe = useSwipeDismiss<HTMLElement>(() => setMore(false));
 
   // El menú "Más" solo existe en celular: si la ventana se ensancha, se cierra.
   useEffect(() => {
@@ -251,7 +302,7 @@ export function Shell(props: {
   }
 
   return (
-    <div className="shell">
+    <div className={scrolled ? "shell scrolled" : "shell"}>
       <a className="skip" href="#contenido">
         Ir al contenido
       </a>
@@ -285,14 +336,7 @@ export function Shell(props: {
       <div className="main">
         <header className="topbar">
           <div className="topbar-left">
-            <button
-              type="button"
-              className="icon-btn only-mobile"
-              aria-label="Más módulos"
-              onClick={() => setMore(true)}
-            >
-              <Menu size={22} />
-            </button>
+            <span className="brand-mark brand-mini only-mobile" aria-hidden="true" />
             <div className="topbar-title">
               <strong>{moduleByKey(props.module).label}</strong>
               <span>{org}</span>
@@ -316,7 +360,12 @@ export function Shell(props: {
               <Bell size={20} />
               {pendientes + revisar > 0 && <span className="dot">{pendientes + revisar}</span>}
             </button>
-            <div className="user">
+            <button
+              type="button"
+              className="user"
+              aria-label="Cuenta y módulos"
+              onClick={() => mobile && setMore(true)}
+            >
               <span className="avatar" aria-hidden="true">
                 {initials(name)}
               </span>
@@ -324,7 +373,7 @@ export function Shell(props: {
                 <strong>{name}</strong>
                 {role && <small>{ROLE_LABEL[role]}</small>}
               </span>
-            </div>
+            </button>
             <button
               type="button"
               className="icon-btn hide-mobile"
@@ -356,8 +405,25 @@ export function Shell(props: {
           </div>
         )}
 
+        <div
+          className="ptr"
+          style={{
+            height: ptr.refreshing ? 56 : ptr.pull,
+            opacity: ptr.refreshing ? 1 : Math.min(ptr.pull / 64, 1),
+          }}
+          aria-hidden="true"
+        >
+          <RefreshCw
+            size={22}
+            className={ptr.refreshing ? "spin" : ""}
+            style={{ transform: ptr.refreshing ? undefined : `rotate(${ptr.pull * 4}deg)` }}
+          />
+        </div>
+
         <main id="contenido" className="content">
-          {props.children}
+          <div key={props.module} className="screen">
+            {props.children}
+          </div>
         </main>
 
         <footer className="statusbar" aria-live="polite">
@@ -375,7 +441,10 @@ export function Shell(props: {
             type="button"
             className={k === props.module ? "tab active" : "tab"}
             aria-current={k === props.module ? "page" : undefined}
-            onClick={() => pick(k)}
+            onClick={() => {
+              haptic(8);
+              pick(k);
+            }}
           >
             <ModIcon k={k} size={22} />
             <span>{moduleByKey(k).short}</span>
@@ -396,7 +465,13 @@ export function Shell(props: {
             tabIndex={-1}
             onClick={() => setMore(false)}
           />
-          <aside className="sheet-panel" aria-label="Módulos">
+          <aside
+            className="sheet-panel"
+            aria-label="Módulos"
+            ref={moreSwipe.ref}
+            {...moreSwipe.bind}
+          >
+            <span className="grabber" aria-hidden="true" />
             <div className="drawer-head">
               <h2>Módulos</h2>
               <button
@@ -740,6 +815,7 @@ export function ModulePreview({ module }: { module: ModuleKey }) {
 function SyncDrawer({ onClose }: { onClose(): void }) {
   const { orgId, counts, dataVersion, syncNow, syncing, lastSync, syncNotice, online, refresh } =
     useApp();
+  const swipe = useSwipeDismiss<HTMLElement>(onClose);
   const [items, setItems] = useState<OutboxItem[]>([]);
   const [fixing, setFixing] = useState<{
     payload: AnimalRegisterPayload;
@@ -771,7 +847,13 @@ function SyncDrawer({ onClose }: { onClose(): void }) {
         tabIndex={-1}
         onClick={onClose}
       />
-      <aside className="drawer" aria-label="Centro de sincronización">
+      <aside
+        className="drawer sync-drawer"
+        aria-label="Centro de sincronización"
+        ref={swipe.ref}
+        {...swipe.bind}
+      >
+        <span className="grabber" aria-hidden="true" />
         <div className="drawer-head">
           <h2>Centro de sincronización</h2>
           <button type="button" className="icon-btn" aria-label="Cerrar" onClick={onClose}>

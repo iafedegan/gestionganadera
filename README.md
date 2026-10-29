@@ -1,6 +1,6 @@
 # Sistema Integral de Gestión Ganadera
 
-Plataforma web instalable (PWA), offline-first, para bovinos y bufalinos. Plan completo en [docs/PLAN_DESARROLLO.md](docs/PLAN_DESARROLLO.md); decisiones en [docs/adr](docs/adr).
+Plataforma web instalable (PWA), offline-first, para bovinos y bufalinos. Plan completo en [docs/PLAN_DESARROLLO.md](docs/PLAN_DESARROLLO.md) y del ERP en [docs/PLAN_ERP.md](docs/PLAN_ERP.md); decisiones en [docs/adr](docs/adr).
 
 ## Requisitos
 
@@ -31,6 +31,7 @@ pnpm lint && pnpm typecheck && pnpm test
 | Ruta | Contenido |
 |---|---|
 | `apps/api` | API Fastify, migraciones SQL, RLS, auditoría, sincronización |
+| `apps/landing` | Página de presentación (Vite, estática). `VITE_APP_URL` y `VITE_CONTACT_EMAIL` configuran los enlaces |
 | `apps/web` | PWA React; base local cifrada en un Worker (SQLite-WASM) |
 | `packages/contracts` | Esquemas Zod y tipos compartidos |
 | `packages/domain` | Reglas puras: arete, genealogía, categorías, permisos, UUID v7 |
