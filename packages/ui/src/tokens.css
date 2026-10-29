@@ -1,0 +1,54 @@
+/* Tokens del Manual de identidad CONtexto Ganadero v1.0.
+   Tema claro por defecto (campo, a pleno sol); oscuro "Esmeralda Real" opcional. */
+:root {
+  --verde-pasto: #589120;
+  --carmesi-cita: #c21a3b;
+  --obsidiana: #05100b;
+  --esmeralda: #2f9c62;
+  --oro: #d8b558;
+  --marfil: #f4f2e9;
+  --niebla: #9fb7a8;
+  --marmol: #f5f4f0;
+  --verde-botella: #0f3d2e;
+
+  --estado-error: #c0392b;
+  --estado-exito: #2f9c62;
+  --estado-aviso: #d8b558;
+  --estado-info: #9fb7a8;
+
+  --radio: 0.25rem;
+  --radio-pildora: 9999px;
+  --filete: 1px solid color-mix(in srgb, var(--oro) 22%, transparent);
+  --filete-foco: 1px solid color-mix(in srgb, var(--oro) 50%, transparent);
+  --paso: 4px;
+  --curva: cubic-bezier(0.22, 1, 0.36, 1);
+
+  --fuente-titular: "Playfair Display", Georgia, serif;
+  --fuente-interfaz: "Inter", system-ui, sans-serif;
+  --fuente-lectura: "Spectral", Georgia, serif;
+  --fuente-datos: "JetBrains Mono", ui-monospace, monospace;
+
+  /* Semánticos: tema claro */
+  --lienzo: var(--marmol);
+  --texto: var(--verde-botella);
+  --texto-suave: #4a6358;
+  --superficie: #ffffff;
+  --acento: var(--verde-botella);
+  --boton-principal-fondo: var(--oro);
+  --boton-principal-texto: var(--obsidiana);
+}
+
+:root[data-theme="oscuro"] {
+  --lienzo: var(--obsidiana);
+  --texto: var(--marfil);
+  --texto-suave: var(--niebla);
+  --superficie: #0b1b13;
+  --acento: var(--esmeralda);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
