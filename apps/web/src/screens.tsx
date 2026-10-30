@@ -36,7 +36,7 @@ import { type FormEvent, type ReactNode, useEffect, useState } from "react";
 import { Pasture } from "./Pasture";
 import { RegisterDialog } from "./animals";
 import { art } from "./art";
-import { CardHead, PageHead, Tile } from "./components";
+import { CardHead, CountUp, PageHead, Tile } from "./components";
 import { CODE_LABEL, KIND_LABEL, fecha, fechaHora, num } from "./labels";
 import { type OutboxItem, localdb } from "./lib/localdb";
 import { lastEmail } from "./lib/session";
@@ -690,6 +690,9 @@ export function Home({
     });
   }, [orgId, dataVersion]);
 
+  const demo = Boolean(
+    session?.memberships[0]?.organizationName.toLowerCase().includes("demostrativa"),
+  );
   const revisar = counts.rechazado + counts.conflicto;
   const lease = session ? new Date(session.offlineLeaseUntil) : null;
   const leaseHours = lease ? (lease.getTime() - Date.now()) / 3_600_000 : 0;
@@ -786,7 +789,7 @@ export function Home({
           art={art("tile-herd")}
           label="Inventario del hato"
           icon={<Users size={20} aria-hidden="true" />}
-          value={inv ? num(inv.total) : "—"}
+          value={inv ? <CountUp value={inv.total} /> : "—"}
           meta={
             inv
               ? `animales activos · ${num(inv.bovino)} bovinos, ${num(inv.bufalino)} bufalinos`
@@ -809,27 +812,27 @@ export function Home({
           art={art("tile-milk")}
           label="Producción y crecimiento"
           icon={<ModIcon k="produccion" />}
-          value="—"
-          meta="Leche (L) y pesajes (kg)"
-          soon="Semana 6"
+          value={demo ? "186 L" : "—"}
+          meta={demo ? "ordeño de hoy · ejemplo" : "Leche (L) y pesajes (kg)"}
+          soon={demo ? "Ejemplo" : "Semana 6"}
         />
         <Tile
           tone="ambar"
           art={art("tile-calf")}
           label="Estado reproductivo"
           icon={<ModIcon k="reproduccion" />}
-          value="—"
-          meta="Servicios, diagnósticos y partos"
-          soon="Semana 7"
+          value={demo ? "4" : "—"}
+          meta={demo ? "gestaciones confirmadas · ejemplo" : "Servicios, diagnósticos y partos"}
+          soon={demo ? "Ejemplo" : "Semana 7"}
         />
         <Tile
           tone="violeta"
           art={art("tile-coins")}
           label="Costos y márgenes"
           icon={<ModIcon k="economia" />}
-          value="—"
-          meta="Saldo de movimientos registrados"
-          soon="Semana 11"
+          value={demo ? "$ 2,4 M" : "—"}
+          meta={demo ? "saldo del mes · ejemplo" : "Saldo de movimientos registrados"}
+          soon={demo ? "Ejemplo" : "Semana 11"}
         />
       </div>
 
@@ -845,21 +848,54 @@ export function Home({
               </button>
             }
           />
-          <ul className="ghost-list" aria-hidden="true">
-            {[0, 1, 2].map((i) => (
-              <li key={i}>
-                <span className="gi" />
-                <span className="gl">
-                  <i />
-                  <i />
-                </span>
-                <span className="gp" />
-              </li>
-            ))}
-          </ul>
+          {demo ? (
+            <ul className="agenda">
+              {[
+                {
+                  t: "Pesaje del lote de levante",
+                  s: "Lote 1 · Potrero Sur",
+                  st: "Pendiente",
+                  c: "warn",
+                },
+                { t: "Control reproductivo", s: "Vacas en servicio", st: "Pendiente", c: "warn" },
+                {
+                  t: "Visita del asesor",
+                  s: "Revisión general de la finca",
+                  st: "Programada",
+                  c: "info",
+                },
+              ].map((r) => (
+                <li key={r.t}>
+                  <span className="gi gi-on">
+                    <CalendarDays size={22} aria-hidden="true" />
+                  </span>
+                  <span className="ag-text">
+                    <strong>{r.t}</strong>
+                    <small>{r.s}</small>
+                  </span>
+                  <span className={`pill-st st-${r.c}`}>{r.st}</span>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <ul className="ghost-list" aria-hidden="true">
+              {[0, 1, 2].map((i) => (
+                <li key={i}>
+                  <span className="gi" />
+                  <span className="gl">
+                    <i />
+                    <i />
+                  </span>
+                  <span className="gp" />
+                </li>
+              ))}
+            </ul>
+          )}
           <p className="ghost-note">
-            <Clock size={16} aria-hidden="true" /> Las tareas, controles y visitas aparecerán aquí
-            con el módulo de tareas (semana 11).
+            <Clock size={16} aria-hidden="true" />{" "}
+            {demo
+              ? "Datos de ejemplo: las tareas reales llegan con el módulo de tareas (semana 11)."
+              : "Las tareas, controles y visitas aparecerán aquí con el módulo de tareas (semana 11)."}
           </p>
         </article>
 
@@ -919,16 +955,18 @@ export function Home({
           />
           <div className="plans">
             {[
-              { label: "Sanidad", icon: <ModIcon k="sanidad" size={24} /> },
-              { label: "Pastoreo", icon: <ModIcon k="pasturas" size={24} /> },
-              { label: "Alimentación", icon: <Package size={24} aria-hidden="true" /> },
+              { label: "Sanidad", pct: 45, icon: <ModIcon k="sanidad" size={24} /> },
+              { label: "Pastoreo", pct: 80, icon: <ModIcon k="pasturas" size={24} /> },
+              { label: "Alimentación", pct: 60, icon: <Package size={24} aria-hidden="true" /> },
             ].map((p) => (
               <div key={p.label} className="plan">
                 <span className="plan-icon">{p.icon}</span>
                 <div>
                   <strong>{p.label}</strong>
-                  <span className="plan-bar" aria-hidden="true" />
-                  <small>Sin plan registrado</small>
+                  <span className="plan-bar" aria-hidden="true">
+                    {demo && <i style={{ width: `${p.pct}%` }} />}
+                  </span>
+                  <small>{demo ? `${p.pct} % · ejemplo` : "Sin plan registrado"}</small>
                 </div>
               </div>
             ))}

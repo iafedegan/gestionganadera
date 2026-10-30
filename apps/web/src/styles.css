@@ -4012,3 +4012,130 @@ tbody tr:hover {
     padding-right: 36px;
   }
 }
+
+/* ═════════ Vida: entrada escalonada, barras y curvas que se dibujan ═════════ */
+.agenda {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.agenda li {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 2px;
+  border-top: 1px solid var(--borde);
+}
+.gi-on {
+  display: grid;
+  place-items: center;
+  background: #e3f1e7;
+  color: var(--verde-i);
+}
+.ag-text {
+  display: grid;
+  flex: 1;
+  min-width: 0;
+}
+.ag-text small {
+  color: var(--texto-suave);
+}
+.pill-st {
+  padding: 5px 14px;
+  border-radius: 99px;
+  font-size: 0.82rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.st-warn {
+  background: #fbefc0;
+  color: #7a5a00;
+}
+.st-info {
+  background: #dcebfa;
+  color: #1b5fb3;
+}
+.plan-bar i {
+  display: block;
+  height: 100%;
+  border-radius: 4px;
+  background: linear-gradient(90deg, #2e9d5b, #5cc07f);
+  transform-origin: left;
+  animation: grow 1.1s var(--curva) both 0.3s;
+}
+.bar span {
+  transform-origin: left;
+  animation: grow 1s var(--curva) both 0.3s;
+}
+@keyframes grow {
+  from {
+    transform: scaleX(0);
+  }
+}
+.spark path {
+  animation: dash 4s linear infinite;
+}
+@keyframes dash {
+  to {
+    stroke-dashoffset: -36;
+  }
+}
+.page > * {
+  animation: rise 520ms var(--curva) both;
+}
+.page > *:nth-child(2) {
+  animation-delay: 60ms;
+}
+.page > *:nth-child(3) {
+  animation-delay: 120ms;
+}
+.page > *:nth-child(4) {
+  animation-delay: 180ms;
+}
+.page > *:nth-child(5) {
+  animation-delay: 240ms;
+}
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+}
+.tile {
+  transition: transform 220ms var(--curva), box-shadow 220ms var(--curva);
+}
+.tile:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 16px 28px -18px rgb(16 40 28 / 0.45);
+}
+.tile-art {
+  animation: float 6s ease-in-out infinite;
+}
+@keyframes float {
+  50% {
+    transform: translateY(-4px);
+  }
+}
+.card {
+  transition: box-shadow 220ms var(--curva), transform 220ms var(--curva);
+}
+@media (hover: hover) {
+  .card:hover {
+    box-shadow: 0 14px 28px -20px rgb(16 40 28 / 0.4);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .page > *,
+  .tile-art,
+  .spark path,
+  .plan-bar i,
+  .bar span {
+    animation: none;
+  }
+}
+@media (max-width: 900px) {
+  html,
+  body {
+    overflow-x: clip;
+  }
+}

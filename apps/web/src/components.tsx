@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { type ReactNode, useEffect, useState } from "react";
 
 export function PageHead(props: {
   /** Solo se muestra en celular, como etiqueta sobre el título. */
@@ -56,7 +56,7 @@ export function Tile(props: {
   art: string;
   label: string;
   icon: ReactNode;
-  value: string;
+  value: ReactNode;
   meta?: string | undefined;
   /** Módulo aún sin datos: se muestra una curva fantasma y la etiqueta «Pronto». */
   soon?: string;
@@ -123,4 +123,25 @@ export function Kpi(props: {
       {props.source && <p className="card-source">{props.source}</p>}
     </article>
   );
+}
+
+/** Número que sube hasta su valor (da vida a las cifras); sin movimiento si el usuario lo pide. */
+export function CountUp({ value, ms = 900 }: { value: number; ms?: number }) {
+  const [n, setN] = useState(0);
+  useEffect(() => {
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches || value === 0) {
+      setN(value);
+      return;
+    }
+    let raf = 0;
+    const t0 = performance.now();
+    const tick = (t: number) => {
+      const p = Math.min((t - t0) / ms, 1);
+      setN(Math.round(value * (1 - (1 - p) ** 3)));
+      if (p < 1) raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [value, ms]);
+  return <>{new Intl.NumberFormat("es-CO").format(n)}</>;
 }
