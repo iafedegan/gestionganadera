@@ -1,7 +1,7 @@
 import { mkdirSync, readFileSync, readdirSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { PGlite } from "@electric-sql/pglite";
+import type { PGlite as PGliteT } from "@electric-sql/pglite";
 import pg from "pg";
 
 export type Row = Record<string, unknown>;
@@ -18,7 +18,11 @@ export interface Db {
   close(): Promise<void>;
 }
 
-const migrationsDir = join(dirname(fileURLToPath(import.meta.url)), "..", "migrations");
+/** En Vercel el paquete se agrupa en un solo archivo: allí las migraciones viajan en `apps/api/migrations`. */
+function resolveMigrationsDir(): string {
+  if (process.env.MIGRATIONS_DIR) return process.env.MIGRATIONS_DIR;
+  return join(dirname(fileURLToPath(import.meta.url)), "..", "migrations");
+}
 
 async function applyMigrations(db: Db): Promise<void> {
   await db.admin((q) =>
@@ -26,14 +30,16 @@ async function applyMigrations(db: Db): Promise<void> {
       "CREATE TABLE IF NOT EXISTS schema_migration (name text PRIMARY KEY, applied_at timestamptz NOT NULL DEFAULT now())",
     ),
   );
-  const files = readdirSync(migrationsDir)
+  const files = readdirSync(resolveMigrationsDir())
     .filter((f) => f.endsWith(".sql"))
     .sort();
   for (const file of files) {
     await db.admin(async (q) => {
+      // Dos instancias arrancando a la vez no deben aplicar la misma migración.
+      await q("SELECT pg_advisory_xact_lock(727274)");
       const done = await q("SELECT 1 FROM schema_migration WHERE name = $1", [file]);
       if (done.length > 0) return;
-      await q(readFileSync(join(migrationsDir, file), "utf8"));
+      await q(readFileSync(join(resolveMigrationsDir(), file), "utf8"));
       await q("INSERT INTO schema_migration(name) VALUES ($1)", [file]);
     });
   }
@@ -47,7 +53,7 @@ async function tenantPrelude(q: Q, orgId: string, write: boolean): Promise<void>
 
 /** PostgreSQL real (producción y CI). */
 export async function createPgDb(connectionString: string): Promise<Db> {
-  const pool = new pg.Pool({ connectionString, max: 10 });
+  const pool = new pg.Pool({ connectionString, max: Number(process.env.PG_POOL_MAX ?? 10) });
   async function run<T>(fn: (q: Q) => Promise<T>, prelude?: (q: Q) => Promise<void>): Promise<T> {
     const client = await pool.connect();
     const q: Q = async (sql, params) => (await client.query(sql, params as unknown[])).rows;
@@ -76,6 +82,9 @@ export async function createPgDb(connectionString: string): Promise<Db> {
 /** PGlite: PostgreSQL real compilado a WASM. Para desarrollo local y pruebas sin Docker. */
 export async function createPgliteDb(dataDir?: string): Promise<Db> {
   if (dataDir) mkdirSync(dirname(dataDir), { recursive: true });
+  const { PGlite } = (await import("@electric-sql/pglite")) as {
+    PGlite: new (d?: string) => PGliteT;
+  };
   const lite = dataDir ? new PGlite(dataDir) : new PGlite();
   await lite.waitReady;
   async function run<T>(fn: (q: Q) => Promise<T>, prelude?: (q: Q) => Promise<void>): Promise<T> {

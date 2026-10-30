@@ -17,8 +17,12 @@
   },
   "devDependencies": {
     "@biomejs/biome": "^1.9.4",
+    "esbuild": "0.25.0",
     "turbo": "^2.5.0",
     "typescript": "^5.8.0",
     "vitest": "^3.2.0"
+  },
+  "dependencies": {
+    "@node-rs/argon2": "^2.2.2"
   }
 }
