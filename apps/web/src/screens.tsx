@@ -2,9 +2,13 @@ import type { AnimalRegisterPayload } from "@ganaderia/contracts";
 import { ROLE_LABEL } from "@ganaderia/domain";
 import {
   AlertTriangle,
+  ArrowLeft,
+  ArrowRight,
   Bell,
   CalendarDays,
   CheckCircle2,
+  ChevronDown,
+  ClipboardCheck,
   Clock,
   CloudOff,
   Database,
@@ -12,7 +16,10 @@ import {
   Eye,
   EyeOff,
   KeyRound,
+  Lightbulb,
+  Lock,
   LogOut,
+  Mail,
   Menu,
   Package,
   PawPrint,
@@ -20,6 +27,7 @@ import {
   RefreshCw,
   Share,
   SquarePlus,
+  Users,
   Wifi,
   WifiOff,
   X,
@@ -27,7 +35,8 @@ import {
 import { type FormEvent, type ReactNode, useEffect, useState } from "react";
 import { Pasture } from "./Pasture";
 import { RegisterDialog } from "./animals";
-import { Kpi, PageHead } from "./components";
+import { art } from "./art";
+import { CardHead, PageHead, Tile } from "./components";
 import { CODE_LABEL, KIND_LABEL, fecha, fechaHora, num } from "./labels";
 import { type OutboxItem, localdb } from "./lib/localdb";
 import { lastEmail } from "./lib/session";
@@ -68,6 +77,7 @@ export function Login() {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [showPw, setShowPw] = useState(false);
+  const [shake, setShake] = useState(0);
   const install = useInstall();
   const mobile = useMedia("(max-width: 900px)");
   const [nudgeOff, setNudgeOff] = useState(() => {
@@ -83,7 +93,11 @@ export function Login() {
     setBusy(true);
     setError(null);
     const res = await login(email, password);
-    if (!res.ok) setError(res.message);
+    if (!res.ok) {
+      setError(res.message);
+      setShake((n) => n + 1);
+      haptic(40);
+    }
     setBusy(false);
   }
 
@@ -95,30 +109,53 @@ export function Login() {
           <p>Abriendo su finca…</p>
         </output>
       )}
+
       <section className="login-hero">
+        <div className="hero-glow" aria-hidden="true" />
         <div className="login-hero-top">
           <span className="brand-mark" aria-hidden="true" />
           <span className="brand-name">Gestión Ganadera</span>
         </div>
         <div className="login-hero-body">
-          <p className="kicker kicker-light">Bovinos y bufalinos</p>
-          <h2>Su finca ordenada, con o sin internet.</h2>
+          <span className="hero-badge">
+            <WifiOff size={14} aria-hidden="true" /> Funciona sin internet
+          </span>
+          <h2>
+            Su finca ordenada, <em>con o sin señal.</em>
+          </h2>
           <ul className="login-points">
             <li>
-              <WifiOff size={18} aria-hidden="true" />
-              <span>Registre en el potrero sin señal; todo se envía al reconectar.</span>
+              <span className="pt-icon">
+                <WifiOff size={18} aria-hidden="true" />
+              </span>
+              <span>
+                <strong>Registre en el potrero</strong>
+                Todo se envía solo al volver la señal.
+              </span>
             </li>
             <li>
-              <KeyRound size={18} aria-hidden="true" />
-              <span>Los datos del dispositivo quedan cifrados con su contraseña.</span>
+              <span className="pt-icon">
+                <KeyRound size={18} aria-hidden="true" />
+              </span>
+              <span>
+                <strong>Datos cifrados</strong>
+                La copia del dispositivo se protege con su contraseña.
+              </span>
             </li>
             <li>
-              <CheckCircle2 size={18} aria-hidden="true" />
-              <span>Cada cifra indica de dónde sale y qué registros la componen.</span>
+              <span className="pt-icon">
+                <CheckCircle2 size={18} aria-hidden="true" />
+              </span>
+              <span>
+                <strong>Cifras con fuente</strong>
+                Cada número muestra qué registros lo componen.
+              </span>
             </li>
           </ul>
         </div>
-        <Pasture className="login-pasture" />
+        <div className="hills-wrap" aria-hidden="true">
+          <Pasture className="login-pasture" />
+        </div>
       </section>
 
       <section className="login-panel">
@@ -161,27 +198,49 @@ export function Login() {
             </button>
           </div>
         )}
-        <form className="login-card" onSubmit={submit} aria-labelledby="login-title">
-          <p className="kicker">Sistema Integral de Gestión Ganadera</p>
-          <h1 id="login-title">Ingrese a su finca</h1>
-          <label>
-            Correo electrónico
-            <input
-              type="email"
-              autoComplete="username"
-              required
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-            />
+
+        <form
+          className="login-card"
+          onSubmit={submit}
+          aria-labelledby="login-title"
+          noValidate={false}
+        >
+          <header className="lc-head">
+            <p className="kicker">Sistema Integral de Gestión Ganadera</p>
+            <h1 id="login-title">Ingrese a su finca</h1>
+            <p className="lc-sub">Use el correo y la contraseña de su cuenta.</p>
+          </header>
+
+          <label className="field">
+            <span className="field-label">Correo electrónico</span>
+            <span className="field-box">
+              <Mail size={19} aria-hidden="true" />
+              <input
+                type="email"
+                inputMode="email"
+                autoComplete="username"
+                autoCapitalize="none"
+                spellCheck={false}
+                required
+                placeholder="usuario@finca.co"
+                value={email}
+                aria-invalid={error ? true : undefined}
+                onChange={(e) => setEmail(e.target.value)}
+              />
+            </span>
           </label>
-          <label>
-            Contraseña
-            <span className="pw">
+
+          <label className="field">
+            <span className="field-label">Contraseña</span>
+            <span className="field-box">
+              <Lock size={19} aria-hidden="true" />
               <input
                 type={showPw ? "text" : "password"}
                 autoComplete="current-password"
                 required
+                placeholder="Su contraseña"
                 value={password}
+                aria-invalid={error ? true : undefined}
                 onChange={(e) => setPassword(e.target.value)}
               />
               <button
@@ -195,18 +254,37 @@ export function Login() {
               </button>
             </span>
           </label>
+
           {error && (
-            <p role="alert" className="form-error">
-              <AlertTriangle size={16} aria-hidden="true" /> {error}
+            <p key={shake} role="alert" className="login-alert">
+              <AlertTriangle size={18} aria-hidden="true" />
+              <span>{error}</span>
             </p>
           )}
-          <button type="submit" className="btn btn-primary btn-block" disabled={busy}>
-            {busy ? "Verificando…" : "Ingresar"}
+
+          <button type="submit" className="btn btn-primary btn-block btn-xl" disabled={busy}>
+            {busy ? (
+              <>
+                <RefreshCw size={18} className="spin" aria-hidden="true" /> Verificando…
+              </>
+            ) : (
+              <>
+                Ingresar <ArrowRight size={18} aria-hidden="true" className="arrow" />
+              </>
+            )}
           </button>
-          <p className="hint">
-            <CloudOff size={14} aria-hidden="true" /> Sin conexión puede ingresar con su contraseña
-            hasta 72 horas después del último inicio de sesión en línea.
+
+          <p className="lc-note">
+            <CloudOff size={18} aria-hidden="true" />
+            <span>
+              <strong>¿Sin señal?</strong> Puede ingresar con su contraseña hasta 72 horas después
+              de su último inicio de sesión en línea.
+            </span>
           </p>
+
+          <a className="lc-back" href="/">
+            <ArrowLeft size={16} aria-hidden="true" /> Volver al sitio
+          </a>
         </form>
       </section>
     </main>
@@ -269,6 +347,7 @@ export function Shell(props: {
     dismissToast,
   } = useApp();
   const [more, setMore] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
   const install = useInstall();
   const mobile = useMedia("(max-width: 900px)");
   const scrolled = useScrolled();
@@ -310,12 +389,8 @@ export function Shell(props: {
       </a>
 
       <aside className="sidebar" aria-label="Navegación principal">
-        <div className="brand">
-          <span className="brand-mark" aria-hidden="true" />
-          <span className="brand-text">
-            <strong>Gestión Ganadera</strong>
-            <small>{org}</small>
-          </span>
+        <div className="sidebar-art-wrap" aria-hidden="true">
+          <img className="sidebar-art" src={art("sidebar-top")} alt="" width={267} height={140} />
         </div>
         <nav aria-label="Módulos">
           <NavList active={props.module} onPick={pick} />
@@ -331,13 +406,18 @@ export function Shell(props: {
                   : "Sin conexión"}
             </span>
           </button>
-          <Pasture className="sidebar-pasture" />
         </div>
       </aside>
 
       <div className="main">
         <header className="topbar">
           <div className="topbar-left">
+            <span className="brand-mark brand-sm hide-mobile" aria-hidden="true" />
+            <span className="brand-line hide-mobile">
+              <strong>Sistema Integral de Gestión Ganadera</strong>
+              <span className="vbar" />
+              <span>{org}</span>
+            </span>
             <span className="brand-mark brand-mini only-mobile" aria-hidden="true" />
             <div className="topbar-title">
               <strong>{moduleByKey(props.module).label}</strong>
@@ -362,28 +442,52 @@ export function Shell(props: {
               <Bell size={20} />
               {pendientes + revisar > 0 && <span className="dot">{pendientes + revisar}</span>}
             </button>
-            <button
-              type="button"
-              className="user"
-              aria-label="Cuenta y módulos"
-              onClick={() => mobile && setMore(true)}
-            >
-              <span className="avatar" aria-hidden="true">
-                {initials(name)}
-              </span>
-              <span className="user-text">
-                <strong>{name}</strong>
-                {role && <small>{ROLE_LABEL[role]}</small>}
-              </span>
-            </button>
-            <button
-              type="button"
-              className="icon-btn hide-mobile"
-              aria-label="Cerrar sesión"
-              onClick={exit}
-            >
-              <LogOut size={20} />
-            </button>
+            <div className="user-wrap">
+              <button
+                type="button"
+                className="user"
+                aria-label="Cuenta y módulos"
+                aria-expanded={menuOpen}
+                onClick={() => (mobile ? setMore(true) : setMenuOpen((v) => !v))}
+              >
+                <span className="avatar" aria-hidden="true">
+                  {initials(name)}
+                </span>
+                <span className="user-text">
+                  <strong>{name}</strong>
+                  {role && <small>{ROLE_LABEL[role]}</small>}
+                </span>
+                <ChevronDown size={18} className="hide-mobile" aria-hidden="true" />
+              </button>
+              {menuOpen && !mobile && (
+                <>
+                  <button
+                    type="button"
+                    className="menu-backdrop"
+                    aria-label="Cerrar menú de cuenta"
+                    tabIndex={-1}
+                    onClick={() => setMenuOpen(false)}
+                  />
+                  <div className="user-menu">
+                    <div className="um-head">
+                      <strong>{name}</strong>
+                      {role && <small>{ROLE_LABEL[role]}</small>}
+                      <small>{org}</small>
+                    </div>
+                    <button
+                      type="button"
+                      className="um-item"
+                      onClick={() => {
+                        setMenuOpen(false);
+                        void exit();
+                      }}
+                    >
+                      <LogOut size={18} aria-hidden="true" /> Cerrar sesión
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
           </div>
         </header>
 
@@ -589,7 +693,6 @@ export function Home({
   const revisar = counts.rechazado + counts.conflicto;
   const lease = session ? new Date(session.offlineLeaseUntil) : null;
   const leaseHours = lease ? (lease.getTime() - Date.now()) / 3_600_000 : 0;
-  const first = session?.displayName.split(" ")[0] ?? "";
   const pctBov = inv && inv.total > 0 ? Math.round((inv.bovino / inv.total) * 100) : 0;
 
   const alerts: {
@@ -597,53 +700,59 @@ export function Home({
     icon: ReactNode;
     title: string;
     text: string;
+    go?: () => void;
   }[] = [];
   if (revisar > 0) {
     alerts.push({
       tone: "error",
-      icon: <AlertTriangle size={20} />,
+      icon: <AlertTriangle size={22} />,
       title: `${revisar} registro(s) no se pudieron confirmar`,
       text: "Fueron rechazados o chocan con un dato ya confirmado. Corríjalos para que se envíen.",
+      go: onOpenSync,
     });
   }
   if (stock.expired > 0) {
     alerts.push({
       tone: "error",
-      icon: <AlertTriangle size={20} />,
+      icon: <AlertTriangle size={22} />,
       title: `${stock.expired} insumo(s) con lotes vencidos en bodega`,
       text: "No se pueden consumir. Revíselos en Compras e insumos.",
+      go: () => onModule("compras"),
     });
   }
   if (stock.soon > 0) {
     alerts.push({
       tone: "warn",
-      icon: <Clock size={20} />,
+      icon: <Clock size={22} />,
       title: `${stock.soon} insumo(s) vencen en los próximos 30 días`,
-      text: "Use primero los lotes que vencen antes (el sistema los descuenta así).",
+      text: "Use primero los lotes que vencen antes: el sistema los descuenta así.",
+      go: () => onModule("compras"),
     });
   }
   if (stock.low > 0) {
     alerts.push({
       tone: "info",
-      icon: <Package size={20} />,
+      icon: <Package size={22} />,
       title: `${stock.low} insumo(s) por debajo del mínimo`,
       text: "Conviene reponerlos antes de que falten.",
+      go: () => onModule("compras"),
     });
   }
   if (counts.pendiente > 0) {
     alerts.push({
       tone: "info",
-      icon: <Clock size={20} />,
+      icon: <Clock size={22} />,
       title: `${counts.pendiente} registro(s) esperan ser enviados`,
       text: online
         ? "Se envían al sincronizar."
         : "Están guardados en este dispositivo y se enviarán al recuperar la conexión.",
+      go: onOpenSync,
     });
   }
   if (lease && leaseHours > 0 && leaseHours < 24) {
     alerts.push({
       tone: "warn",
-      icon: <KeyRound size={20} />,
+      icon: <KeyRound size={22} />,
       title: "El permiso para trabajar sin conexión vence pronto",
       text: `Conéctese antes del ${fechaHora(lease.toISOString())} para renovarlo.`,
     });
@@ -652,8 +761,8 @@ export function Home({
   return (
     <section className="page">
       <PageHead
-        kicker={longDate.format(new Date())}
-        title={`${greeting()}${first ? `, ${first}` : ""}`}
+        kicker="Inicio"
+        title="¿Qué requiere atención hoy?"
         lead="Un vistazo general para priorizar las actividades de la finca."
       />
 
@@ -671,18 +780,19 @@ export function Home({
         </button>
       </div>
 
-      <div className="kpis">
-        <Kpi
+      <div className="tiles">
+        <Tile
           tone="verde"
-          icon={<PawPrint size={20} />}
+          art={art("tile-herd")}
           label="Inventario del hato"
+          icon={<Users size={20} aria-hidden="true" />}
           value={inv ? num(inv.total) : "—"}
           meta={
             inv
               ? `animales activos · ${num(inv.bovino)} bovinos, ${num(inv.bufalino)} bufalinos`
-              : ""
+              : undefined
           }
-          source={`Fuente: registros de este dispositivo${lastSync ? ` · ${fechaHora(lastSync)}` : " · aún sin sincronizar"}`}
+          onGo={() => onModule("animales")}
         >
           {inv && inv.total > 0 && (
             <div
@@ -693,77 +803,101 @@ export function Home({
               <span style={{ width: `${pctBov}%` }} />
             </div>
           )}
-        </Kpi>
-        <Kpi
+        </Tile>
+        <Tile
           tone="azul"
-          icon={<ModIcon k="produccion" />}
+          art={art("tile-milk")}
           label="Producción y crecimiento"
+          icon={<ModIcon k="produccion" />}
           value="—"
           meta="Leche (L) y pesajes (kg)"
           soon="Semana 6"
         />
-        <Kpi
+        <Tile
           tone="ambar"
-          icon={<ModIcon k="reproduccion" />}
+          art={art("tile-calf")}
           label="Estado reproductivo"
+          icon={<ModIcon k="reproduccion" />}
           value="—"
           meta="Servicios, diagnósticos y partos"
           soon="Semana 7"
         />
-        <Kpi
+        <Tile
           tone="violeta"
+          art={art("tile-coins")}
+          label="Costos y márgenes"
           icon={<ModIcon k="economia" />}
-          label="Saldo de movimientos"
           value="—"
-          meta="Ingresos menos egresos registrados"
+          meta="Saldo de movimientos registrados"
           soon="Semana 11"
         />
       </div>
 
       <div className="two">
         <article className="card">
-          <header className="card-head">
-            <CalendarDays size={20} aria-hidden="true" />
-            <div>
-              <h2>Agenda del día</h2>
-              <p>Actividades programadas para hoy en la finca.</p>
-            </div>
-          </header>
-          <div className="empty-state">
-            <CalendarDays size={28} aria-hidden="true" />
-            <p>
-              Las tareas, controles reproductivos y visitas aparecerán aquí cuando se active el
-              módulo de tareas.
-            </p>
-            <span className="chip chip-soon">Semana 11</span>
-          </div>
+          <CardHead
+            icon={<CalendarDays size={26} aria-hidden="true" />}
+            title="Agenda del día"
+            sub="Actividades programadas para hoy en la finca."
+            action={
+              <button type="button" className="btn btn-ghost btn-sm" disabled>
+                Ver agenda completa ›
+              </button>
+            }
+          />
+          <ul className="ghost-list" aria-hidden="true">
+            {[0, 1, 2].map((i) => (
+              <li key={i}>
+                <span className="gi" />
+                <span className="gl">
+                  <i />
+                  <i />
+                </span>
+                <span className="gp" />
+              </li>
+            ))}
+          </ul>
+          <p className="ghost-note">
+            <Clock size={16} aria-hidden="true" /> Las tareas, controles y visitas aparecerán aquí
+            con el módulo de tareas (semana 11).
+          </p>
         </article>
 
         <article className="card">
-          <header className="card-head">
-            <Bell size={20} aria-hidden="true" />
-            <div>
-              <h2>Alertas para revisar</h2>
-              <p>Situaciones que requieren su atención.</p>
-            </div>
-            <button type="button" className="link" onClick={onOpenSync}>
-              Abrir sincronización
-            </button>
-          </header>
+          <CardHead
+            icon={<Bell size={26} aria-hidden="true" />}
+            title="Alertas para revisar"
+            sub="Situaciones que requieren su atención."
+            action={
+              <button type="button" className="btn btn-ghost btn-sm" onClick={onOpenSync}>
+                Ver sincronización ›
+              </button>
+            }
+          />
           {alerts.length === 0 ? (
             <div className="empty-state ok">
-              <CheckCircle2 size={28} aria-hidden="true" />
+              <CheckCircle2 size={34} aria-hidden="true" />
               <p>Todo en orden. No hay alertas por ahora.</p>
             </div>
           ) : (
-            <ul className="alert-list">
+            <ul className="alert-rows">
               {alerts.map((a) => (
-                <li key={a.title} className={`alert alert-${a.tone}`}>
-                  <span className="alert-icon">{a.icon}</span>
-                  <div>
+                <li key={a.title}>
+                  <span className={`ar-icon ar-${a.tone}`}>{a.icon}</span>
+                  <div className="ar-text">
                     <strong>{a.title}</strong>
                     <p>{a.text}</p>
                   </div>
+                  {a.go && (
+                    <button
+                      type="button"
+                      className="ar-go"
+                      aria-label={`Abrir: ${a.title}`}
+                      onClick={a.go}
+                    >
+                      ›
+                    </button>
+                  )}
                 </li>
               ))}
             </ul>
@@ -771,51 +905,119 @@ export function Home({
         </article>
       </div>
 
-      <div className="two">
+      <div className="two two-wide">
         <article className="card">
-          <header className="card-head">
-            <Database size={20} aria-hidden="true" />
-            <div>
-              <h2>Este dispositivo</h2>
-              <p>Copia local cifrada de sus fincas.</p>
-            </div>
-          </header>
-          <dl className="kv">
-            <dt>Conexión</dt>
-            <dd>{online ? "En línea" : "Sin conexión"}</dd>
-            <dt>Última sincronización</dt>
-            <dd>{lastSync ? fechaHora(lastSync) : "Aún no en esta sesión"}</dd>
-            <dt>Trabajo sin conexión hasta</dt>
-            <dd>{lease ? fechaHora(lease.toISOString()) : "—"}</dd>
-            <dt>Cifrado</dt>
-            <dd>Con su contraseña (AES-256)</dd>
-          </dl>
+          <CardHead
+            icon={<ClipboardCheck size={26} aria-hidden="true" />}
+            title="Avance de mis planes"
+            sub="Seguimiento al cumplimiento de los planes de la finca."
+            action={
+              <button type="button" className="btn btn-ghost btn-sm" disabled>
+                Ver planes completos ›
+              </button>
+            }
+          />
+          <div className="plans">
+            {[
+              { label: "Sanidad", icon: <ModIcon k="sanidad" size={24} /> },
+              { label: "Pastoreo", icon: <ModIcon k="pasturas" size={24} /> },
+              { label: "Alimentación", icon: <Package size={24} aria-hidden="true" /> },
+            ].map((p) => (
+              <div key={p.label} className="plan">
+                <span className="plan-icon">{p.icon}</span>
+                <div>
+                  <strong>{p.label}</strong>
+                  <span className="plan-bar" aria-hidden="true" />
+                  <small>Sin plan registrado</small>
+                </div>
+              </div>
+            ))}
+          </div>
         </article>
 
-        <article className="card card-cta">
-          <header className="card-head">
-            <PawPrint size={20} aria-hidden="true" />
-            <div>
-              <h2>Empiece por los animales</h2>
-              <p>Registre el inventario inicial de cada finca, con o sin conexión.</p>
-            </div>
-          </header>
-          <button type="button" className="btn btn-primary" onClick={() => onModule("animales")}>
-            Ir a animales
-          </button>
+        <article className="card cta-card">
+          <div className="cta-text">
+            <CardHead
+              icon={<Lightbulb size={26} aria-hidden="true" />}
+              title="Apoyo para decidir"
+              sub="Revisa los datos antes de actuar."
+            />
+            <button type="button" className="btn btn-primary" onClick={() => onModule("animales")}>
+              Ver de dónde salen las cifras ›
+            </button>
+          </div>
+          <img className="cta-art" src={art("cta-art")} alt="" />
         </article>
       </div>
+
+      <article className="card device">
+        <CardHead
+          icon={<Database size={26} aria-hidden="true" />}
+          title="Este dispositivo"
+          sub="Copia local cifrada de sus fincas."
+        />
+        <dl className="kv kv-row">
+          <div>
+            <dt>Conexión</dt>
+            <dd>{online ? "En línea" : "Sin conexión"}</dd>
+          </div>
+          <div>
+            <dt>Última sincronización</dt>
+            <dd>{lastSync ? fechaHora(lastSync) : "Aún no en esta sesión"}</dd>
+          </div>
+          <div>
+            <dt>Trabajo sin conexión hasta</dt>
+            <dd>{lease ? fechaHora(lease.toISOString()) : "—"}</dd>
+          </div>
+          <div>
+            <dt>Cifrado</dt>
+            <dd>Con su contraseña (AES-256)</dd>
+          </div>
+        </dl>
+      </article>
     </section>
   );
 }
 
 /* ───────────── Módulos en construcción ───────────── */
 
+/** Acciones principales de cada módulo, tal como aparecen en el diseño de referencia (aún sin función). */
+const PREVIEW_ACTIONS: Partial<Record<ModuleKey, string[]>> = {
+  produccion: ["Registrar ordeño", "Control de calidad", "Registrar peso"],
+  reproduccion: ["Registrar servicio", "Registrar diagnóstico", "Registrar parto"],
+  sanidad: ["Registrar evento sanitario", "Programar campaña", "Ver historial"],
+  pasturas: ["Registrar aforo", "Planificar rotación", "Confirmar movimiento"],
+  economia: ["Registrar ingreso", "Registrar egreso", "Ver soportes"],
+  asistencia: ["Programar visita", "Registrar recomendación", "Generar informe"],
+  ventas: ["Registrar venta", "Nuevo cliente"],
+  personal: ["Registrar trabajador", "Programar turno"],
+  activos: ["Registrar equipo", "Programar mantenimiento"],
+  contabilidad: ["Registrar factura", "Cierre del mes"],
+};
+
 export function ModulePreview({ module }: { module: ModuleKey }) {
   const m: ModuleDef = moduleByKey(module);
+  const Icon = m.icon;
+  const actions = PREVIEW_ACTIONS[module] ?? [];
   return (
     <section className="page">
-      <PageHead kicker={m.label} title={m.title ?? m.label} {...(m.lead ? { lead: m.lead } : {})} />
+      <PageHead
+        kicker={m.label}
+        icon={<Icon size={30} aria-hidden="true" />}
+        title={m.title ?? m.label}
+        {...(m.lead ? { lead: m.lead } : {})}
+        actions={actions.map((label, i) => (
+          <button
+            key={label}
+            type="button"
+            className={i === 0 ? "btn btn-primary" : "btn btn-ghost"}
+            disabled
+            title={`Disponible en ${m.phase}`}
+          >
+            {label}
+          </button>
+        ))}
+      />
       <div className="banner banner-info">
         <ModIcon k={module} size={18} />
         <span>
@@ -823,17 +1025,29 @@ export function ModulePreview({ module }: { module: ModuleKey }) {
           plan de desarrollo. Esta vista muestra lo que incluirá; todavía no registra datos.
         </span>
       </div>
-      <div className="preview-grid">
+      <div className="preview-cards">
         {m.cards?.map((c) => {
           const CardIcon = c.icon;
           return (
-            <article key={c.title} className={`card preview tone-${c.tone}`}>
-              <span className="kpi-icon">
-                <CardIcon size={22} aria-hidden="true" />
-              </span>
-              <h2>{c.title}</h2>
-              <p>{c.text}</p>
-              <span className="chip chip-soon">{c.when}</span>
+            <article key={c.title} className="card">
+              <CardHead
+                icon={<CardIcon size={26} aria-hidden="true" />}
+                title={c.title}
+                sub={c.text}
+                action={<span className="chip chip-soon">{c.when}</span>}
+              />
+              <ul className="ghost-list" aria-hidden="true">
+                {[0, 1, 2].map((i) => (
+                  <li key={i}>
+                    <span className="gi" />
+                    <span className="gl">
+                      <i />
+                      <i />
+                    </span>
+                    <span className="gp" />
+                  </li>
+                ))}
+              </ul>
             </article>
           );
         })}

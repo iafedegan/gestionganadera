@@ -10,12 +10,15 @@ import {
 import {
   Baby,
   Building2,
+  CalendarCheck,
   Cloud,
   CloudOff,
   FileText,
   GitBranch,
   History,
+  PawPrint,
   PlusCircle,
+  QrCode,
   Scale,
   Scan,
   Search,
@@ -25,7 +28,8 @@ import {
   X,
 } from "lucide-react";
 import { type FormEvent, type ReactNode, useEffect, useRef, useState } from "react";
-import { Kpi, PageHead } from "./components";
+import { art } from "./art";
+import { PageHead } from "./components";
 import {
   CATEGORY_LABEL,
   REASON_LABEL,
@@ -88,7 +92,7 @@ export function AnimalsScreen() {
   const [registering, setRegistering] = useState(false);
   const [creatingFarm, setCreatingFarm] = useState(false);
   const [inv, setInv] = useState({ total: 0, bovino: 0, bufalino: 0 });
-  const wide = useMedia("(min-width: 1500px)");
+  const wide = useMedia("(min-width: 1440px)");
   const mobile = useMedia("(max-width: 900px)");
   const [filtersOpen, setFiltersOpen] = useState(false);
   const filterSwipe = useSwipeDismiss<HTMLElement>(() => setFiltersOpen(false));
@@ -118,37 +122,17 @@ export function AnimalsScreen() {
     <section className="page">
       <PageHead
         kicker="Animales"
+        icon={<PawPrint size={30} aria-hidden="true" />}
         title="Animales e inventario del hato"
         lead="Registro e inventario del hato, con historial individual y control de movimientos."
         actions={
-          <>
-            {canRegister && (
-              <button
-                type="button"
-                className="btn btn-primary"
-                disabled={farms.length === 0}
-                onClick={() => setRegistering(true)}
-              >
-                <PlusCircle size={18} aria-hidden="true" /> Registrar animal
-              </button>
-            )}
-            <button
-              type="button"
-              className="btn btn-ghost hide-mobile"
-              disabled
-              title="Disponible en la semana 12"
-            >
-              <Upload size={18} aria-hidden="true" /> Importar datos
-            </button>
-            <button
-              type="button"
-              className="btn btn-ghost hide-mobile"
-              disabled
-              title="Disponible en la semana 6"
-            >
-              <Scale size={18} aria-hidden="true" /> Iniciar pesaje
-            </button>
-          </>
+          <span className="qr-chip">
+            <QrCode size={26} aria-hidden="true" />
+            <span>
+              <strong>Lectura QR o RFID</strong>
+              <small>cuando esté disponible</small>
+            </span>
+          </span>
         }
       />
 
@@ -167,33 +151,24 @@ export function AnimalsScreen() {
         </div>
       </section>
 
-      <div className="kpis kpis-3">
-        <Kpi
-          tone="verde"
-          icon={<Weight size={20} aria-hidden="true" />}
-          label="Inventario activo"
-          value={num(inv.total)}
-          meta="animales"
-          source={source}
-        />
-        <Kpi
-          tone="azul"
-          icon={<SpeciesBadge species="bovino" size={28} />}
-          label="Bovinos"
-          value={num(inv.bovino)}
-          meta="animales activos"
-        />
-        <Kpi
-          tone="violeta"
-          icon={<SpeciesBadge species="bufalino" size={28} />}
-          label="Bufalinos"
-          value={num(inv.bufalino)}
-          meta="animales activos"
-        >
-          {counts.pendiente > 0 && (
-            <p className="kpi-note">{counts.pendiente} pendiente(s) de enviar incluido(s)</p>
-          )}
-        </Kpi>
+      <div className="summary-chips" aria-label="Resumen del inventario">
+        <span className="sc">
+          <Weight size={16} aria-hidden="true" /> Inventario activo{" "}
+          <strong>{num(inv.total)}</strong>
+        </span>
+        <span className="sc">
+          <SpeciesBadge species="bovino" size={22} /> Bovinos <strong>{num(inv.bovino)}</strong>
+        </span>
+        <span className="sc">
+          <SpeciesBadge species="bufalino" size={22} /> Bufalinos{" "}
+          <strong>{num(inv.bufalino)}</strong>
+        </span>
+        {counts.pendiente > 0 && (
+          <span className="sc sc-warn">
+            <CloudOff size={16} aria-hidden="true" /> {counts.pendiente} sin enviar
+          </span>
+        )}
+        <small className="sc-src">{source}</small>
       </div>
 
       {farms.length === 0 && (
@@ -284,6 +259,25 @@ export function AnimalsScreen() {
         )}
       </div>
 
+      <div className="action-row">
+        {canRegister && (
+          <button
+            type="button"
+            className="btn btn-green"
+            disabled={farms.length === 0}
+            onClick={() => setRegistering(true)}
+          >
+            <PlusCircle size={20} aria-hidden="true" /> Registrar animal
+          </button>
+        )}
+        <button type="button" className="btn btn-ghost" disabled title="Disponible en la semana 12">
+          <Upload size={20} aria-hidden="true" /> Importar datos
+        </button>
+        <button type="button" className="btn btn-ghost" disabled title="Disponible en la semana 6">
+          <Scale size={20} aria-hidden="true" /> Iniciar pesaje
+        </button>
+      </div>
+
       <div className={wide ? "split" : undefined}>
         <div className="card table-card">
           {rows === null ? (
@@ -320,7 +314,6 @@ export function AnimalsScreen() {
                   <th scope="col">Categoría</th>
                   <th scope="col">Ubicación</th>
                   <th scope="col">Estado</th>
-                  <th scope="col">Sincronización</th>
                 </tr>
               </thead>
               <tbody>
@@ -347,13 +340,11 @@ export function AnimalsScreen() {
                     <td data-label="Ubicación" className="col-x">
                       {farmName(r.farmId)}
                     </td>
-                    <td data-label="Estado" className="col-x">
+                    <td data-label="Estado" className="col-state">
                       <span className="status">
                         <span className={`dot dot-${r.status}`} />
                         {STATUS_LABEL[r.status]}
                       </span>
-                    </td>
-                    <td data-label="Sincronización" className="col-sync">
                       <SyncChip state={r.syncState} />
                     </td>
                   </tr>
@@ -363,7 +354,10 @@ export function AnimalsScreen() {
           )}
         </div>
         {wide ? (
-          <AnimalCard id={selected} farmName={farmName} />
+          <div className="side-col">
+            <AnimalCard id={selected} farmName={farmName} />
+            <SessionCard />
+          </div>
         ) : (
           selected && (
             <>
@@ -474,6 +468,36 @@ export function AnimalsScreen() {
   );
 }
 
+/** Sesión de manejo: función futura (pesajes y jornadas); se muestra su espacio sin cifras inventadas. */
+function SessionCard() {
+  return (
+    <section className="card session" aria-label="Sesión de manejo">
+      <header className="session-head">
+        <CalendarCheck size={22} aria-hidden="true" />
+        <h2>Sesión de manejo</h2>
+        <span className="chip chip-soon">Semana 6</span>
+      </header>
+      <div className="session-stats">
+        <div>
+          <small>Animales previstos</small>
+          <strong>—</strong>
+        </div>
+        <div>
+          <small>Animales atendidos</small>
+          <strong>—</strong>
+        </div>
+        <div>
+          <small>Pendientes</small>
+          <strong>—</strong>
+        </div>
+        <button type="button" className="btn btn-primary" disabled>
+          Confirmar jornada
+        </button>
+      </div>
+    </section>
+  );
+}
+
 type Tab = "genealogia" | "movimientos" | "pesos" | "documentos";
 const TABS: { key: Tab; label: string; icon: ReactNode }[] = [
   { key: "genealogia", label: "Genealogía", icon: <GitBranch size={15} aria-hidden="true" /> },
@@ -553,46 +577,42 @@ function AnimalCard({
           <X size={20} />
         </button>
       )}
-      <header className="sheet-head">
-        <SpeciesBadge species={a.species} size={56} />
-        <div>
-          <p className="card-label">Identificación</p>
-          <p className="sheet-tag mono">{a.tag}</p>
-        </div>
+      <header className="sheet-title">
+        <h2>Ficha del animal</h2>
         <span className="status status-pill">
           <span className={`dot dot-${a.status}`} />
           {STATUS_LABEL[a.status]}
         </span>
       </header>
-      <SyncChip state={a.syncState} />
-
-      <dl className="facts">
-        <div>
-          <dt>Especie</dt>
-          <dd>{SPECIES_LABEL[a.species]}</dd>
+      <div className="sheet-hero">
+        <div className={`photo photo-${a.species}`}>
+          <img src={art(a.species === "bufalino" ? "ficha-buffalo" : "ficha-cow")} alt="" />
         </div>
-        <div>
-          <dt>Sexo</dt>
-          <dd>{SEX_LABEL[a.sex]}</dd>
+        <div className="hero-facts">
+          <p className="card-label">Identificación</p>
+          <p className="sheet-tag mono">{a.tag}</p>
+          <SyncChip state={a.syncState} />
+          <dl className="facts">
+            <div>
+              <dt>Especie</dt>
+              <dd>{SPECIES_LABEL[a.species]}</dd>
+            </div>
+            <div>
+              <dt>Ubicación actual</dt>
+              <dd>{farmName(a.farmId)}</dd>
+            </div>
+            <div>
+              <dt>Categoría</dt>
+              <dd>{CATEGORY_LABEL[a.category]}</dd>
+            </div>
+            <div>
+              <dt>Sexo</dt>
+              <dd>{SEX_LABEL[a.sex]}</dd>
+            </div>
+          </dl>
         </div>
-        <div>
-          <dt>Categoría</dt>
-          <dd>{CATEGORY_LABEL[a.category]}</dd>
-        </div>
-        <div>
-          <dt>Ubicación</dt>
-          <dd>{farmName(a.farmId)}</dd>
-        </div>
-        <div>
-          <dt>Nacimiento</dt>
-          <dd>
-            {a.birthDate
-              ? `${fecha(a.birthDate.date)} (${a.birthDate.precision})`
-              : "No registrado"}
-          </dd>
-        </div>
-      </dl>
-
+      </div>
+      <h3 className="hist-title">Historia individual</h3>
       <div className="tabs" role="tablist" aria-label="Historia individual">
         {TABS.map((t) => (
           <button

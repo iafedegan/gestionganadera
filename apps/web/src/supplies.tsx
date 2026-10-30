@@ -14,6 +14,7 @@ import {
   Hammer,
   History,
   Leaf,
+  Package,
   PackageMinus,
   PackagePlus,
   PlusCircle,
@@ -64,7 +65,7 @@ const parseNum = (v: string): number => Number(v.trim().replace(",", "."));
 export function SuppliesScreen() {
   const { orgId, role, dataVersion, lastSync } = useApp();
   const farms = useFarms();
-  const wide = useMedia("(min-width: 1500px)");
+  const wide = useMedia("(min-width: 1440px)");
   const [overview, setOverview] = useState<SupplyOverview[] | null>(null);
   const [farmId, setFarmId] = useState("");
   const [q, setQ] = useState("");
@@ -106,6 +107,7 @@ export function SuppliesScreen() {
     <section className="page">
       <PageHead
         kicker="Compras e insumos · ERP"
+        icon={<Package size={30} aria-hidden="true" />}
         title="Inventario de insumos"
         lead="Alimentos, medicamentos, sales y materiales, con lote y vencimiento. Cada consumo sale primero del lote que vence antes."
         actions={
