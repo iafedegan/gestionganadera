@@ -16,6 +16,7 @@ import {
   FileText,
   GitBranch,
   History,
+  Nfc,
   PawPrint,
   PlusCircle,
   QrCode,
@@ -43,6 +44,7 @@ import {
 } from "./labels";
 import { ApiError, api } from "./lib/api";
 import { type AnimalDetail, type LocalAnimal, localdb } from "./lib/localdb";
+import { detectCapabilities, scanNfc } from "./lib/reader";
 import { useMedia, useSwipeDismiss } from "./native";
 import { useApp } from "./state";
 
@@ -697,6 +699,21 @@ export function RegisterDialog(props: {
   const ref = useRef<HTMLDialogElement>(null);
   const formRef = useRef<HTMLFormElement>(null);
   const tagRef = useRef<HTMLInputElement>(null);
+  const [caps] = useState(detectCapabilities);
+  const [reading, setReading] = useState(false);
+
+  async function readChip() {
+    const ac = new AbortController();
+    setReading(true);
+    try {
+      setTag((await scanNfc(ac.signal)).code);
+    } catch (e) {
+      if ((e as Error).name !== "AbortError") notify("No se pudo leer la etiqueta.", "warn");
+    } finally {
+      ac.abort();
+      setReading(false);
+    }
+  }
   const another = useRef(false);
   const init = props.initial;
 
@@ -878,7 +895,22 @@ export function RegisterDialog(props: {
               value={tag}
               onChange={(e) => setTag(e.target.value)}
               className="mono input-lg"
+              onKeyDown={(e) => {
+                // El bastón RFID termina con Enter: no debe enviar el formulario a medias.
+                if (e.key === "Enter" && tag) e.preventDefault();
+              }}
             />
+            {caps.nfc && (
+              <button
+                type="button"
+                className="btn btn-ghost btn-sm"
+                disabled={reading}
+                onClick={() => void readChip()}
+              >
+                <Nfc size={16} aria-hidden="true" />{" "}
+                {reading ? "Acerque la etiqueta…" : "Leer chip"}
+              </button>
+            )}
           </label>
 
           <Segmented

@@ -4300,3 +4300,90 @@ tbody tr:hover {
     white-space: nowrap;
   }
 }
+
+/* Configuración: dispositivos de identificación */
+.settings-grid {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr));
+  margin-bottom: 16px;
+}
+.dev-list,
+.tech-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 4px;
+}
+.dev-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--borde);
+}
+.dev-row:last-child {
+  border-bottom: 0;
+}
+.dev-text {
+  display: grid;
+  min-width: 0;
+  flex: 1;
+}
+.dev-text small {
+  color: var(--texto-suave);
+}
+.dev-ok {
+  color: var(--verde, #1f7a4d);
+  flex-shrink: 0;
+}
+.dev-no {
+  color: var(--texto-suave);
+  flex-shrink: 0;
+}
+.dev-actions {
+  display: grid;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+.dev-sub {
+  margin: 16px 0 4px;
+  font-size: 0.95rem;
+}
+.switch-row {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+}
+.switch-row span {
+  display: grid;
+}
+.switch-row small {
+  color: var(--texto-suave);
+}
+.tech-list li {
+  display: flex;
+  gap: 14px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--borde);
+}
+.tech-list li:last-child {
+  border-bottom: 0;
+}
+.tech-list p {
+  margin: 2px 0;
+}
+.tech-list small {
+  color: var(--texto-suave);
+}
+.tech-icon {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--azul, #0f6bc4) 12%, white);
+  color: var(--azul, #0f6bc4);
+  flex-shrink: 0;
+}

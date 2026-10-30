@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { AnimalsScreen } from "./animals";
 import { Home, Login, type ModuleKey, ModulePreview, Shell } from "./screens";
+import { SettingsScreen } from "./settings";
 import { useApp } from "./state";
 import { SuppliesScreen } from "./supplies";
 
@@ -16,9 +17,11 @@ export function App() {
       {module === "inicio" && <Home onOpenSync={() => setSyncOpen(true)} onModule={setModule} />}
       {module === "animales" && <AnimalsScreen />}
       {module === "compras" && <SuppliesScreen />}
-      {module !== "inicio" && module !== "animales" && module !== "compras" && (
-        <ModulePreview module={module} />
-      )}
+      {module === "configuracion" && <SettingsScreen />}
+      {module !== "inicio" &&
+        module !== "animales" &&
+        module !== "compras" &&
+        module !== "configuracion" && <ModulePreview module={module} />}
     </Shell>
   );
 }

@@ -17,6 +17,7 @@ import {
   PawPrint,
   Scale,
   Scan,
+  Settings,
   ShieldCheck,
   Sprout,
   Stethoscope,
@@ -38,6 +39,7 @@ export type ModuleKey =
   | "pasturas"
   | "economia"
   | "asistencia"
+  | "configuracion"
   | "compras"
   | "ventas"
   | "personal"
@@ -269,6 +271,7 @@ export const MODULES: ModuleDef[] = [
       },
     ],
   },
+  { key: "configuracion", label: "Configuración", short: "Config.", icon: Settings },
   {
     key: "compras",
     label: "Compras e insumos",
