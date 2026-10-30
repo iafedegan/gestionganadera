@@ -2,7 +2,7 @@ import react from "@vitejs/plugin-react";
 import { defineConfig } from "vite";
 import { VitePWA } from "vite-plugin-pwa";
 
-const api = { "/v1": { target: "http://127.0.0.1:3000", changeOrigin: false } };
+const api = { "/v1": { target: "http://127.0.0.1:4173", changeOrigin: false } };
 
 export default defineConfig({
   // La aplicación vive en /app/; la landing ocupa la raíz del mismo servidor.

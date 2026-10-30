@@ -13,7 +13,7 @@ Todo sale por **un solo puerto**: la landing en `/`, la aplicación en `/app/` y
 ```bash
 pnpm install
 pnpm --filter @ganaderia/api seed   # crea datos y credenciales de desarrollo (una vez)
-pnpm start                          # compila landing y app y las sirve en http://localhost:3000
+pnpm start                          # compila landing y app y las sirve en http://localhost:4173
 ```
 
 Las credenciales de desarrollo quedan en `apps/api/.seed-credentials.json` (ignorado por git). El seed no corre con `NODE_ENV=production`.

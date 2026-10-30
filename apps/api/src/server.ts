@@ -3,7 +3,7 @@ import { buildApp } from "./app.js";
 import { createPgDb, createPgliteDb } from "./db.js";
 
 const production = process.env.NODE_ENV === "production";
-const port = Number(process.env.PORT ?? 3000);
+const port = Number(process.env.PORT ?? 4173);
 
 // Producción: PostgreSQL (DATABASE_URL). Desarrollo: PGlite persistente en disco, sin Docker.
 const db = process.env.DATABASE_URL
