@@ -1,4 +1,4 @@
-// Prepara la salida para Vercel: estáticos en public/ y la API empaquetada en api/index.js.
+// Prepara la salida para Vercel: estáticos en public/ y la API empaquetada en api/_app.cjs.
 import { cpSync, mkdirSync, rmSync } from "node:fs";
 import { build } from "esbuild";
 
@@ -9,7 +9,7 @@ cpSync("apps/web/dist", "public/app", { recursive: true });
 
 await build({
   entryPoints: ["apps/api/src/vercel.ts"],
-  outfile: "api/index.js",
+  outfile: "api/_app.cjs",
   bundle: true,
   platform: "node",
   target: "node22",
@@ -19,4 +19,4 @@ await build({
   // import.meta no existe en CommonJS; la ruta de migraciones llega por MIGRATIONS_DIR.
   define: { "import.meta.url": "undefined" },
 });
-console.log("Listo: public/ y api/index.js");
+console.log("Listo: public/ y api/_app.cjs");

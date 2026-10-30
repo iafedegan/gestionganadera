@@ -10,7 +10,7 @@ node_modules
 **/node_modules
 **/dist
 public
-api/index.js
+api/_app.cjs
 spikes
 docs
 *.log

@@ -6,7 +6,7 @@
       "dist",
       ".turbo",
       "pnpm-lock.yaml",
-      "api/index.js",
+      "api/_app.cjs", "**/.seed-credentials.json",
       "public",
       ".vercel"
     ]

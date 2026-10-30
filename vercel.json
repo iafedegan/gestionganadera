@@ -6,7 +6,7 @@
   "functions": {
     "api/index.js": {
       "maxDuration": 30,
-      "includeFiles": "apps/api/migrations/**"
+      "includeFiles": "{apps/api/migrations/**,api/_app.cjs}"
     }
   },
   "rewrites": [

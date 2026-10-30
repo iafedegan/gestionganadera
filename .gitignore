@@ -10,7 +10,7 @@ coverage/
 playwright-report/
 .data/
 .seed-credentials.json
-api/index.js
+api/_app.cjs
 public/
 .vercel/
 .vercel
