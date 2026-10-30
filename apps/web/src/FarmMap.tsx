@@ -140,6 +140,27 @@ function load(): MapData {
   }
 }
 
+/** Roce tolerado entre rótulos vecinos antes de ocultar uno. */
+const LABEL_OVERLAP_PX = 4;
+
+/** Oculta los rótulos que chocan con otro ya visible; el orden de dibujo decide cuál queda. */
+function declutterLabels(m: L.Map | null) {
+  if (!m) return;
+  const shown: DOMRect[] = [];
+  for (const el of m.getContainer().querySelectorAll<HTMLElement>(".pd-label")) {
+    const r = el.getBoundingClientRect();
+    const hit = shown.some(
+      (o) =>
+        r.left < o.right - LABEL_OVERLAP_PX &&
+        r.right > o.left + LABEL_OVERLAP_PX &&
+        r.top < o.bottom - LABEL_OVERLAP_PX &&
+        r.bottom > o.top + LABEL_OVERLAP_PX,
+    );
+    el.style.visibility = hit ? "hidden" : "";
+    if (!hit) shown.push(r);
+  }
+}
+
 const COLORS = [
   "#2e9e5b",
   "#3b82c4",
@@ -286,7 +307,10 @@ export function FarmMap() {
     };
     fit();
     setTimeout(fit, 250);
+    const relayout = () => declutterLabels(m);
+    m.on("zoomend moveend", relayout);
     return () => {
+      m.off("zoomend moveend", relayout);
       m.remove();
       map.current = null;
       if (watch.current !== null) navigator.geolocation.clearWatch(watch.current);
@@ -327,6 +351,7 @@ export function FarmMap() {
       });
       poly.addTo(g);
     });
+    declutterLabels(map.current);
     if (draft.length) {
       const color = mode === "lindero" ? "#facc15" : mode === "dividir" ? "#ef4444" : "#ffffff";
       L.polyline(
