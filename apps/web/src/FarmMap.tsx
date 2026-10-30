@@ -140,6 +140,13 @@ function load(): MapData {
   }
 }
 
+/** Mensaje según la causa real del fallo de ubicación. */
+function geoErrorMessage(e: GeolocationPositionError) {
+  if (e.code === e.PERMISSION_DENIED)
+    return "El permiso de ubicación está bloqueado. Actívelo en los ajustes del navegador.";
+  return "No se pudo determinar su posición en este momento. Si está bajo techo, salga a cielo abierto e intente de nuevo.";
+}
+
 /** Roce tolerado entre rótulos vecinos antes de ocultar uno. */
 const LABEL_OVERLAP_PX = 4;
 
@@ -415,13 +422,26 @@ export function FarmMap() {
       notify("Este dispositivo no tiene GPS disponible.", "warn");
       return;
     }
+    const found = (g: GeolocationPosition) => {
+      const p: Pt = [g.coords.latitude, g.coords.longitude];
+      setPos({ p, acc: g.coords.accuracy });
+      if (follow) map.current?.setView(p, 17);
+    };
+    const failed = (e: GeolocationPositionError) => notify(geoErrorMessage(e), "warn");
     navigator.geolocation.getCurrentPosition(
-      (g) => {
-        const p: Pt = [g.coords.latitude, g.coords.longitude];
-        setPos({ p, acc: g.coords.accuracy });
-        if (follow) map.current?.setView(p, 17);
+      found,
+      (e) => {
+        if (e.code === e.PERMISSION_DENIED) {
+          failed(e);
+          return;
+        }
+        // Sin señal precisa: reintenta con Wi-Fi o red móvil antes de avisar.
+        navigator.geolocation.getCurrentPosition(found, failed, {
+          enableHighAccuracy: false,
+          timeout: 15000,
+          maximumAge: 60000,
+        });
       },
-      () => notify("No se pudo obtener la ubicación. Revise el permiso de ubicación.", "warn"),
       { enableHighAccuracy: true, timeout: 15000 },
     );
   }
@@ -446,8 +466,10 @@ export function FarmMap() {
           return !last || L.latLng(last).distanceTo(L.latLng(p)) >= 5 ? [...d, p] : d;
         });
       },
-      () => {
-        notify("Se perdió la señal de GPS.", "warn");
+      (e) => {
+        notify(geoErrorMessage(e), "warn");
+        if (watch.current !== null) navigator.geolocation.clearWatch(watch.current);
+        watch.current = null;
         setWalking(false);
       },
       { enableHighAccuracy: true, maximumAge: 2000 },
