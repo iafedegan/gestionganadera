@@ -4139,3 +4139,164 @@ tbody tr:hover {
     overflow-x: clip;
   }
 }
+
+/* ═════════ Estilo iPhone en celular ═════════ */
+.page-head,
+.ph-main,
+.page-head > div,
+.ph-main > div {
+  min-width: 0;
+  max-width: 100%;
+}
+.page-head h1 {
+  overflow-wrap: anywhere;
+}
+@media (max-width: 900px) {
+  :root {
+    --lienzo: #f2f4f1;
+    --fuente-interfaz: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Inter", system-ui,
+      sans-serif;
+  }
+  body {
+    font-family: var(--fuente-interfaz);
+    font-size: 17px;
+    background: var(--lienzo);
+  }
+  .page {
+    gap: 20px;
+  }
+  .page-head h1 {
+    font-size: 2.1rem;
+    font-weight: 800;
+    letter-spacing: -0.02em;
+  }
+  .page-head .kicker {
+    font-size: 0.78rem;
+    letter-spacing: 0.08em;
+    color: var(--texto-suave);
+  }
+  /* Tarjetas como grupos insertados: esquinas amplias, sin borde, sombra suave */
+  .card,
+  .tile,
+  .statstrip,
+  .install-nudge {
+    border: 0;
+    border-radius: 18px;
+    box-shadow: 0 1px 2px rgb(16 40 28 / 0.06), 0 6px 18px -10px rgb(16 40 28 / 0.18);
+  }
+  .card {
+    padding: 16px;
+  }
+  .ch-text h2 {
+    font-size: 1.2rem;
+  }
+  .ch {
+    flex-wrap: wrap;
+  }
+  .ch-action {
+    width: 100%;
+  }
+  .ch-action .btn {
+    width: 100%;
+  }
+  .btn {
+    border-radius: 14px;
+    min-height: 52px;
+    font-size: 1.02rem;
+  }
+  .btn-sm {
+    min-height: 44px;
+  }
+  input,
+  select,
+  textarea,
+  .field-box {
+    border-radius: 12px;
+  }
+  .seg-opt {
+    border-radius: 12px;
+    min-height: 50px;
+  }
+  /* Listas agrupadas con separadores insertados */
+  .table-card tbody tr,
+  .alert-rows li,
+  .agenda li {
+    border-radius: 16px;
+  }
+  .alert-rows li,
+  .agenda li {
+    padding: 12px 2px;
+  }
+  .ar-icon,
+  .gi {
+    width: 44px;
+    height: 44px;
+  }
+  .tile {
+    border: 1px solid var(--tb);
+  }
+  /* Hojas y barra inferior como en iOS */
+  .sheet-panel,
+  .drawer.sync-drawer,
+  .drawer.sheet-drawer {
+    border-radius: 22px 22px 0 0;
+  }
+  .dialog-form {
+    border-radius: 0;
+  }
+  .bottom-nav {
+    padding-top: 8px;
+  }
+  .tab {
+    font-size: 0.66rem;
+    font-weight: 500;
+    gap: 3px;
+  }
+  .tab svg {
+    width: 26px;
+    height: 26px;
+  }
+  .tab.active {
+    font-weight: 700;
+  }
+  .topbar {
+    border-bottom: 0;
+  }
+  .toast {
+    border-radius: 16px;
+  }
+}
+@media (max-width: 360px) {
+  .content {
+    padding-inline: 12px;
+  }
+  .tiles {
+    grid-template-columns: 1fr;
+  }
+  .quick-actions .btn {
+    font-size: 0.78rem;
+  }
+  .kv-row {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Fila de lista en celular: el nombre se recorta con puntos suspensivos y nunca queda bajo la etiqueta */
+@media (max-width: 900px) {
+  .table-card tbody tr > th {
+    min-width: 0;
+    overflow: hidden;
+  }
+  .row-btn {
+    min-width: 0;
+  }
+  .row-main > span:first-child {
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .table-card td.col-sync,
+  .table-card td.col-state {
+    flex-shrink: 0;
+    white-space: nowrap;
+  }
+}
