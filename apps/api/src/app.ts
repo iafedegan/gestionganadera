@@ -127,6 +127,21 @@ export async function buildApp(opts: AppOptions): Promise<FastifyInstance> {
     return toSessionDto(a.user, a.memberships);
   });
 
+  // Posición aproximada según la IP, que Vercel entrega en cabeceras. Solo sirve para centrar el mapa.
+  app.get("/v1/geo/approx", { preHandler: requireSession }, async (req, reply) => {
+    const lat = Number(req.headers["x-vercel-ip-latitude"] ?? Number.NaN);
+    const lng = Number(req.headers["x-vercel-ip-longitude"] ?? Number.NaN);
+    if (
+      !Number.isFinite(lat) ||
+      !Number.isFinite(lng) ||
+      Math.abs(lat) > 90 ||
+      Math.abs(lng) > 180
+    ) {
+      return reply.code(404).send({ error: "SIN_UBICACION", message: "Ubicación no disponible." });
+    }
+    return { lat, lng };
+  });
+
   app.get("/v1/farms", { preHandler: requireSession }, async (req, reply) => {
     const q = orgQuery.safeParse(req.query);
     const a = req.auth as NonNullable<FastifyRequest["auth"]>;

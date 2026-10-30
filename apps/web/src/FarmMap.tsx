@@ -15,6 +15,7 @@ import {
 import { useEffect, useRef, useState } from "react";
 import { FORAGES } from "./herd";
 import { Badge, FormDialog, downloadCsv, num } from "./kit";
+import { api } from "./lib/api";
 import { type LocalFarmMap, localdb } from "./lib/localdb";
 import { useApp } from "./state";
 
@@ -427,7 +428,23 @@ export function FarmMap() {
       setPos({ p, acc: g.coords.accuracy });
       if (follow) map.current?.setView(p, 17);
     };
-    const failed = (e: GeolocationPositionError) => notify(geoErrorMessage(e), "warn");
+    const failed = (e: GeolocationPositionError) => {
+      if (!follow || e.code === e.PERMISSION_DENIED) {
+        notify(geoErrorMessage(e), "warn");
+        return;
+      }
+      // Último recurso: centra el mapa por IP. No toca `pos` para que nunca se marque como punto.
+      api
+        .approxLocation()
+        .then(({ lat, lng }) => {
+          map.current?.setView([lat, lng], 12);
+          notify(
+            "Sin GPS en este dispositivo. El mapa se centró en su zona aproximada según su conexión, que puede variar varios kilómetros.",
+            "warn",
+          );
+        })
+        .catch(() => notify(geoErrorMessage(e), "warn"));
+    };
     navigator.geolocation.getCurrentPosition(
       found,
       (e) => {

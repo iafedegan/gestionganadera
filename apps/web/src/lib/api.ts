@@ -61,6 +61,7 @@ export const api = {
     request<SessionDto>("POST", "/v1/auth/login", { email, password }),
   logout: () => request<{ ok: true }>("POST", "/v1/auth/logout"),
   me: () => request<SessionDto>("GET", "/v1/auth/me"),
+  approxLocation: () => request<{ lat: number; lng: number }>("GET", "/v1/geo/approx"),
   createFarm: (input: FarmCreate) => request<FarmDto>("POST", "/v1/farms", input),
   pull: (organizationId: string, since: number, limit = 200) =>
     request<PullResponse>(

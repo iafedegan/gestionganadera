@@ -727,3 +727,25 @@ describe("mapa de la finca: linderos y potreros", () => {
     ).rejects.toThrow();
   });
 });
+
+describe("ubicación aproximada", () => {
+  const VERCEL = { "x-vercel-ip-latitude": "4.7110", "x-vercel-ip-longitude": "-74.0721" };
+
+  it("exige sesión", async () => {
+    const res = await app.inject({ method: "GET", url: "/v1/geo/approx", headers: VERCEL });
+    expect(res.statusCode).toBe(401);
+  });
+
+  it("devuelve la posición de las cabeceras de Vercel y 404 si faltan o no son válidas", async () => {
+    await addUser("geo@a.test", orgA, "propietario");
+    const cookie = await loginAs("geo@a.test");
+    const get = (headers: Record<string, string>) =>
+      app.inject({ method: "GET", url: "/v1/geo/approx", headers: { ...H, cookie, ...headers } });
+
+    const ok = await get(VERCEL);
+    expect(ok.statusCode).toBe(200);
+    expect(ok.json()).toEqual({ lat: 4.711, lng: -74.0721 });
+    expect((await get({})).statusCode).toBe(404);
+    expect((await get({ ...VERCEL, "x-vercel-ip-latitude": "999" })).statusCode).toBe(404);
+  });
+});
