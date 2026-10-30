@@ -7,6 +7,8 @@ import {
   ErrorCodes,
   type FarmCreate,
   type FarmDto,
+  type FarmMapDto,
+  type FarmMapSavePayload,
   ORG_SCOPE_FARM_ID,
   type PullResponse,
   type PushResponse,
@@ -535,6 +537,80 @@ async function applyStockConsume(
   return { id: commandId, status: "accepted", serverVersion: version };
 }
 
+/* ───────────── Mapa de la finca ───────────── */
+
+async function applyFarmMapSave(
+  q: Q,
+  ctx: PushCtx,
+  commandId: string,
+  p: FarmMapSavePayload,
+): Promise<CommandResult> {
+  if (!grants(ctx.memberships, ctx.orgId, "farm.write", p.farmId)) {
+    return rejected(
+      commandId,
+      ErrorCodes.PERMISO_DENEGADO,
+      "No tiene permiso para editar el mapa de esta finca.",
+    );
+  }
+  if ((await q("SELECT 1 FROM farm WHERE id = $1", [p.farmId])).length === 0) {
+    return rejected(
+      commandId,
+      ErrorCodes.FINCA_NO_AUTORIZADA,
+      "La finca no existe o no está autorizada.",
+    );
+  }
+  const ids = new Set(p.paddocks.map((x) => x.id));
+  if (ids.size !== p.paddocks.length) {
+    return rejected(commandId, ErrorCodes.VALIDACION, "Hay potreros con el mismo identificador.");
+  }
+  // El bloqueo de fila serializa dos guardados simultáneos de la misma finca.
+  const cur = await q<{ revision: number }>(
+    "SELECT revision FROM farm_map WHERE farm_id = $1 FOR UPDATE",
+    [p.farmId],
+  );
+  const current = Number(cur[0]?.revision ?? 0);
+  if (current !== p.baseRevision) {
+    return conflict(
+      commandId,
+      ErrorCodes.MAPA_DESACTUALIZADO,
+      "El mapa cambió en otro dispositivo mientras usted lo editaba.",
+    );
+  }
+  const revision = current + 1;
+  const boundary = p.boundary ? JSON.stringify(p.boundary) : null;
+  const paddocks = JSON.stringify(p.paddocks);
+  await q(
+    `INSERT INTO farm_map (farm_id, organization_id, revision, boundary, paddocks, updated_by, updated_at)
+     VALUES ($1,$2,$3,$4,$5,$6, now())
+     ON CONFLICT (farm_id) DO UPDATE SET revision = excluded.revision, boundary = excluded.boundary,
+       paddocks = excluded.paddocks, updated_by = excluded.updated_by, updated_at = now()`,
+    [p.farmId, ctx.orgId, revision, boundary, paddocks, ctx.user.id],
+  );
+  await q(
+    `INSERT INTO farm_map_revision (farm_id, organization_id, revision, boundary, paddocks, user_id, command_id)
+     VALUES ($1,$2,$3,$4,$5,$6,$7)`,
+    [p.farmId, ctx.orgId, revision, boundary, paddocks, ctx.user.id, commandId],
+  );
+  const dto: FarmMapDto = {
+    farmId: p.farmId,
+    organizationId: ctx.orgId,
+    revision,
+    boundary: p.boundary,
+    paddocks: p.paddocks,
+    updatedAt: new Date().toISOString(),
+    updatedBy: ctx.user.displayName,
+  };
+  const version = await pushChange(q, ctx.orgId, p.farmId, "farm_map", p.farmId, dto);
+  await appendAudit(q, ctx.orgId, {
+    userId: ctx.user.id,
+    action: "farm.map.save",
+    entity: "farm",
+    entityId: p.farmId,
+    detail: { revision, paddocks: p.paddocks.length, boundary: Boolean(p.boundary), commandId },
+  });
+  return { id: commandId, status: "accepted", serverVersion: version };
+}
+
 async function processCommand(ctx: PushCtx, raw: unknown): Promise<CommandResult> {
   const rawId =
     raw && typeof raw === "object" && typeof (raw as { id?: unknown }).id === "string"
@@ -573,6 +649,9 @@ async function processCommand(ctx: PushCtx, raw: unknown): Promise<CommandResult
           break;
         case "stock.consume":
           result = await applyStockConsume(q, ctx, cmd.id, cmd.payload);
+          break;
+        case "farm.map.save":
+          result = await applyFarmMapSave(q, ctx, cmd.id, cmd.payload);
           break;
       }
       await q(

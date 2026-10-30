@@ -1,5 +1,6 @@
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
+import { can, uuidv7 } from "@ganaderia/domain";
 import {
   Crosshair,
   Download,
@@ -14,6 +15,7 @@ import {
 import { useEffect, useRef, useState } from "react";
 import { FORAGES } from "./herd";
 import { Badge, FormDialog, downloadCsv, num } from "./kit";
+import { type LocalFarmMap, localdb } from "./lib/localdb";
 import { useApp } from "./state";
 
 /**
@@ -150,7 +152,10 @@ const COLORS = [
 ];
 
 export function FarmMap() {
-  const { notify } = useApp();
+  const { notify, orgId, online, syncNow, dataVersion, role, session } = useApp();
+  const canEdit = role ? can(role, "farm.write") : false;
+  const [farmId, setFarmId] = useState<string | null>(null);
+  const [meta, setMeta] = useState<LocalFarmMap | null>(null);
   const el = useRef<HTMLDivElement>(null);
   const map = useRef<L.Map | null>(null);
   const layer = useRef<L.LayerGroup | null>(null);
@@ -166,13 +171,83 @@ export function FarmMap() {
   const modeRef = useRef(mode);
   modeRef.current = mode;
 
+  const fitted = useRef(false);
+  const fitTo = (d: MapData) => {
+    const all = [...(d.lindero ?? []), ...d.potreros.flatMap((p) => p.pts)];
+    if (map.current && all.length)
+      map.current.fitBounds(L.latLngBounds(all), { padding: [24, 24] });
+  };
+
+  // Mapa guardado (servidor o cambios locales): se recarga tras cada sincronización.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: recarga por organización y versión de datos
+  useEffect(() => {
+    if (!orgId) return;
+    let live = true;
+    void (async () => {
+      const farms = await localdb.listFarms(orgId);
+      const f = farmId ?? farms[0]?.id ?? null;
+      if (!live || !f) return;
+      setFarmId(f);
+      const m = await localdb.getFarmMap(f);
+      if (!live || modeRef.current !== "ver") return;
+      setMeta(m);
+      if (m) {
+        const d: MapData = {
+          lindero: m.boundary,
+          potreros: m.paddocks.map((x) => ({
+            id: x.id,
+            nombre: x.name,
+            forraje: x.forage,
+            pts: x.points,
+          })),
+        };
+        setData(d);
+        if (!fitted.current) {
+          fitted.current = true;
+          setTimeout(() => fitTo(d), 300);
+        }
+      }
+    })();
+    return () => {
+      live = false;
+    };
+  }, [orgId, dataVersion]);
+
+  const r7 = (n: number) => Math.round(n * 1e7) / 1e7;
   const save = (d: MapData) => {
     setData(d);
-    try {
-      localStorage.setItem(KEY, JSON.stringify(d));
-    } catch {
-      /* sin almacenamiento */
-    }
+    if (!orgId || !farmId || !canEdit) return;
+    void localdb
+      .enqueueFarmMap({
+        orgId,
+        updatedBy: session?.displayName ?? "",
+        command: {
+          id: uuidv7(),
+          type: "farm.map.save",
+          clientTs: new Date().toISOString(),
+          payload: {
+            farmId,
+            baseRevision:
+              meta && meta.syncState !== "pendiente" && meta.syncState !== "sincronizado"
+                ? meta.serverRevision
+                : (meta?.revision ?? 0),
+            boundary:
+              d.lindero && d.lindero.length >= 3
+                ? d.lindero.map(([a, b]) => [r7(a), r7(b)] as Pt)
+                : null,
+            paddocks: d.potreros.map((x) => ({
+              id: x.id.slice(0, 40),
+              name: x.nombre,
+              forage: x.forraje,
+              points: x.pts.map(([a, b]) => [r7(a), r7(b)] as Pt),
+            })),
+          },
+        },
+      })
+      .then(async () => {
+        setMeta(await localdb.getFarmMap(farmId));
+        if (online) void syncNow();
+      });
   };
 
   // Crear el mapa una sola vez
@@ -527,6 +602,59 @@ export function FarmMap() {
             </button>
           )}
         </div>
+      </div>
+      <div className={`fm-status s-${meta?.syncState ?? "nuevo"}`}>
+        {!canEdit ? (
+          <span>Solo lectura: su perfil no puede editar el mapa.</span>
+        ) : !meta ? (
+          <span>Mapa de ejemplo, aún sin guardar. Al editarlo se guarda en el servidor.</span>
+        ) : meta.syncState === "sincronizado" ? (
+          <span>
+            Guardado en el servidor · revisión {meta.revision}
+            {meta.updatedBy ? ` · ${meta.updatedBy}` : ""}
+          </span>
+        ) : meta.syncState === "pendiente" ? (
+          <span>Guardado en este dispositivo; se enviará al sincronizar.</span>
+        ) : (
+          <>
+            <span>
+              {meta.syncState === "conflicto"
+                ? "Otro dispositivo cambió el mapa mientras usted lo editaba."
+                : "El servidor rechazó el último cambio."}
+            </span>
+            <button type="button" className="btn btn-ghost btn-sm" onClick={() => save(data)}>
+              Conservar mis cambios
+            </button>
+            <button
+              type="button"
+              className="btn btn-ghost btn-sm"
+              onClick={() => {
+                if (!farmId) return;
+                void localdb.useServerFarmMap(farmId).then(async () => {
+                  const m = await localdb.getFarmMap(farmId);
+                  setMeta(m);
+                  if (m)
+                    setData({
+                      lindero: m.boundary,
+                      potreros: m.paddocks.map((x) => ({
+                        id: x.id,
+                        nombre: x.name,
+                        forraje: x.forage,
+                        pts: x.points,
+                      })),
+                    });
+                });
+              }}
+            >
+              Usar la del servidor
+            </button>
+          </>
+        )}
+        {canEdit && !meta && (
+          <button type="button" className="btn btn-primary btn-sm" onClick={() => save(data)}>
+            Guardar este mapa
+          </button>
+        )}
       </div>
       <p className="hint fm-hint">{hint}</p>
       <div className="fm-stage">

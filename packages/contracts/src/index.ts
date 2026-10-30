@@ -102,6 +102,33 @@ export const StockConsumePayload = z.object({
 });
 export type StockConsumePayload = z.infer<typeof StockConsumePayload>;
 
+/* ───────────── Mapa de la finca: lindero y potreros ───────────── */
+
+/** Punto [latitud, longitud] en grados decimales (WGS84). */
+export const LatLng = z.tuple([z.number().min(-90).max(90), z.number().min(-180).max(180)]);
+export type LatLng = z.infer<typeof LatLng>;
+const Ring = z.array(LatLng).min(3).max(5000);
+
+export const MapPaddock = z.object({
+  id: z.string().trim().min(1).max(40),
+  name: z.string().trim().min(1).max(60),
+  forage: z.string().trim().max(60),
+  points: Ring,
+});
+export type MapPaddock = z.infer<typeof MapPaddock>;
+
+/**
+ * Guarda el mapa completo de una finca. `baseRevision` es la revisión sobre la que se editó:
+ * si en el servidor ya hay otra (cambio desde otro dispositivo), el comando queda en conflicto.
+ */
+export const FarmMapSavePayload = z.object({
+  farmId: uuid,
+  baseRevision: z.number().int().min(0),
+  boundary: Ring.nullable(),
+  paddocks: z.array(MapPaddock).max(300),
+});
+export type FarmMapSavePayload = z.infer<typeof FarmMapSavePayload>;
+
 const base = { id: uuid, clientTs: z.string().datetime({ offset: true }) };
 
 export const AnimalCommand = z.object({
@@ -126,6 +153,12 @@ export const StockConsumeCommand = z.object({
   type: z.literal("stock.consume"),
   payload: StockConsumePayload,
 });
+export const FarmMapSaveCommand = z.object({
+  ...base,
+  type: z.literal("farm.map.save"),
+  payload: FarmMapSavePayload,
+});
+export type FarmMapSaveCommand = z.infer<typeof FarmMapSaveCommand>;
 export type SupplyCreateCommand = z.infer<typeof SupplyCreateCommand>;
 export type StockReceiveCommand = z.infer<typeof StockReceiveCommand>;
 export type StockConsumeCommand = z.infer<typeof StockConsumeCommand>;
@@ -136,6 +169,7 @@ export const CommandEnvelope = z.discriminatedUnion("type", [
   SupplyCreateCommand,
   StockReceiveCommand,
   StockConsumeCommand,
+  FarmMapSaveCommand,
 ]);
 export type CommandEnvelope = z.infer<typeof CommandEnvelope>;
 
@@ -207,11 +241,22 @@ export interface StockMovementDto {
   note: string | null;
 }
 
+export interface FarmMapDto {
+  farmId: string;
+  organizationId: string;
+  revision: number;
+  boundary: LatLng[] | null;
+  paddocks: MapPaddock[];
+  updatedAt: string;
+  updatedBy: string;
+}
+
 export type Change =
   | { version: number; entity: "farm"; op: "upsert"; data: FarmDto }
   | { version: number; entity: "animal"; op: "upsert"; data: AnimalDto }
   | { version: number; entity: "supply"; op: "upsert"; data: SupplyDto }
-  | { version: number; entity: "stock_movement"; op: "upsert"; data: StockMovementDto };
+  | { version: number; entity: "stock_movement"; op: "upsert"; data: StockMovementDto }
+  | { version: number; entity: "farm_map"; op: "upsert"; data: FarmMapDto };
 
 /** Las existencias de insumos son del conjunto de la organización: usan esta "finca" nula en el feed. */
 export const ORG_SCOPE_FARM_ID = "00000000-0000-0000-0000-000000000000";
@@ -269,5 +314,6 @@ export const ErrorCodes = {
   STOCK_INSUFICIENTE: "STOCK_INSUFICIENTE",
   INSUMO_NO_EXISTE: "INSUMO_NO_EXISTE",
   INSUMO_DUPLICADO: "INSUMO_DUPLICADO",
+  MAPA_DESACTUALIZADO: "MAPA_DESACTUALIZADO",
 } as const;
 export type ErrorCode = (typeof ErrorCodes)[keyof typeof ErrorCodes];

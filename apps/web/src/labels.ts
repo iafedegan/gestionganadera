@@ -27,6 +27,7 @@ export const KIND_LABEL: Record<string, string> = {
   "supply.create": "Nuevo insumo",
   "stock.receive": "Recepción de insumo",
   "stock.consume": "Consumo de insumo",
+  "farm.map.save": "Mapa de la finca",
 };
 export const SUPPLY_CATEGORY_LABEL: Record<string, string> = {
   alimento: "Alimento",

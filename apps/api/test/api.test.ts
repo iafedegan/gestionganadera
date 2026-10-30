@@ -628,3 +628,102 @@ describe("insumos: permisos por finca, costos y aislamiento", () => {
     expect(filas).toHaveLength(0);
   });
 });
+
+describe("mapa de la finca: linderos y potreros", () => {
+  const ring: [number, number][] = [
+    [8.47, -75.73],
+    [8.47, -75.72],
+    [8.48, -75.72],
+    [8.48, -75.73],
+  ];
+  const mapCmd = (farmId: string, baseRevision: number, paddocks = 1, id = uuidv7()) => ({
+    id,
+    type: "farm.map.save",
+    clientTs: new Date().toISOString(),
+    payload: {
+      farmId,
+      baseRevision,
+      boundary: ring,
+      paddocks: Array.from({ length: paddocks }, (_, i) => ({
+        id: `P${i + 1}`,
+        name: `Potrero ${i + 1}`,
+        forage: "Brachiaria brizantha",
+        points: ring,
+      })),
+    },
+  });
+
+  it("guarda revisiones, conserva el historial y lo entrega en la descarga", async () => {
+    const cookie = await loginAs("dueno-a@test.local");
+    const r1 = await push(cookie, orgA, [mapCmd(farmA, 0, 2)]);
+    expect(r1.body.results[0]?.status).toBe("accepted");
+    const r2 = await push(cookie, orgA, [mapCmd(farmA, 1, 3)]);
+    expect(r2.body.results[0]?.status).toBe("accepted");
+
+    const p = await pull(cookie, orgA);
+    const maps = p.body.changes.filter((c) => c.entity === "farm_map");
+    const last = maps[maps.length - 1];
+    expect(last?.entity === "farm_map" && last.data.revision).toBe(2);
+    expect(last?.entity === "farm_map" && last.data.paddocks).toHaveLength(3);
+
+    const hist = await db.tenant(orgA, (q) =>
+      q<{ revision: number }>(
+        "SELECT revision FROM farm_map_revision WHERE farm_id = $1 ORDER BY revision",
+        [farmA],
+      ),
+    );
+    expect(hist.map((h) => h.revision)).toEqual([1, 2]);
+  });
+
+  it("marca conflicto si otro dispositivo guardó antes (revisión base vieja)", async () => {
+    const cookie = await loginAs("dueno-a@test.local");
+    const r = await push(cookie, orgA, [mapCmd(farmA, 1)]);
+    expect(r.body.results[0]).toMatchObject({ status: "conflict", code: "MAPA_DESACTUALIZADO" });
+  });
+
+  it("un reenvío del mismo comando no crea otra revisión", async () => {
+    const cookie = await loginAs("dueno-a@test.local");
+    const c = mapCmd(farmA2, 0);
+    const a = await push(cookie, orgA, [c]);
+    const b = await push(cookie, orgA, [c]);
+    expect(b.body.results[0]).toEqual(a.body.results[0]);
+    const rev = await db.tenant(orgA, (q) =>
+      q<{ revision: number }>("SELECT revision FROM farm_map WHERE farm_id = $1", [farmA2]),
+    );
+    expect(rev[0]?.revision).toBe(1);
+  });
+
+  it("el operario no puede editar el mapa", async () => {
+    const op = await loginAs("operario-a@test.local");
+    const r = await push(op, orgA, [mapCmd(farmA, 2)]);
+    expect(r.body.results[0]).toMatchObject({ status: "rejected", code: "PERMISO_DENEGADO" });
+  });
+
+  it("no permite guardar el mapa de una finca de otra organización", async () => {
+    const cookie = await loginAs("dueno-a@test.local");
+    const r = await push(cookie, orgA, [mapCmd(farmB, 0)]);
+    expect(r.body.results[0]?.status).toBe("rejected");
+    const otra = await db.tenant(orgB, (q) =>
+      q("SELECT 1 FROM farm_map WHERE farm_id = $1", [farmB]),
+    );
+    expect(otra).toHaveLength(0);
+  });
+
+  it("rechaza coordenadas fuera de rango", async () => {
+    const cookie = await loginAs("dueno-a@test.local");
+    const bad = mapCmd(farmA, 2);
+    bad.payload.boundary = [
+      [95, -75],
+      [8, -75],
+      [8, -74],
+    ];
+    const r = await push(cookie, orgA, [bad]);
+    expect(r.body.results[0]).toMatchObject({ status: "rejected", code: "VALIDACION" });
+  });
+
+  it("el historial de revisiones no se puede modificar", async () => {
+    await expect(
+      db.admin((q) => q("UPDATE farm_map_revision SET revision = 99 WHERE farm_id = $1", [farmA])),
+    ).rejects.toThrow();
+  });
+});

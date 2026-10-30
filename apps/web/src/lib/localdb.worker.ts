@@ -5,6 +5,9 @@ import type {
   Change,
   CommandEnvelope,
   ConsumeTarget,
+  FarmMapSaveCommand,
+  LatLng,
+  MapPaddock,
   StockConsumeCommand,
   StockReceiveCommand,
   SupplyCreateCommand,
@@ -57,6 +60,24 @@ export interface OutboxItem {
   errorCode: string | null;
   errorMessage: string | null;
   createdAt: string;
+}
+
+interface MapPayload {
+  boundary: LatLng[] | null;
+  paddocks: MapPaddock[];
+  updatedAt: string;
+  updatedBy: string;
+}
+
+export interface LocalFarmMap extends MapPayload {
+  farmId: string;
+  /** Revisión del servidor sobre la que se editó lo que se ve. */
+  revision: number;
+  /** Última revisión conocida del servidor. */
+  serverRevision: number;
+  syncState: SyncState;
+  /** Versión del servidor, por si hay cambios locales en conflicto. */
+  server: MapPayload | null;
 }
 
 export interface SupplyLot {
@@ -168,6 +189,10 @@ const SCHEMA = `
     kind TEXT NOT NULL, quantity REAL NOT NULL, lot_code TEXT, expires_on TEXT, occurred_on TEXT NOT NULL,
     payload BLOB NOT NULL);
   CREATE INDEX IF NOT EXISTS stock_by_supply ON stock_movement (supply_id, farm_id);
+  CREATE TABLE IF NOT EXISTS farm_map (
+    farm_id TEXT PRIMARY KEY, org_id TEXT NOT NULL, revision INTEGER NOT NULL,
+    server_revision INTEGER NOT NULL DEFAULT 0, sync_state TEXT NOT NULL,
+    payload BLOB NOT NULL, server_payload BLOB);
 `;
 
 const OUTBOX = `
@@ -196,7 +221,7 @@ function migrate(d: Database): void {
               FROM outbox_v1 o LEFT JOIN animal a ON a.id = o.animal_id;
             DROP TABLE outbox_v1;`);
   }
-  if (version < 2) d.exec("PRAGMA user_version = 2");
+  if (version < 3) d.exec("PRAGMA user_version = 3");
 }
 
 async function openDb(userId: string): Promise<void> {
@@ -266,7 +291,7 @@ const api = {
   wipe(): void {
     const d = requireDb();
     d.exec(
-      "DELETE FROM animal; DELETE FROM farm; DELETE FROM supply; DELETE FROM stock_movement; DELETE FROM outbox; DELETE FROM meta;",
+      "DELETE FROM animal; DELETE FROM farm; DELETE FROM supply; DELETE FROM stock_movement; DELETE FROM farm_map; DELETE FROM outbox; DELETE FROM meta;",
     );
   },
 
@@ -316,6 +341,19 @@ const api = {
               supplier: m.supplier,
               target: m.target,
               note: m.note,
+            }),
+          ),
+        });
+      } else if (c.entity === "farm_map") {
+        const m = c.data;
+        prepared.push({
+          c,
+          payload: await seal(
+            JSON.stringify({
+              boundary: m.boundary,
+              paddocks: m.paddocks,
+              updatedAt: m.updatedAt,
+              updatedBy: m.updatedBy,
             }),
           ),
         });
@@ -373,6 +411,27 @@ const api = {
               payload as Uint8Array<ArrayBuffer>,
             ],
           });
+        } else if (c.entity === "farm_map") {
+          const m = c.data;
+          // Con cambios locales sin confirmar, solo se guarda la versión del servidor aparte:
+          // así el usuario decide en caso de conflicto y nada se pierde.
+          d.exec({
+            sql: `INSERT INTO farm_map (farm_id, org_id, revision, server_revision, sync_state, payload, server_payload)
+                  VALUES (?,?,?,?,'sincronizado',?,?)
+                  ON CONFLICT (farm_id) DO UPDATE SET
+                    server_revision = excluded.server_revision, server_payload = excluded.server_payload,
+                    revision = CASE WHEN farm_map.sync_state = 'sincronizado' THEN excluded.revision ELSE farm_map.revision END,
+                    payload = CASE WHEN farm_map.sync_state = 'sincronizado' THEN excluded.payload ELSE farm_map.payload END
+                  WHERE excluded.server_revision >= farm_map.server_revision`,
+            bind: [
+              m.farmId,
+              m.organizationId,
+              m.revision,
+              m.revision,
+              payload as Uint8Array<ArrayBuffer>,
+              payload as Uint8Array<ArrayBuffer>,
+            ],
+          });
         } else {
           const m = c.data;
           d.exec({
@@ -414,7 +473,7 @@ const api = {
   resetSynced(): void {
     const d = requireDb();
     d.exec(
-      "DELETE FROM animal WHERE sync_state = 'sincronizado'; DELETE FROM supply WHERE sync_state = 'sincronizado'; DELETE FROM stock_movement; DELETE FROM farm; DELETE FROM meta WHERE k IN ('cursor','scope');",
+      "DELETE FROM animal WHERE sync_state = 'sincronizado'; DELETE FROM supply WHERE sync_state = 'sincronizado'; DELETE FROM stock_movement; DELETE FROM farm_map WHERE sync_state = 'sincronizado'; DELETE FROM farm; DELETE FROM meta WHERE k IN ('cursor','scope');",
     );
   },
 
@@ -603,6 +662,10 @@ const api = {
           sql: "UPDATE supply SET sync_state = ? WHERE id = (SELECT entity_id FROM outbox WHERE id = ? AND kind = 'supply.create')",
           bind: [animalState, r.id],
         });
+        d.exec({
+          sql: "UPDATE farm_map SET sync_state = ? WHERE farm_id = (SELECT entity_id FROM outbox WHERE id = ? AND kind = 'farm.map.save')",
+          bind: [animalState, r.id],
+        });
       }
       d.exec("COMMIT");
     } catch (err) {
@@ -640,6 +703,11 @@ const api = {
       });
       d.exec({
         sql: "DELETE FROM supply WHERE sync_state IN ('rechazado','conflicto','pendiente') AND id = (SELECT entity_id FROM outbox WHERE id = ? AND kind = 'supply.create')",
+        bind: [id],
+      });
+      d.exec({
+        sql: `UPDATE farm_map SET payload = coalesce(server_payload, payload), revision = server_revision, sync_state = 'sincronizado'
+               WHERE server_payload IS NOT NULL AND farm_id = (SELECT entity_id FROM outbox WHERE id = ? AND kind = 'farm.map.save')`,
         bind: [id],
       });
       d.exec({ sql: "DELETE FROM outbox WHERE id = ?", bind: [id] });
@@ -749,6 +817,109 @@ const api = {
       ],
     });
     return { ok: true };
+  },
+
+  /** Mapa de la finca tal como lo ve este dispositivo (incluidos cambios sin enviar). */
+  async getFarmMap(farmId: string): Promise<LocalFarmMap | null> {
+    const rows = requireDb().selectObjects(
+      "SELECT farm_id, revision, server_revision, sync_state, payload, server_payload FROM farm_map WHERE farm_id = ?",
+      [farmId],
+    ) as {
+      farm_id: string;
+      revision: number;
+      server_revision: number;
+      sync_state: SyncState;
+      payload: Uint8Array<ArrayBuffer>;
+      server_payload: Uint8Array<ArrayBuffer> | null;
+    }[];
+    const r = rows[0];
+    if (!r) return null;
+    const mine = JSON.parse(await unseal(r.payload)) as MapPayload;
+    const server = r.server_payload
+      ? (JSON.parse(await unseal(r.server_payload)) as MapPayload)
+      : null;
+    return {
+      farmId: r.farm_id,
+      revision: Number(r.revision),
+      serverRevision: Number(r.server_revision),
+      syncState: r.sync_state,
+      boundary: mine.boundary,
+      paddocks: mine.paddocks,
+      updatedAt: mine.updatedAt,
+      updatedBy: mine.updatedBy,
+      server,
+    };
+  },
+
+  /**
+   * Guarda el mapa en el dispositivo y encola su envío. Solo importa el último estado del mapa,
+   * así que un guardado reemplaza al comando anterior que aún no salió.
+   */
+  async enqueueFarmMap(args: {
+    orgId: string;
+    command: FarmMapSaveCommand;
+    updatedBy: string;
+  }): Promise<void> {
+    const d = requireDb();
+    const p = args.command.payload;
+    const payload = await seal(
+      JSON.stringify({
+        boundary: p.boundary,
+        paddocks: p.paddocks,
+        updatedAt: new Date().toISOString(),
+        updatedBy: args.updatedBy,
+      }),
+    );
+    const body = await seal(JSON.stringify(args.command));
+    d.exec("BEGIN");
+    try {
+      d.exec({
+        sql: "DELETE FROM outbox WHERE kind = 'farm.map.save' AND entity_id = ? AND state IN ('pendiente','conflicto','rechazado')",
+        bind: [p.farmId],
+      });
+      d.exec({
+        sql: `INSERT INTO farm_map (farm_id, org_id, revision, server_revision, sync_state, payload)
+              VALUES (?,?,?,?,'pendiente',?)
+              ON CONFLICT (farm_id) DO UPDATE SET revision = excluded.revision, sync_state = 'pendiente', payload = excluded.payload`,
+        bind: [p.farmId, args.orgId, p.baseRevision, p.baseRevision, payload],
+      });
+      d.exec({
+        sql: "INSERT INTO outbox (id, org_id, kind, entity_id, label, farm_id, state, body, created_at) VALUES (?,?,'farm.map.save',?,?,?,'pendiente',?,?)",
+        bind: [
+          args.command.id,
+          args.orgId,
+          p.farmId,
+          "Mapa de la finca",
+          p.farmId,
+          body,
+          new Date().toISOString(),
+        ],
+      });
+      d.exec("COMMIT");
+    } catch (err) {
+      d.exec("ROLLBACK");
+      throw err;
+    }
+  },
+
+  /** Conflicto resuelto a favor del servidor: se descartan los cambios locales del mapa. */
+  useServerFarmMap(farmId: string): void {
+    const d = requireDb();
+    d.exec("BEGIN");
+    try {
+      d.exec({
+        sql: "DELETE FROM outbox WHERE kind = 'farm.map.save' AND entity_id = ? AND state <> 'enviado'",
+        bind: [farmId],
+      });
+      d.exec({
+        sql: "UPDATE farm_map SET payload = coalesce(server_payload, payload), revision = server_revision, sync_state = 'sincronizado' WHERE farm_id = ?",
+        bind: [farmId],
+      });
+      d.exec("COMMIT");
+    } catch (err) {
+      d.exec("ROLLBACK");
+      throw err;
+    }
   },
 
   /** Resumen de existencias por insumo: confirmado, pendiente, lotes y vencimiento más próximo. */
