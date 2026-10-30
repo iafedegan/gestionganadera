@@ -1,0 +1,16 @@
+# Nunca subir datos locales ni credenciales a Vercel.
+.data
+**/.data
+.seed-credentials.json
+**/.seed-credentials.json
+.env
+.env.*
+**/.env.*
+node_modules
+**/node_modules
+**/dist
+public
+api/index.js
+spikes
+docs
+*.log
