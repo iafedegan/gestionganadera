@@ -166,7 +166,7 @@ export function SettingsScreen() {
               hint={
                 caps.nfc
                   ? "Acerque el celular a la etiqueta."
-                  : "Use Chrome en un Android con NFC. En iPhone, use el bastón o el QR."
+                  : "Use Chrome en un Android con NFC. En iPhone, use el bastón RFID o escriba el código."
               }
             />
             <Support
