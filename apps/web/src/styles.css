@@ -4635,3 +4635,134 @@ tbody tr:hover {
     opacity: 0;
   }
 }
+
+/* Logo de la barra plegada: ícono completo, centrado en los 76 px */
+@media (min-width: 901px) and (hover: hover) {
+  .sidebar .sidebar-art-wrap::after {
+    left: 16px;
+    top: 10px;
+    width: 44px;
+    height: 44px;
+    border-radius: 12px;
+    background: url("/app/icon.svg") center / contain no-repeat;
+    box-shadow: 0 0 0 2px rgb(255 255 255 / 0.14);
+  }
+}
+
+/* Prototipo de módulos: indicadores, barras y tablas */
+.kpi-row {
+  display: grid;
+  gap: 14px;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr));
+  margin: 16px 0;
+}
+.page > .card {
+  margin-bottom: 16px;
+}
+.banner.banner-info {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.bars {
+  display: flex;
+  align-items: flex-end;
+  gap: 10px;
+  height: 180px;
+  padding-top: 8px;
+}
+.bar-col {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  justify-items: center;
+  align-items: end;
+  gap: 4px;
+}
+.bar {
+  width: min(44px, 80%);
+  border-radius: 10px 10px 4px 4px;
+  background: linear-gradient(
+    180deg,
+    var(--azul, #0f6bc4),
+    color-mix(in srgb, var(--azul, #0f6bc4) 55%, white)
+  );
+  transform-origin: bottom;
+  animation: barUp 700ms cubic-bezier(0.32, 0.72, 0, 1) both;
+}
+@keyframes barUp {
+  from {
+    transform: scaleY(0.05);
+  }
+}
+.bar-val,
+.bar-lab {
+  font-size: 0.72rem;
+  color: var(--texto-suave);
+}
+.proto-tabs {
+  grid-auto-flow: column;
+  grid-auto-columns: max-content;
+  overflow-x: auto;
+  margin-bottom: 8px;
+}
+.proto-tabs .seg-opt {
+  padding: 0 16px;
+  white-space: nowrap;
+}
+.ptable-wrap {
+  overflow-x: auto;
+}
+.ptable {
+  width: 100%;
+  border-collapse: collapse;
+}
+.ptable th {
+  text-align: left;
+  font-size: 0.74rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--texto-suave);
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--borde);
+}
+.ptable td {
+  padding: 12px;
+  border-bottom: 1px solid var(--borde);
+}
+.ptable tr:last-child td {
+  border-bottom: 0;
+}
+@media (max-width: 900px) {
+  .ptable thead {
+    display: none;
+  }
+  .ptable,
+  .ptable tbody,
+  .ptable tr,
+  .ptable td {
+    display: block;
+  }
+  .ptable tr {
+    padding: 10px 0;
+    border-bottom: 1px solid var(--borde);
+  }
+  .ptable td {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 4px 0;
+    border: 0;
+    text-align: right;
+  }
+  .ptable td::before {
+    content: attr(data-label);
+    color: var(--texto-suave);
+    font-size: 0.8rem;
+    text-align: left;
+  }
+}

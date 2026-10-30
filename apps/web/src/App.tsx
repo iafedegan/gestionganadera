@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { AnimalsScreen } from "./animals";
-import { Home, Login, type ModuleKey, ModulePreview, Shell } from "./screens";
+import { ModuleProto } from "./proto";
+import { Home, Login, type ModuleKey, Shell } from "./screens";
 import { SettingsScreen } from "./settings";
 import { useApp } from "./state";
 import { SuppliesScreen } from "./supplies";
@@ -21,7 +22,7 @@ export function App() {
       {module !== "inicio" &&
         module !== "animales" &&
         module !== "compras" &&
-        module !== "configuracion" && <ModulePreview module={module} />}
+        module !== "configuracion" && <ModuleProto module={module} />}
     </Shell>
   );
 }

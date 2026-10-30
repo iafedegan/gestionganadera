@@ -50,6 +50,7 @@ import {
   useScrolled,
   useSwipeDismiss,
 } from "./native";
+import { PROTO } from "./protoData";
 import { useApp } from "./state";
 import { statusOf } from "./supplies";
 
@@ -316,7 +317,7 @@ function NavList(props: {
           >
             <ModIcon k={m.key} />
             <span className="nav-label">{m.label}</span>
-            {m.phase && <small title={`Planificado: ${m.phase}`}>Pronto</small>}
+            {m.phase && !PROTO[m.key] && <small title={`Planificado: ${m.phase}`}>Pronto</small>}
           </button>
         </li>
       ))}
