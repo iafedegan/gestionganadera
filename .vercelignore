@@ -9,8 +9,8 @@
 node_modules
 **/node_modules
 **/dist
-public
-api/_app.cjs
+/public
+/api/_app.cjs
 spikes
 docs
 *.log
