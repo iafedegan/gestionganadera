@@ -93,13 +93,11 @@ export function AsistenciaScreen() {
         },
       },
     })),
-    ...proximas
-      .slice(0, 2)
-      .map((v) => ({
-        tone: "azul" as Tone,
-        title: `Visita ${v.area.toLowerCase()} en ${daysFromNow(v.fecha)} días`,
-        text: `${v.asesor} · ${v.objetivo}`,
-      })),
+    ...proximas.slice(0, 2).map((v) => ({
+      tone: "azul" as Tone,
+      title: `Visita ${v.area.toLowerCase()} en ${daysFromNow(v.fecha)} días`,
+      text: `${v.asesor} · ${v.objetivo}`,
+    })),
     ...grants
       .filter((g) => g.activo && daysFromNow(g.hasta) <= 15)
       .map((g) => ({

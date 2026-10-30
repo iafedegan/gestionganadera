@@ -77,8 +77,20 @@ export function Tabs<K extends string>(props: {
   value: K;
   onChange(k: K): void;
 }) {
+  const ref = useRef<HTMLDivElement>(null);
+  // La pestaña activa siempre queda a la vista en la barra desplazable.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: se recalcula al cambiar de pestaña
+  useEffect(() => {
+    const bar = ref.current;
+    const on = bar?.querySelector<HTMLElement>(".kit-tab.on");
+    if (bar && on)
+      bar.scrollTo({
+        left: on.offsetLeft - bar.clientWidth / 2 + on.offsetWidth / 2,
+        behavior: "smooth",
+      });
+  }, [props.value]);
   return (
-    <div className="kit-tabs" role="tablist">
+    <div className="kit-tabs" role="tablist" ref={ref}>
       {props.tabs.map((t) => (
         <button
           key={t.key}
@@ -132,7 +144,7 @@ export function Panel(props: {
   return (
     <article className={props.wide ? "card kit-panel wide" : "card kit-panel"}>
       <CardHead
-        icon={props.icon ?? <span aria-hidden="true">●</span>}
+        icon={props.icon ?? <span className="ch-none" aria-hidden="true" />}
         title={props.title}
         {...(props.sub ? { sub: props.sub } : {})}
         {...(props.action ? { action: props.action } : {})}

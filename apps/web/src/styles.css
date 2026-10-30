@@ -5790,3 +5790,159 @@ span.neg {
     max-width: none;
   }
 }
+
+/* ═════════ Auditoría responsive: los contenedores con scroll propio no ensanchan la página ═════════ */
+.main,
+.page,
+.page > *,
+.kit-panel,
+.kit-grid2 > *,
+.kit-grid3 > *,
+.kit-table,
+.farm-map-wrap,
+.farm-map-wrap > * {
+  min-width: 0;
+  max-width: 100%;
+}
+.kit-tabs,
+.ptable-wrap,
+.proto-tabs {
+  max-width: 100%;
+  min-width: 0;
+}
+.kit-seg {
+  flex-wrap: wrap;
+  max-width: 100%;
+}
+.ks-label,
+.ks-meta,
+.ks-value {
+  overflow-wrap: anywhere;
+}
+@media (max-width: 900px) {
+  .tile-go,
+  .ar-go {
+    min-width: 44px;
+    min-height: 44px;
+  }
+  .kit-tab {
+    min-height: 44px;
+  }
+  .kit-seg button {
+    min-height: 40px;
+  }
+  .btn-sm {
+    min-height: 40px;
+  }
+}
+
+/* ═════════ UX móvil: acciones, pestañas y tablas en tarjetas ═════════ */
+@media (max-width: 900px) {
+  /* Las acciones del encabezado vuelven en celular, salvo donde hay botón flotante. */
+  .page-head .page-actions {
+    display: flex;
+    flex-wrap: nowrap;
+    gap: 8px;
+    overflow-x: auto;
+    margin: 4px -16px 0;
+    padding: 4px 16px 8px;
+    scrollbar-width: none;
+    -webkit-mask-image: linear-gradient(90deg, #000 88%, transparent);
+    mask-image: linear-gradient(90deg, #000 88%, transparent);
+  }
+  .page-head .page-actions::-webkit-scrollbar {
+    display: none;
+  }
+  .page-head .page-actions .btn {
+    flex: 0 0 auto;
+    min-height: 44px;
+    white-space: nowrap;
+  }
+  .page:has(.fab) .page-head .page-actions {
+    display: none;
+  }
+  .kit-tabs {
+    margin-left: -16px;
+    margin-right: -16px;
+    padding: 0 16px;
+    max-width: none;
+    width: calc(100% + 32px);
+    -webkit-mask-image: linear-gradient(
+      90deg,
+      transparent,
+      #000 16px,
+      #000 calc(100% - 28px),
+      transparent
+    );
+    mask-image: linear-gradient(90deg, transparent, #000 16px, #000 calc(100% - 28px), transparent);
+  }
+  .kit-toolbar {
+    gap: 8px;
+  }
+  .kit-toolbar .hint {
+    font-size: 0.8rem;
+  }
+  /* Tabla → tarjetas: la primera celda es el título de la tarjeta. */
+  .ptable tbody tr {
+    margin-bottom: 10px;
+    padding: 12px 14px;
+    border: 1px solid var(--borde);
+    border-radius: 14px;
+    background: #fff;
+  }
+  .ptable tbody tr:last-child {
+    margin-bottom: 0;
+  }
+  .ptable tbody td:first-child {
+    display: block;
+    text-align: left;
+    font-size: 1rem;
+    padding-bottom: 6px;
+    margin-bottom: 4px;
+    border-bottom: 1px solid var(--borde);
+  }
+  .ptable tbody td:first-child::before {
+    display: none;
+  }
+  .ptable tbody td {
+    align-items: center;
+    min-height: 30px;
+  }
+  .ptable tr.clickable:hover td {
+    background: none;
+  }
+  .ptable tr.clickable:active {
+    background: rgb(15 61 46 / 0.05);
+  }
+  .kt-search {
+    flex-basis: 100%;
+  }
+  .kit-panel .ch {
+    margin-bottom: 8px;
+  }
+  .fm-toolbar,
+  .fm-group {
+    width: 100%;
+  }
+}
+.ch-icon:has(> .ch-none) {
+  display: none;
+}
+@media (max-width: 640px) {
+  /* Formularios a pantalla completa, como una hoja nativa del teléfono. */
+  .dialog.dialog-form {
+    width: 100vw;
+    max-width: 100vw;
+    height: 100dvh;
+    max-height: 100dvh;
+    margin: 0;
+    border-radius: 0;
+  }
+  .dialog.dialog-form form {
+    height: 100%;
+    max-height: 100dvh;
+  }
+  .dialog-form .dialog-head {
+    padding-top: calc(12px + env(safe-area-inset-top));
+  }
+}
