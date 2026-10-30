@@ -11,11 +11,14 @@ import {
   Baby,
   Building2,
   CalendarCheck,
+  CalendarDays,
   Cloud,
   CloudOff,
   FileText,
+  Fingerprint,
   GitBranch,
   History,
+  Layers,
   Nfc,
   PawPrint,
   PlusCircle,
@@ -860,105 +863,120 @@ export function RegisterDialog(props: {
         </header>
 
         <div className="dialog-body">
-          {farmOne ? (
-            <p className="farm-chip">
-              <Building2 size={16} aria-hidden="true" /> {farmOne.name}
-            </p>
-          ) : (
-            <label>
-              Finca
-              <select required value={farmId} onChange={(e) => setFarmId(e.target.value)}>
-                <option value="" disabled>
-                  Seleccione
-                </option>
-                {farms.map((f) => (
-                  <option key={f.id} value={f.id}>
-                    {f.name}
+          <section className="fsec">
+            <h3 className="fsec-t">
+              <Fingerprint size={18} aria-hidden="true" /> Identificación
+            </h3>
+            {farmOne ? (
+              <p className="farm-chip">
+                <Building2 size={16} aria-hidden="true" /> {farmOne.name}
+              </p>
+            ) : (
+              <label>
+                Finca
+                <select required value={farmId} onChange={(e) => setFarmId(e.target.value)}>
+                  <option value="" disabled>
+                    Seleccione
                   </option>
-                ))}
-              </select>
-            </label>
-          )}
-
-          <label>
-            Arete o identificación visible
-            <input
-              ref={tagRef}
-              required
-              autoComplete="off"
-              autoCapitalize="characters"
-              autoCorrect="off"
-              spellCheck={false}
-              enterKeyHint="done"
-              maxLength={40}
-              placeholder="Ej. BOV-014"
-              value={tag}
-              onChange={(e) => setTag(e.target.value)}
-              className="mono input-lg"
-              onKeyDown={(e) => {
-                // El bastón RFID termina con Enter: no debe enviar el formulario a medias.
-                if (e.key === "Enter" && tag) e.preventDefault();
-              }}
-            />
-            {caps.nfc && (
-              <button
-                type="button"
-                className="btn btn-ghost btn-sm"
-                disabled={reading}
-                onClick={() => void readChip()}
-              >
-                <Nfc size={16} aria-hidden="true" />{" "}
-                {reading ? "Acerque la etiqueta…" : "Leer chip"}
-              </button>
+                  {farms.map((f) => (
+                    <option key={f.id} value={f.id}>
+                      {f.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
             )}
-          </label>
 
-          <Segmented
-            legend="Especie"
-            value={species}
-            onChange={(v) => {
-              setSpecies(v);
-              setMotherId("");
-              setFatherId("");
-            }}
-            options={[
-              { value: "bovino", label: "Bovino" },
-              { value: "bufalino", label: "Bufalino" },
-            ]}
-          />
-          <Segmented
-            legend="Sexo"
-            value={sex}
-            onChange={changeSex}
-            options={[
-              { value: "hembra", label: "Hembra" },
-              { value: "macho", label: "Macho" },
-            ]}
-          />
-          <Segmented
-            legend="Categoría"
-            value={category}
-            onChange={setCategory}
-            wrap
-            options={cats.map((c) => ({ value: c, label: CATEGORY_LABEL[c] ?? c }))}
-          />
-          <Segmented
-            legend="Motivo de entrada"
-            value={reason}
-            onChange={setReason}
-            wrap
-            options={Object.entries(REASON_LABEL).map(([value, label]) => ({ value, label }))}
-          />
-          <label>
-            Fecha de entrada
-            <input
-              type="date"
-              required
-              max={todayLocal()}
-              value={entryDate}
-              onChange={(e) => setEntryDate(e.target.value)}
+            <label>
+              Arete o identificación visible
+              <input
+                ref={tagRef}
+                required
+                autoComplete="off"
+                autoCapitalize="characters"
+                autoCorrect="off"
+                spellCheck={false}
+                enterKeyHint="done"
+                maxLength={40}
+                placeholder="Ej. BOV-014"
+                value={tag}
+                onChange={(e) => setTag(e.target.value)}
+                className="mono input-lg"
+                onKeyDown={(e) => {
+                  // El bastón RFID termina con Enter: no debe enviar el formulario a medias.
+                  if (e.key === "Enter" && tag) e.preventDefault();
+                }}
+              />
+              {caps.nfc && (
+                <button
+                  type="button"
+                  className="btn btn-ghost btn-sm"
+                  disabled={reading}
+                  onClick={() => void readChip()}
+                >
+                  <Nfc size={16} aria-hidden="true" />{" "}
+                  {reading ? "Acerque la etiqueta…" : "Leer chip"}
+                </button>
+              )}
+            </label>
+
+            <Segmented
+              legend="Especie"
+              value={species}
+              onChange={(v) => {
+                setSpecies(v);
+                setMotherId("");
+                setFatherId("");
+              }}
+              options={[
+                { value: "bovino", label: "Bovino" },
+                { value: "bufalino", label: "Bufalino" },
+              ]}
             />
-          </label>
+          </section>
+          <section className="fsec">
+            <h3 className="fsec-t">
+              <Layers size={18} aria-hidden="true" /> Clasificación
+            </h3>
+            <Segmented
+              legend="Sexo"
+              value={sex}
+              onChange={changeSex}
+              options={[
+                { value: "hembra", label: "Hembra" },
+                { value: "macho", label: "Macho" },
+              ]}
+            />
+            <Segmented
+              legend="Categoría"
+              value={category}
+              onChange={setCategory}
+              wrap
+              options={cats.map((c) => ({ value: c, label: CATEGORY_LABEL[c] ?? c }))}
+            />
+          </section>
+          <section className="fsec">
+            <h3 className="fsec-t">
+              <CalendarDays size={18} aria-hidden="true" /> Entrada al hato
+            </h3>
+            <Segmented
+              legend="Motivo de entrada"
+              value={reason}
+              onChange={setReason}
+              wrap
+              options={Object.entries(REASON_LABEL).map(([value, label]) => ({ value, label }))}
+            />
+            <label>
+              Fecha de entrada
+              <input
+                type="date"
+                required
+                max={todayLocal()}
+                value={entryDate}
+                onChange={(e) => setEntryDate(e.target.value)}
+              />
+            </label>
+          </section>
 
           <details
             className="more"

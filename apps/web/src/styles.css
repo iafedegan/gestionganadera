@@ -4387,3 +4387,251 @@ tbody tr:hover {
   color: var(--azul, #0f6bc4);
   flex-shrink: 0;
 }
+
+/* ═════════ Formulario de registro · secciones ═════════ */
+.dialog.dialog-form {
+  width: min(680px, calc(100vw - 32px));
+  border: 0;
+  border-radius: 22px;
+  background: #f6f7f2;
+  box-shadow: 0 40px 80px -24px rgb(5 16 11 / 0.55);
+}
+.dialog-form .dialog-head {
+  padding: 16px 20px;
+  background: var(--superficie);
+  border-bottom: 1px solid rgb(0 0 0 / 0.06);
+}
+.dialog-form .dialog-head h2 {
+  font-weight: 800;
+  letter-spacing: -0.01em;
+}
+.dialog-form .dialog-body {
+  gap: 14px;
+  padding: 18px 20px 22px;
+}
+.fsec {
+  display: grid;
+  gap: 14px;
+  padding: 18px;
+  background: var(--superficie);
+  border-radius: 18px;
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.04), 0 6px 18px -10px rgb(5 40 28 / 0.18);
+}
+.fsec-t {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font-size: 0.74rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--verde-botella);
+}
+.fsec-t svg {
+  padding: 5px;
+  width: 28px;
+  height: 28px;
+  border-radius: 9px;
+  background: var(--verde-t);
+}
+.dialog-form .fsec label,
+.dialog-form .more label {
+  display: grid;
+  gap: 6px;
+  font-size: 0.84rem;
+  font-weight: 600;
+  color: var(--texto);
+}
+.dialog-form .fsec input:not([type="radio"]),
+.dialog-form .fsec select,
+.dialog-form .more input,
+.dialog-form .more select,
+.dialog-form .more textarea {
+  min-height: 50px;
+  padding: 0 14px;
+  border: 1px solid rgb(0 0 0 / 0.12);
+  border-radius: 12px;
+  background: #fbfbf8;
+  font: inherit;
+  font-weight: 500;
+}
+.dialog-form .fsec input:focus,
+.dialog-form .fsec select:focus,
+.dialog-form .more input:focus,
+.dialog-form .more select:focus,
+.dialog-form .more textarea:focus {
+  outline: 0;
+  border-color: var(--azul, #0f6bc4);
+  background: #fff;
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--azul, #0f6bc4) 16%, transparent);
+}
+.dialog-form .fsec input.input-lg {
+  min-height: 58px;
+  font-size: 1.2rem;
+  letter-spacing: 0.04em;
+}
+.dialog-form .seg-opt {
+  border: 1px solid rgb(0 0 0 / 0.1);
+  background: #fbfbf8;
+  box-shadow: none;
+  font-weight: 600;
+}
+.dialog-form .seg-opt.on {
+  background: color-mix(in srgb, var(--verde-botella) 10%, white);
+  border-color: var(--verde-botella);
+  color: var(--verde-botella);
+  box-shadow: inset 0 0 0 1px var(--verde-botella);
+}
+.dialog-form .seg legend {
+  font-size: 0.84rem;
+  margin-bottom: 8px;
+}
+.dialog-form details.more {
+  background: var(--superficie);
+  border-radius: 18px;
+  padding: 4px 18px;
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.04);
+}
+.dialog-form details.more summary {
+  min-height: 52px;
+  display: flex;
+  align-items: center;
+  font-weight: 700;
+  cursor: pointer;
+}
+.dialog-form .dialog-actions {
+  background: var(--superficie);
+  border-top: 1px solid rgb(0 0 0 / 0.06);
+  padding: 14px 20px calc(14px + env(safe-area-inset-bottom));
+}
+.dialog-form .dialog-actions .btn {
+  min-height: 52px;
+  border-radius: 14px;
+}
+@media (min-width: 640px) {
+  /* Dos columnas: especie junto a la identificación no cabe; sexo y categoría sí. */
+  .fsec .seg-row.wrap {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+@media (max-width: 900px) {
+  .dialog.dialog-form {
+    border-radius: 0;
+    background: #f2f4f1;
+  }
+  .fsec {
+    padding: 16px;
+  }
+}
+
+/* ═════════ Barra lateral plegada: se abre al pasar el mouse ═════════ */
+@media (min-width: 901px) and (hover: hover) {
+  .shell {
+    grid-template-columns: 76px minmax(0, 1fr);
+  }
+  .sidebar {
+    z-index: 60;
+    width: 76px;
+    transition: width 220ms cubic-bezier(0.32, 0.72, 0, 1), box-shadow 220ms ease;
+  }
+  .sidebar:hover,
+  .sidebar:focus-within {
+    width: 268px;
+    box-shadow: 18px 0 40px -18px rgb(5 16 11 / 0.55);
+  }
+  .sidebar .nav {
+    padding: 0 14px;
+    gap: 18px;
+    white-space: nowrap;
+  }
+  .sidebar .nav-label,
+  .sidebar .nav small,
+  .sidebar .nav-group,
+  .sidebar .sync-mini span {
+    opacity: 0;
+    transition: opacity 140ms ease;
+  }
+  .sidebar:hover .nav-label,
+  .sidebar:hover .nav small,
+  .sidebar:hover .nav-group,
+  .sidebar:hover .sync-mini span,
+  .sidebar:focus-within .nav-label,
+  .sidebar:focus-within .nav small,
+  .sidebar:focus-within .nav-group,
+  .sidebar:focus-within .sync-mini span {
+    opacity: 1;
+    transition-delay: 90ms;
+  }
+  .sidebar .nav small {
+    margin-left: auto;
+  }
+  .sidebar .sidebar-art-wrap {
+    height: 56px;
+    margin-bottom: 8px;
+    transition: height 220ms cubic-bezier(0.32, 0.72, 0, 1);
+  }
+  .sidebar:hover .sidebar-art-wrap,
+  .sidebar:focus-within .sidebar-art-wrap {
+    height: 128px;
+  }
+  .sidebar .sidebar-art {
+    width: 268px;
+    max-width: none;
+    margin-left: -97px;
+  }
+  .sidebar .nav-group {
+    white-space: nowrap;
+  }
+  .sidebar .sync-mini {
+    width: 48px;
+    overflow: hidden;
+    white-space: nowrap;
+    transition: width 220ms cubic-bezier(0.32, 0.72, 0, 1);
+  }
+  .sidebar:hover .sync-mini,
+  .sidebar:focus-within .sync-mini {
+    width: 100%;
+  }
+}
+@media (min-width: 901px) and (hover: hover) {
+  .sidebar .sidebar-art {
+    transition: margin-left 220ms cubic-bezier(0.32, 0.72, 0, 1);
+  }
+  .sidebar:hover .sidebar-art,
+  .sidebar:focus-within .sidebar-art {
+    margin-left: 0;
+  }
+}
+
+/* Plegada: sin ilustración recortada; solo el logo. Al abrir, aparece la ilustración completa. */
+@media (min-width: 901px) and (hover: hover) {
+  .sidebar .sidebar-art-wrap {
+    height: 64px;
+  }
+  .sidebar .sidebar-art {
+    opacity: 0;
+    margin-left: 0;
+    transition: opacity 160ms ease;
+  }
+  .sidebar .sidebar-art-wrap::after {
+    content: "";
+    position: absolute;
+    left: 14px;
+    top: 12px;
+    width: 48px;
+    height: 48px;
+    border-radius: 14px;
+    background: #f8f8ef url("/app/icon.svg") center / 34px no-repeat;
+    transition: opacity 120ms ease;
+  }
+  .sidebar:hover .sidebar-art,
+  .sidebar:focus-within .sidebar-art {
+    opacity: 1;
+    transition-delay: 100ms;
+  }
+  .sidebar:hover .sidebar-art-wrap::after,
+  .sidebar:focus-within .sidebar-art-wrap::after {
+    opacity: 0;
+  }
+}
