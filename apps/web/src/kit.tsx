@@ -691,3 +691,22 @@ export function Donut(props: {
     </div>
   );
 }
+
+/* ───────────── Exportación ───────────── */
+
+/** Descarga un CSV (separado por punto y coma, como lo abre Excel en español). */
+export function downloadCsv(name: string, header: string[], rows: (string | number)[][]) {
+  const esc = (v: string | number) => {
+    const s = String(v);
+    // Evita inyección de fórmulas al abrir en hojas de cálculo.
+    const safe = /^[=+\-@]/.test(s) ? `'${s}` : s;
+    return /[;"\n]/.test(safe) ? `"${safe.replace(/"/g, '""')}"` : safe;
+  };
+  const csv = `﻿${[header, ...rows].map((r) => r.map(esc).join(";")).join("\n")}`;
+  const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `${name}-${iso(today())}.csv`;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}

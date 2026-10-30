@@ -18,12 +18,14 @@
     "@ganaderia/domain": "workspace:*",
     "@ganaderia/ui": "workspace:*",
     "@sqlite.org/sqlite-wasm": "3.54.1-build1",
+    "leaflet": "1.9.4",
     "lucide-react": "^1.64.0",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
     "workbox-window": "^7.4.1"
   },
   "devDependencies": {
+    "@types/leaflet": "1.9.12",
     "@types/react": "^19.1.0",
     "@types/react-dom": "^19.1.0",
     "@vitejs/plugin-react": "^5.0.0",

@@ -5444,3 +5444,349 @@ tbody tr:hover {
     text-align: right;
   }
 }
+
+/* ═════════ Mapa GPS de la finca ═════════ */
+.farm-map-wrap {
+  display: grid;
+  gap: 12px;
+}
+.fm-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 10px;
+}
+.fm-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.fm-group .btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.fm-hint {
+  margin: 0;
+}
+.fm-stage {
+  position: relative;
+  border-radius: 18px;
+  overflow: hidden;
+  box-shadow: 0 10px 30px -16px rgb(5 40 28 / 0.45);
+}
+.farm-map {
+  height: min(68vh, 620px);
+  min-height: 380px;
+  width: 100%;
+  background: #dfe7df;
+  z-index: 0;
+}
+.fm-draw-bar {
+  position: absolute;
+  left: 50%;
+  bottom: 14px;
+  transform: translateX(-50%);
+  z-index: 500;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: center;
+  gap: 8px;
+  max-width: calc(100% - 24px);
+  padding: 8px 10px;
+  border-radius: 16px;
+  background: rgb(255 255 255 / 0.94);
+  backdrop-filter: blur(8px);
+  box-shadow: 0 8px 24px rgb(0 0 0 / 0.25);
+  font-size: 0.86rem;
+  font-weight: 600;
+}
+.leaflet-tooltip.pd-label {
+  background: rgb(10 30 20 / 0.72);
+  color: #fff;
+  border: 0;
+  border-radius: 8px;
+  box-shadow: none;
+  font-size: 11px;
+  line-height: 1.25;
+  text-align: center;
+  padding: 3px 7px;
+}
+.leaflet-tooltip.pd-label::before {
+  display: none;
+}
+.fm-info > .card {
+  margin: 0;
+}
+.fm-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 6px;
+  max-height: 360px;
+  overflow-y: auto;
+}
+.fm-list li {
+  border-radius: 12px;
+  border: 1px solid transparent;
+}
+.fm-list li.on {
+  border-color: var(--verde-botella);
+  background: rgb(15 61 46 / 0.04);
+}
+.fm-item {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border: 0;
+  background: none;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.fm-item i {
+  width: 14px;
+  height: 14px;
+  border-radius: 4px;
+  flex-shrink: 0;
+}
+.fm-item span {
+  display: grid;
+  flex: 1;
+  min-width: 0;
+}
+.fm-item small {
+  color: var(--texto-suave);
+}
+.fm-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 0 10px 10px 34px;
+}
+.file-btn {
+  position: relative;
+  overflow: hidden;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+}
+.file-btn input {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+.btn.pulse {
+  animation: pulseBtn 1.4s ease-in-out infinite;
+}
+@keyframes pulseBtn {
+  50% {
+    box-shadow: 0 0 0 6px rgb(15 107 196 / 0.25);
+  }
+}
+
+/* ═════════ Gestión: tablero, informe, listas ═════════ */
+.chip-btn {
+  border: 0;
+  background: none;
+  padding: 0;
+  cursor: pointer;
+  font: inherit;
+}
+.badge-row {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.inline-field {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+}
+.inline-field select {
+  min-height: 42px;
+  border-radius: 12px;
+  padding: 0 10px;
+  border: 1px solid rgb(0 0 0 / 0.12);
+  font: inherit;
+  max-width: 100%;
+}
+.kanban {
+  display: grid;
+  gap: 14px;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr));
+  margin-bottom: 16px;
+}
+.kanban-col {
+  background: rgb(15 61 46 / 0.05);
+  border-radius: 16px;
+  padding: 12px;
+  display: grid;
+  gap: 10px;
+  align-content: start;
+}
+.kanban-col h3 {
+  margin: 2px 4px;
+  font-size: 0.9rem;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.kanban-card {
+  display: grid;
+  gap: 6px;
+  padding: 12px;
+  border-radius: 12px;
+  background: var(--superficie);
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.06);
+  border-left: 4px solid #cfd8d0;
+}
+.kanban-card.late {
+  border-left-color: #c0392b;
+}
+.kanban-card small {
+  color: var(--texto-suave);
+}
+.kc-foot {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+.report {
+  max-width: 860px;
+}
+.report-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  border-bottom: 2px solid var(--verde-botella);
+  padding-bottom: 12px;
+  margin-bottom: 12px;
+}
+.report-head h2 {
+  margin: 4px 0;
+}
+.report-meta {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 10px;
+  margin: 0 0 12px;
+}
+.report-meta dt {
+  font-size: 0.74rem;
+  color: var(--texto-suave);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+.report-meta dd {
+  margin: 2px 0 0;
+  font-weight: 700;
+}
+.report h3 {
+  margin: 18px 0 6px;
+  font-size: 1rem;
+}
+.report-list {
+  display: grid;
+  gap: 10px;
+  padding-left: 20px;
+}
+.report-list li span {
+  display: block;
+  color: var(--texto-suave);
+  font-size: 0.86rem;
+}
+.report-sign {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 40px;
+  margin-top: 48px;
+}
+.report-sign div {
+  display: grid;
+  gap: 6px;
+}
+.report-sign span {
+  border-top: 1px solid var(--texto);
+}
+.checklist {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 4px;
+}
+.checklist label {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+  cursor: pointer;
+}
+.checklist input {
+  width: 22px;
+  height: 22px;
+  accent-color: var(--verde-botella);
+}
+.ptable.shifts td,
+.ptable.shifts th {
+  text-align: center;
+}
+.ptable.shifts td:first-child,
+.ptable.shifts th:first-child {
+  text-align: left;
+}
+.ptable .total-row td,
+.ptable .cover-row td {
+  background: rgb(15 61 46 / 0.04);
+}
+.hint.neg,
+span.neg {
+  color: #c0392b;
+}
+@media (max-width: 900px) {
+  .farm-map {
+    height: 58vh;
+    min-height: 320px;
+  }
+  .fm-toolbar .btn {
+    flex: 1 1 auto;
+    justify-content: center;
+  }
+  .ptable.shifts td {
+    text-align: right;
+  }
+  .report-sign {
+    grid-template-columns: 1fr;
+    gap: 28px;
+  }
+}
+@media print {
+  .sidebar,
+  .topbar,
+  .bottom-nav,
+  .kit-tabs,
+  .page-head,
+  .kit-toolbar,
+  .no-print,
+  .sync-bar,
+  .fab,
+  .toasts {
+    display: none !important;
+  }
+  .shell {
+    display: block !important;
+  }
+  .report {
+    box-shadow: none !important;
+    max-width: none;
+  }
+}

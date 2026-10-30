@@ -1,5 +1,6 @@
 import { CloudRain, Leaf, Map as MapIcon, Sprout, Thermometer } from "lucide-react";
 import { useState } from "react";
+import { FarmMap } from "./FarmMap";
 import { PageHead } from "./components";
 import { CONSUMO_MS, PADDOCKS, type Paddock, RAIN, UGG, forageOf, lotStats } from "./herd";
 import {
@@ -25,7 +26,7 @@ import {
 } from "./kit";
 import { useApp } from "./state";
 
-type Tab = "mapa" | "planificador" | "aforos" | "balance" | "raciones" | "clima";
+type Tab = "gps" | "mapa" | "planificador" | "aforos" | "balance" | "raciones" | "clima";
 interface Aforo {
   fecha: string;
   id: string;
@@ -104,7 +105,7 @@ export function PasturasScreen() {
       estado: "Confirmado",
     },
   ]);
-  const [tab, setTab] = useState<Tab>("mapa");
+  const [tab, setTab] = useState<Tab>("gps");
   const [open, setOpen] = useState<"aforo" | "mov" | null>(null);
   const [plan, setPlan] = useState({ lote: "Ordeño", id: "P2", uso: 50 });
   const [ith, setIth] = useState({ t: 31, h: 70 });
@@ -235,7 +236,8 @@ export function PasturasScreen() {
         value={tab}
         onChange={(k) => setTab(k as Tab)}
         tabs={[
-          { key: "mapa", label: "Mapa de potreros", badge: alerts.length },
+          { key: "gps", label: "Mapa GPS de la finca" },
+          { key: "mapa", label: "Estado de potreros", badge: alerts.length },
           { key: "planificador", label: "Planificador" },
           { key: "aforos", label: "Aforos y movimientos" },
           { key: "balance", label: "Balance forrajero" },
@@ -243,6 +245,8 @@ export function PasturasScreen() {
           { key: "clima", label: "Agua y clima" },
         ]}
       />
+
+      {tab === "gps" && <FarmMap />}
 
       {tab === "mapa" && (
         <>
