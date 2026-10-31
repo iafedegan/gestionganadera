@@ -4,8 +4,11 @@ import {
   detectCommand,
   detectConfirmation,
   detectCorrection,
+  endsWithSave,
+  extractAnswers,
   interpretAnswer,
   matchChoice,
+  needsAnswer,
   parseSpokenDate,
   parseSpokenNumber,
   parseSpokenTag,
@@ -148,18 +151,157 @@ describe("respuesta según el campo", () => {
     expect(parseSpokenTag("be ve setenta y ocho")).toBe("BEVE78");
   });
 
-  it("arma la pregunta con pocas opciones y sin unidades", () => {
-    expect(questionFor({ name: "p", label: "Peso (kg)", type: "number" })).toBe("Peso.");
-    expect(
-      questionFor({
-        name: "t",
-        label: "Turno",
+  it("hace preguntas cortas y detalla las opciones solo si no entendió", () => {
+    const turno: VoiceField = {
+      name: "t",
+      label: "Turno",
+      type: "select",
+      choices: opts("Mañana", "Tarde"),
+    };
+    expect(questionFor({ name: "p", label: "Peso (kg)", type: "number" })).toBe("Peso?");
+    expect(questionFor(turno)).toBe("Turno?");
+    expect(questionFor(turno, true)).toBe("Turno: Mañana, Tarde.");
+  });
+});
+
+describe("varios datos en una sola frase", () => {
+  const ordeno: VoiceField[] = [
+    {
+      name: "tag",
+      label: "Animal",
+      type: "select",
+      choices: opts("VACA-01", "BOV-002", "CRIA-78"),
+    },
+    { name: "fecha", label: "Fecha", type: "date" },
+    { name: "turno", label: "Turno", type: "select", choices: opts("Mañana", "Tarde") },
+    { name: "litros", label: "Litros", type: "number" },
+  ];
+  const x = (text: string, fields = ordeno, current?: string) =>
+    extractAnswers(fields, text, TODAY, current);
+
+  it("llena todo el ordeño en cualquier orden", () => {
+    const want = { tag: "VACA-01", fecha: "2026-10-30", turno: "Tarde", litros: "18" };
+    expect(x("vaca cero uno hoy en la tarde dieciocho litros").values).toEqual(want);
+    expect(x("18 litros, tarde, hoy, vaca 01").values).toEqual(want);
+    expect(x("hoy turno tarde litros 18 animal vaca cero uno").values).toEqual(want);
+  });
+
+  it("acepta datos parciales y decimales", () => {
+    expect(x("dieciocho y medio litros").values).toEqual({ litros: "18.5" });
+    expect(x("tarde 12,5").values).toEqual({ turno: "Tarde", litros: "12.5" });
+    expect(x("la vaca bov cero cero dos en la mañana").values).toMatchObject({
+      tag: "BOV-002",
+      turno: "Mañana",
+    });
+  });
+
+  it("tolera errores del reconocedor en palabras, nunca en cifras", () => {
+    expect(x("baca cero uno").values.tag).toBe("VACA-01");
+    expect(x("en la mañanas").values.turno).toBe("Mañana");
+    expect(x("vaca cero dos").values.tag).toBeUndefined();
+  });
+
+  it("no inventa datos con ruido", () => {
+    expect(x("buenos días señor").values).toEqual({});
+  });
+
+  it("reparte números por su nombre, sin confundirlos", () => {
+    const f: VoiceField[] = [
+      { name: "peso", label: "Peso (kg)", type: "number" },
+      { name: "costo", label: "Costo (COP)", type: "number" },
+    ];
+    expect(extractAnswers(f, "cien mil pesos y 350 kilos", TODAY).values).toEqual({
+      costo: "100000",
+      peso: "350",
+    });
+    expect(extractAnswers(f, "costo 5000 peso 420", TODAY).values).toEqual({
+      costo: "5000",
+      peso: "420",
+    });
+  });
+
+  it("separa áreas y unidad al registrar una finca", () => {
+    const f: VoiceField[] = [
+      {
+        name: "unit",
+        label: "Unidad de medida",
         type: "select",
-        choices: opts("Mañana", "Tarde"),
-      }),
-    ).toBe("Turno. Mañana, Tarde.");
-    expect(questionFor({ name: "o", label: "Notas", type: "textarea", required: false })).toContain(
-      "saltar",
-    );
+        choices: opts("Hectárea", "Fanegada"),
+      },
+      { name: "total", label: "Área total", type: "number" },
+      { name: "gan", label: "Área en ganadería", type: "number" },
+    ];
+    expect(extractAnswers(f, "150 en ganadería y 200 total en fanegadas", TODAY).values).toEqual({
+      unit: "Fanegada",
+      gan: "150",
+      total: "200",
+    });
+    expect(extractAnswers(f, "doscientas hectáreas ciento cincuenta", TODAY).values).toEqual({
+      unit: "Hectárea",
+      total: "200",
+      gan: "150",
+    });
+  });
+
+  it("toma textos nombrados y fechas de varios campos", () => {
+    const f: VoiceField[] = [
+      { name: "entrada", label: "Fecha de entrada", type: "date" },
+      { name: "nacio", label: "Fecha de nacimiento", type: "date", required: false },
+      { name: "motivo", label: "Motivo o diagnóstico", type: "text" },
+      { name: "resp", label: "Responsable", type: "text" },
+    ];
+    expect(
+      extractAnswers(
+        f,
+        "hoy nacimiento 15 de marzo de 2022 motivo ciclo nacional responsable doctora ruiz",
+        TODAY,
+      ).values,
+    ).toEqual({
+      entrada: "2026-10-30",
+      nacio: "2022-03-15",
+      motivo: "Ciclo nacional",
+      resp: "Doctora ruiz",
+    });
+  });
+
+  it("dicta aretes nuevos con su nombre o sin él", () => {
+    const f: VoiceField[] = [
+      { name: "tag", label: "Arete del animal", type: "tag" },
+      { name: "cat", label: "Categoría", type: "select", choices: opts("Vaca", "Toro") },
+    ];
+    expect(extractAnswers(f, "arete cero cinco vaca", TODAY).values).toEqual({
+      tag: "05",
+      cat: "Vaca",
+    });
+    expect(extractAnswers(f, "bov cero cero nueve toro", TODAY).values).toEqual({
+      tag: "BOV009",
+      cat: "Toro",
+    });
+  });
+
+  it("deja el sobrante para un campo de texto", () => {
+    const f: VoiceField[] = [
+      { name: "name", label: "Nombre de la finca", type: "text" },
+      { name: "focus", label: "Especialidad", type: "select", choices: opts("Leche", "Carne") },
+    ];
+    const r = extractAnswers(f, "el porvenir carne", TODAY, "name");
+    expect(r.values).toEqual({ focus: "Carne" });
+    expect(r.rest).toBe("el porvenir");
+  });
+
+  it("sabe qué falta preguntar", () => {
+    const select: VoiceField = { name: "s", label: "S", type: "select", choices: opts("A", "B") };
+    expect(needsAnswer(select, "A")).toBe(true);
+    expect(needsAnswer({ ...select, defaultOk: true }, "A")).toBe(false);
+    expect(needsAnswer({ ...select, choices: opts("A") }, "A")).toBe(false);
+    expect(needsAnswer({ name: "d", label: "D", type: "date" }, "2026-10-30")).toBe(false);
+    expect(needsAnswer({ name: "n", label: "N", type: "number" }, "")).toBe(true);
+    expect(needsAnswer({ name: "o", label: "O", type: "text", required: false }, "")).toBe(false);
+  });
+
+  it("detecta guardar al final de la frase", () => {
+    expect(endsWithSave("dieciocho litros guardar")).toBe(true);
+    expect(endsWithSave("dieciocho litros, listo.")).toBe(true);
+    expect(endsWithSave("guardar dieciocho")).toBe(false);
   });
 });

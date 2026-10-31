@@ -14,6 +14,8 @@ export interface VoiceField {
   type: "text" | "tag" | "number" | "date" | "select" | "textarea";
   choices?: VoiceChoice[];
   required?: boolean;
+  /** El valor inicial sirve aunque no se diga (solo opciones); no se pregunta. */
+  defaultOk?: boolean;
 }
 
 export type VoiceCommand = "atras" | "repetir" | "saltar" | "detener";
@@ -351,17 +353,291 @@ export function interpretAnswer(field: VoiceField, text: string, today: string):
   }
 }
 
-/** Texto de la pregunta. Lee las opciones cuando son pocas; una lista larga solo se muestra. */
-export function questionFor(field: VoiceField): string {
+/** Pregunta corta. Con `detail` (cuando no se entendió) también lee las opciones si son pocas. */
+export function questionFor(field: VoiceField, detail = false): string {
   const label = speakableLabel(field.label);
-  const optional = field.required === false ? " Si no aplica, diga saltar." : "";
-  if (field.type === "date") return `${label}. Diga hoy, ayer o la fecha.${optional}`;
-  if (field.type === "select") {
-    const list = field.choices ?? [];
-    if (list.length > 0 && list.length <= 5)
-      return `${label}. ${list.map((c) => c.label).join(", ")}.${optional}`;
+  const list = field.choices ?? [];
+  if (detail && field.type === "select" && list.length > 0 && list.length <= 5) {
+    return `${label}: ${list.map((c) => c.label.replace(/\s*\([^)]*\)/g, "")).join(", ")}.`;
   }
-  return `${label}.${optional}`;
+  return `${label}?`;
+}
+
+/** Lo que falta preguntar: obligatorio y sin un valor que el usuario haya dado o aceptado. */
+export function needsAnswer(field: VoiceField, value: string | undefined): boolean {
+  if (field.required === false) return false;
+  if (field.type === "date") return !value;
+  if (field.type === "select") {
+    if ((field.choices?.length ?? 0) <= 1) return false;
+    return !(field.defaultOk && value);
+  }
+  return !value;
+}
+
+/* ───────────── Varios datos en una sola frase ───────────── */
+
+const STOP = new Set(
+  "de del la el los las en y o a al para con por un una area edad fecha tipo numero total_".split(
+    " ",
+  ),
+);
+const UNIT_WORDS: Record<string, string[]> = {
+  kg: ["kg", "kilo", "kilos", "kilogramo", "kilogramos"],
+  cop: ["peso", "pesos"],
+  l: ["litro", "litros"],
+  "%": ["porciento", "porcentaje"],
+};
+const MEMO_WORDS = ["nota", "notas", "observacion", "observaciones", "comentario"];
+const TAG_WORDS = ["arete", "chapeta", "numero", "identificacion", "chip"];
+
+function unitWords(field: VoiceField): string[] {
+  const unit = /\(([^)]*)\)/.exec(field.label)?.[1];
+  return norm(unit ?? "")
+    .split(/[\s/]+/)
+    .flatMap((u) => UNIT_WORDS[u] ?? []);
+}
+
+/** Palabras con las que el usuario nombraría este dato: «litros», «peso», «motivo»… */
+function keysFor(field: VoiceField): string[] {
+  const keys = new Set(
+    norm(speakableLabel(field.label))
+      .replace(/[,.]/g, " ")
+      .split(" ")
+      .filter((w) => w.length >= 3 && !STOP.has(w)),
+  );
+  for (const w of unitWords(field)) keys.add(w);
+  // «Litros» y «litro» cuentan igual.
+  for (const k of [...keys]) keys.add(k.endsWith("s") ? k.slice(0, -1) : `${k}s`);
+  if (field.type === "tag") for (const w of TAG_WORDS) keys.add(w);
+  if (field.type === "textarea") for (const w of MEMO_WORDS) keys.add(w);
+  return [...keys];
+}
+
+function editDistance(a: string, b: string): number {
+  let prev = Array.from({ length: b.length + 1 }, (_, i) => i);
+  for (let i = 1; i <= a.length; i++) {
+    const row = [i];
+    for (let j = 1; j <= b.length; j++) {
+      row[j] = Math.min(
+        (prev[j] as number) + 1,
+        (row[j - 1] as number) + 1,
+        (prev[j - 1] as number) + (a[i - 1] === b[j - 1] ? 0 : 1),
+      );
+    }
+    prev = row;
+  }
+  return prev[b.length] as number;
+}
+
+const digitsOf = (s: string) => s.replace(/\D/g, "");
+
+/** Parecido tolerante a errores del reconocedor («baca 01», «mañanas»); las cifras no se perdonan. */
+function closeEnough(said: string, target: string): boolean {
+  if (said === target) return true;
+  if (digitsOf(said) !== digitsOf(target)) return false;
+  const letters = target.replace(/\d/g, "").length;
+  if (letters < 4) return false;
+  return editDistance(said, target) <= (target.length >= 9 ? 2 : 1);
+}
+
+const DATE_PATTERNS = [
+  /\b\d{1,2}[/-]\d{1,2}[/-]\d{4}\b/,
+  /\bhace [a-z0-9 ]{1,24}? (?:dia|dias|semana|semanas|mes|meses)\b/,
+  /\b(?:el )?(?:primero|\d{1,2}|[a-z]+(?: y [a-z]+)?) de (?:enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|setiembre|octubre|noviembre|diciembre)(?: de(?:l)? (?:\d{4}|dos mil(?: [a-z]+)?))?\b/,
+  /\b(?:anteayer|antier|antes de ayer|ayer|hoy)\b/,
+];
+
+const isNumberToken = (t: string) =>
+  /^\d[\d.,]*$/.test(t) || UNITS[t] !== undefined || t === "mil" || t === "medio" || t === "media";
+
+export interface Extraction {
+  values: Record<string, string>;
+  /** Lo que sobró de la frase después de sacar los datos reconocidos. */
+  rest: string;
+}
+
+/**
+ * Saca de una frase todos los datos que reconozca, en cualquier orden. `current` es el campo que
+ * se acaba de preguntar: tiene prioridad cuando un valor le serviría a más de uno.
+ */
+export function extractAnswers(
+  fields: VoiceField[],
+  text: string,
+  today: string,
+  current?: string,
+): Extraction {
+  const values: Record<string, string> = {};
+  const order = [...fields].sort((a, b) => (a.name === current ? -1 : b.name === current ? 1 : 0));
+  let rest = ` ${norm(text)
+    .replace(/,(?!\d)/g, " ")
+    .replace(/\.(?!\d)/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()} `;
+  const cut = (piece: string) => {
+    // El separador evita que dos números que no iban juntos se lean como uno solo.
+    rest = rest.replace(piece, " | ").replace(/\s+/g, " ");
+    if (!rest.startsWith(" ")) rest = ` ${rest}`;
+    if (!rest.endsWith(" ")) rest = `${rest} `;
+  };
+
+  // 1. Fechas: «nacimiento» o «entrada» cerca deciden el campo si hay más de una.
+  const dateFields = order.filter((f) => f.type === "date");
+  for (const pattern of DATE_PATTERNS) {
+    for (;;) {
+      const m = pattern.exec(rest);
+      if (!m) break;
+      const value = parseSpokenDate(m[0], today);
+      if (!value) break;
+      const before = rest.slice(0, m.index).trim().split(" ").slice(-3);
+      const target =
+        dateFields.find((f) => !values[f.name] && keysFor(f).some((k) => before.includes(k))) ??
+        dateFields.find((f) => !values[f.name] && f.required !== false) ??
+        dateFields.find((f) => !values[f.name]);
+      if (!target) break;
+      values[target.name] = value;
+      for (const k of keysFor(target)) {
+        if (before.includes(k)) cut(` ${k} `);
+      }
+      cut(m[0]);
+    }
+  }
+
+  // 2. Textos nombrados: «motivo ciclo nacional», «nota cojea»; llegan hasta el siguiente nombre.
+  const textFields = order.filter((f) => f.type === "text" || f.type === "textarea");
+  const marks: { field: VoiceField; at: number; key: string }[] = [];
+  for (const f of textFields) {
+    for (const key of keysFor(f)) {
+      const at = rest.indexOf(` ${key} `);
+      if (at >= 0 && !marks.some((m) => m.field === f)) marks.push({ field: f, at, key });
+    }
+  }
+  marks.sort((a, b) => a.at - b.at);
+  const pieces = marks.map((m, i) => ({
+    ...m,
+    raw: rest.slice(m.at, marks[i + 1]?.at ?? rest.length),
+  }));
+  for (const p of pieces) {
+    const said = p.raw.trim().slice(p.key.length).trim();
+    if (said) {
+      values[p.field.name] =
+        p.field.type === "textarea" || p.field.type === "text"
+          ? said.charAt(0).toUpperCase() + said.slice(1)
+          : said;
+      cut(p.raw.trimEnd());
+    }
+  }
+
+  // 3. Opciones, de la frase más larga a la más corta para no partir «doble propósito».
+  const selects = order.filter((f) => f.type === "select" && f.choices?.length);
+  for (const size of [4, 3, 2, 1]) {
+    for (const f of selects) {
+      if (values[f.name]) continue;
+      const tokens = rest.trim().split(" ");
+      for (let i = 0; i + size <= tokens.length && !values[f.name]; i++) {
+        const piece = tokens.slice(i, i + size).join(" ");
+        const said = compactKey(piece);
+        if (!said || piece.includes("|")) continue;
+        const hits = (f.choices ?? []).filter((c) =>
+          closeEnough(said, compactKey(c.label.replace(/\s*\([^)]*\)/g, ""))),
+        );
+        const hit = hits.length === 1 ? hits[0] : undefined;
+        if (hit) {
+          values[f.name] = hit.value;
+          cut(` ${piece} `);
+        }
+      }
+    }
+  }
+
+  // 4. Aretes: nombrados («arete 05») o, si no hay números que llenar, palabra más cifras.
+  const hasNumbers = order.some((f) => f.type === "number");
+  for (const f of order.filter((x) => x.type === "tag")) {
+    const tokens = rest.trim().split(" ");
+    const keyAt = tokens.findIndex((t) => keysFor(f).includes(t));
+    let from = -1;
+    if (keyAt >= 0 && tokens[keyAt + 1]) from = keyAt + 1;
+    else if (!hasNumbers) {
+      const firstDigit = tokens.findIndex((t) => isNumberToken(t));
+      if (firstDigit >= 0) from = firstDigit > 0 ? firstDigit - 1 : 0;
+    }
+    if (from < 0) continue;
+    let to = from + 1;
+    while (tokens[to] !== undefined && (isNumberToken(tokens[to] as string) || tokens[to] === "y"))
+      to++;
+    const piece = tokens.slice(from, to).join(" ");
+    const tag = parseSpokenTag(piece);
+    if (tag) {
+      values[f.name] = tag;
+      if (keyAt >= 0 && keyAt === from - 1) cut(` ${tokens[keyAt]} `);
+      cut(` ${piece} `);
+    }
+  }
+
+  // 5. Números: el que tenga nombre al lado; los demás, en orden, a los campos que falten.
+  const numberFields = order.filter((f) => f.type === "number");
+  if (numberFields.length > 0) {
+    const tokens = rest.trim().split(" ");
+    const runs: { from: number; to: number }[] = [];
+    for (let i = 0; i < tokens.length; i++) {
+      if (!isNumberToken(tokens[i] as string)) continue;
+      let to = i + 1;
+      while (
+        tokens[to] !== undefined &&
+        // «doscientas ciento cincuenta» son dos cifras: una centena no sigue a otra.
+        !(
+          (UNITS[tokens[to] as string] ?? 0) >= 100 && (UNITS[tokens[to - 1] as string] ?? 0) >= 100
+        ) &&
+        (isNumberToken(tokens[to] as string) ||
+          ((tokens[to] === "y" || tokens[to] === "punto" || tokens[to] === "coma") &&
+            tokens[to + 1] !== undefined &&
+            isNumberToken(tokens[to + 1] as string)))
+      )
+        to++;
+      runs.push({ from: i, to });
+      i = to - 1;
+    }
+    const near = (at: number, step: 1 | -1) => {
+      const out: string[] = [];
+      for (let k = at; k >= 0 && k < tokens.length && out.length < 2; k += step) {
+        const t = tokens[k] as string;
+        if (STOP.has(t)) continue;
+        out.push(t);
+      }
+      return out;
+    };
+    const free: { from: number; to: number }[] = [];
+    const used = new Set<number>();
+    for (const run of runs) {
+      const words = [...near(run.to, 1).slice(0, 1), ...near(run.from - 1, -1).slice(0, 1)];
+      // Primero la unidad («pesos» es costo aunque otro campo se llame «Peso»), luego el nombre.
+      const target =
+        numberFields.find((f) => !values[f.name] && unitWords(f).some((k) => words.includes(k))) ??
+        numberFields.find((f) => !values[f.name] && keysFor(f).some((k) => words.includes(k)));
+      const n = parseSpokenNumber(tokens.slice(run.from, run.to).join(" "));
+      if (target && n !== null) {
+        values[target.name] = String(n);
+        for (let k = run.from; k < run.to; k++) used.add(k);
+        for (const w of [run.to, run.from - 1]) {
+          if (keysFor(target).includes(tokens[w] ?? "")) used.add(w);
+        }
+      } else free.push(run);
+    }
+    for (const run of free) {
+      const target = numberFields.find((f) => !values[f.name]);
+      const n = parseSpokenNumber(tokens.slice(run.from, run.to).join(" "));
+      if (!target || n === null) continue;
+      values[target.name] = String(n);
+      for (let k = run.from; k < run.to; k++) used.add(k);
+    }
+    rest = ` ${tokens.filter((_, i) => !used.has(i)).join(" ")} `;
+  }
+
+  return { values, rest: rest.replace(/\|/g, " ").replace(/\s+/g, " ").trim() };
+}
+
+/** «… guardar» o «… listo» al final de la frase: guardar sin que se pregunte. */
+export function endsWithSave(text: string): boolean {
+  return /\b(guardar|guarda|guardalo|guarde|listo)$/.test(norm(text).replace(/[,.]/g, "").trim());
 }
 
 /** Cómo se lee el valor al repasar el formulario. */

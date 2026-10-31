@@ -79,6 +79,7 @@ function formFor(
             name: "macho",
             label: "Reproductor o pajilla",
             type: "text",
+            spokenAsTag: true,
             placeholder: "Ej. HOL-221 o TORO-02",
           },
           {
@@ -132,6 +133,7 @@ function formFor(
             name: "cria",
             label: "Identificación de la cría",
             type: "text",
+            spokenAsTag: true,
             placeholder: "Ej. BOV-040",
           },
           {

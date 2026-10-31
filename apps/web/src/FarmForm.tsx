@@ -281,6 +281,7 @@ export function FarmDialog({ farm, onClose }: { farm?: LocalFarm; onClose(): voi
       name: "unit",
       label: "Unidad de medida",
       type: "select",
+      defaultOk: true,
       choices: UNITS.map((u) => ({ value: u.value, label: u.label.replace(/ \(.*\)/, "") })),
     },
     { name: "total", label: "Área total", type: "number", required: false },
@@ -296,7 +297,7 @@ export function FarmDialog({ farm, onClose }: { farm?: LocalFarm; onClose(): voi
     livestock,
     location,
   };
-  function setStepOne(field: string, value: string) {
+  function setStepOne(field: string, value: string): undefined {
     if (field === "name") {
       setName(value);
       if (!farm && !codeEdited) setCode(suggestCode(value));
@@ -310,12 +311,12 @@ export function FarmDialog({ farm, onClose }: { farm?: LocalFarm; onClose(): voi
   const stepTwoFields: VoiceField[] = species.flatMap((s) => [
     {
       name: `${s}.weaningMonths`,
-      label: `Edad de destete de ${SPECIES_LABEL[s]}, en meses`,
+      label: `Destete de ${SPECIES_LABEL[s]} (meses)`,
       type: "number" as const,
     },
     {
       name: `${s}.dryOffDays`,
-      label: `Secado de ${SPECIES_LABEL[s]}, en días de lactancia`,
+      label: `Secado de ${SPECIES_LABEL[s]} (días)`,
       type: "number" as const,
     },
   ]);
@@ -325,7 +326,7 @@ export function FarmDialog({ farm, onClose }: { farm?: LocalFarm; onClose(): voi
       [`${s}.dryOffDays`, settings[s].dryOffDays],
     ]),
   );
-  function setStepTwo(field: string, value: string) {
+  function setStepTwo(field: string, value: string): undefined {
     const [s, key] = field.split(".") as [Species, "weaningMonths" | "dryOffDays"];
     setSettings((v) => ({ ...v, [s]: { ...v[s], [key]: value } }));
   }

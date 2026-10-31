@@ -391,6 +391,8 @@ export interface FField {
   options?: string[];
   placeholder?: string;
   value?: string;
+  /** Al dictar: mayúsculas y cifras, para aretes y códigos. */
+  spokenAsTag?: boolean;
   step?: string;
   required?: boolean;
   help?: string;
@@ -419,7 +421,7 @@ export function FormDialog(props: {
   const voiceFields: VoiceField[] = props.fields.map((f) => ({
     name: f.name,
     label: f.label,
-    type: f.type,
+    type: f.spokenAsTag ? ("tag" as const) : f.type,
     ...(f.options ? { choices: f.options.map((o) => ({ value: o, label: o })) } : {}),
     // Las notas nunca son obligatorias; el resto sigue la misma regla del formulario.
     required: f.type === "textarea" ? false : f.required !== false,
@@ -461,7 +463,10 @@ export function FormDialog(props: {
               <VoiceAssistant
                 fields={voiceFields}
                 values={vals}
-                onChange={(name, value) => setVals((p) => ({ ...p, [name]: value }))}
+                onChange={(name, value) => {
+                  setVals((p) => ({ ...p, [name]: value }));
+                  return undefined;
+                }}
                 onActive={setVoiceField}
                 onConfirm={() => formRef.current?.requestSubmit()}
               />

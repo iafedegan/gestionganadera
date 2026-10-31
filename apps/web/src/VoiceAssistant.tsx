@@ -1,4 +1,4 @@
-import { Mic, MicOff, Square } from "lucide-react";
+import { Mic, MicOff, Square, Volume2, VolumeX } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { todayLocal } from "./labels";
 import {
@@ -6,19 +6,27 @@ import {
   detectCommand,
   detectConfirmation,
   detectCorrection,
+  endsWithSave,
+  extractAnswers,
   interpretAnswer,
+  needsAnswer,
   questionFor,
-  speakableLabel,
   speakableValue,
 } from "./lib/voice";
 
 /**
- * Llena un formulario conversando: pregunta cada dato en voz alta, escucha la respuesta y la deja
- * en su casilla. Las casillas siguen editables: lo que se corrija a mano se conserva.
+ * Llena un formulario conversando. Se puede decir todo en una frase («vaca cero uno, en la tarde,
+ * dieciocho litros»): la app llena lo que entienda y solo pregunta lo que falte. Las casillas
+ * siguen editables y lo que se corrija a mano se conserva.
  */
 
+interface RecognitionAlternative {
+  transcript: string;
+}
+type RecognitionResult = ArrayLike<RecognitionAlternative> & { isFinal: boolean };
 interface RecognitionResultEvent {
-  results: ArrayLike<ArrayLike<{ transcript: string }>>;
+  resultIndex: number;
+  results: ArrayLike<RecognitionResult>;
 }
 interface Recognition {
   lang: string;
@@ -30,6 +38,7 @@ interface Recognition {
   onend: (() => void) | null;
   start(): void;
   abort(): void;
+  stop(): void;
 }
 type RecognitionCtor = new () => Recognition;
 
@@ -45,16 +54,28 @@ export const voiceSupported = () => typeof window !== "undefined" && getRecognit
 
 type Heard = { alts: string[] } | { error: string };
 const MAX_MISSES = 3;
-const LISTEN_MS = 12_000;
+/** Cuánto se espera a que empiece a hablar antes de volver a preguntar. */
+const WAIT_FOR_SPEECH_MS = 15_000;
+/** Silencio tras palabras aún sin confirmar para dar la frase por terminada. */
+const END_OF_PHRASE_MS = 1_100;
+const SILENT_KEY = "gg.voz.silencio";
 
 type Status = "idle" | "speaking" | "listening" | "paused";
+
+const readSilent = () => {
+  try {
+    return localStorage.getItem(SILENT_KEY) === "1";
+  } catch {
+    return false;
+  }
+};
 
 export function VoiceAssistant(props: {
   fields: VoiceField[];
   values: Record<string, string>;
-  onChange(name: string, value: string): void;
+  /** Puede devolver otros campos que el valor deja resueltos (categoría «vaca» → sexo). */
+  onChange(name: string, value: string): string[] | undefined;
   onActive?(name: string | null): void;
-  /** Pregunta final y acción al confirmar. */
   confirmText?: string;
   onConfirm(): void;
   autoStart?: boolean;
@@ -62,17 +83,25 @@ export function VoiceAssistant(props: {
   const [status, setStatus] = useState<Status>("idle");
   const [prompt, setPrompt] = useState("");
   const [heard, setHeard] = useState("");
+  const [live, setLive] = useState("");
+  const [silent, setSilent] = useState(readSilent);
+  const silentRef = useRef(silent);
   const latest = useRef(props);
   latest.current = props;
   // Cada sesión tiene un número: si cambia, la conversación anterior deja de actuar.
   const session = useRef(0);
   const recognizer = useRef<Recognition | null>(null);
-  const resumeAt = useRef(0);
   const root = useRef<HTMLDivElement>(null);
+  // Lo dicho, o cambiado a mano frente a como estaba, ya no se vuelve a preguntar.
+  const answered = useRef(new Set<string>());
+  const started = useRef<Record<string, string>>({});
+  const lang = useRef("es-CO");
 
-  /** Marca el campo que se está preguntando y lo deja a la vista. */
-  function markField(name: string) {
+  const tick = () => new Promise((r) => setTimeout(r, 0));
+
+  function markField(name: string | null) {
     latest.current.onActive?.(name);
+    if (!name) return;
     setTimeout(() => {
       root.current
         ?.closest("dialog")
@@ -89,15 +118,16 @@ export function VoiceAssistant(props: {
 
   function speak(text: string): Promise<void> {
     setPrompt(text);
+    if (silentRef.current || !("speechSynthesis" in window)) return Promise.resolve();
     setStatus("speaking");
-    if (!("speechSynthesis" in window)) return Promise.resolve();
     return new Promise((resolve) => {
       const u = new SpeechSynthesisUtterance(text);
       u.lang = "es-CO";
+      u.rate = 1.15;
       const voice = window.speechSynthesis.getVoices().find((v) => v.lang.startsWith("es"));
       if (voice) u.voice = voice;
       // Algunos navegadores nunca avisan el final: se sigue tras el tiempo estimado.
-      const guard = setTimeout(resolve, 2500 + text.length * 110);
+      const guard = setTimeout(resolve, 1500 + text.length * 90);
       const done = () => {
         clearTimeout(guard);
         resolve();
@@ -108,46 +138,99 @@ export function VoiceAssistant(props: {
     });
   }
 
-  function listen(): Promise<Heard> {
+  /**
+   * Escucha una frase. Muestra las palabras mientras llegan, se reinicia sola si el navegador
+   * corta por silencio y no termina hasta que la persona deja de hablar.
+   */
+  function listen(id: number): Promise<Heard> {
     const Ctor = getRecognition();
     if (!Ctor) return Promise.resolve({ error: "not-supported" });
     setStatus("listening");
+    setLive("");
+    const deadline = Date.now() + WAIT_FOR_SPEECH_MS;
     return new Promise((resolve) => {
-      const r = new Ctor();
-      recognizer.current = r;
-      r.lang = "es-CO";
-      r.continuous = false;
-      r.interimResults = false;
-      r.maxAlternatives = 3;
       let settled = false;
+      let endTimer: ReturnType<typeof setTimeout> | undefined;
+      let finals: string[][] = [];
+      let interim = "";
       const finish = (v: Heard) => {
         if (settled) return;
         settled = true;
-        clearTimeout(limit);
+        clearTimeout(endTimer);
+        setLive("");
+        const r = recognizer.current;
+        recognizer.current = null;
+        if (r) {
+          r.onresult = null;
+          r.onerror = null;
+          r.onend = null;
+          r.abort();
+        }
         resolve(v);
       };
-      const limit = setTimeout(() => {
-        r.abort();
-        finish({ error: "no-speech" });
-      }, LISTEN_MS);
-      r.onresult = (e) => {
-        const best = e.results[0];
-        const alts: string[] = [];
-        if (best) {
-          for (let i = 0; i < best.length; i++) {
-            const t = best[i]?.transcript;
-            if (t) alts.push(t);
-          }
-        }
-        finish({ alts });
+      // Une lo ya confirmado y deja las alternativas de la última parte.
+      const phrase = (): string[] => {
+        const head = finals.slice(0, -1).map((a) => a[0] ?? "");
+        const last = finals[finals.length - 1] ?? [];
+        const tail = interim ? [interim] : last.length ? last : [""];
+        const prefix = (interim ? finals.map((a) => a[0] ?? "") : head).join(" ");
+        return tail.map((t) => `${prefix} ${t}`.trim());
       };
-      r.onerror = (e) => finish({ error: e.error });
-      r.onend = () => finish({ error: "no-speech" });
-      try {
-        r.start();
-      } catch {
-        finish({ error: "audio-capture" });
-      }
+      const begin = () => {
+        if (settled || session.current !== id) return;
+        const r = new Ctor();
+        recognizer.current = r;
+        r.lang = lang.current;
+        // Sin modo continuo: en Android duplica las frases. Se reinicia al terminar cada tramo.
+        r.continuous = false;
+        r.interimResults = true;
+        r.maxAlternatives = 5;
+        r.onresult = (e) => {
+          interim = "";
+          const pending: string[] = [];
+          for (let i = e.resultIndex; i < e.results.length; i++) {
+            const res = e.results[i];
+            if (!res) continue;
+            if (res.isFinal) {
+              const alts: string[] = [];
+              for (let k = 0; k < res.length; k++) {
+                const t = res[k]?.transcript?.trim();
+                if (t) alts.push(t);
+              }
+              if (alts.length) finals = [...finals, alts];
+            } else if (res[0]) pending.push(res[0].transcript);
+          }
+          interim = pending.join(" ").trim();
+          setLive(phrase()[0] ?? "");
+          // Si el navegador se queda sin confirmar la frase, se da por terminada tras un silencio.
+          clearTimeout(endTimer);
+          endTimer = setTimeout(() => finish({ alts: phrase() }), interim ? END_OF_PHRASE_MS : 80);
+        };
+        r.onerror = (e) => {
+          if (e.error === "language-not-supported" && lang.current !== "es-ES") {
+            lang.current = "es-ES";
+            return;
+          }
+          if (e.error === "no-speech" || e.error === "aborted") return;
+          finish({ error: e.error });
+        };
+        r.onend = () => {
+          if (settled) return;
+          // Ya habló: el navegador detectó el fin de la frase, no hay que esperar más.
+          if (finals.length || interim) {
+            finish({ alts: phrase() });
+            return;
+          }
+          if (Date.now() < deadline) begin();
+          else finish({ error: "no-speech" });
+        };
+        try {
+          r.start();
+        } catch {
+          finish({ error: "audio-capture" });
+        }
+      };
+      begin();
     });
   }
 
@@ -162,155 +245,191 @@ export function VoiceAssistant(props: {
     return null;
   }
 
-  async function pause(id: number, message: string, at: number) {
-    resumeAt.current = at;
-    latest.current.onActive?.(null);
+  async function pause(id: number, message: string) {
+    markField(null);
     if (session.current !== id) return;
     await speak(message);
     if (session.current === id) setStatus("paused");
   }
 
-  async function confirmStep(id: number): Promise<void> {
-    // Da tiempo a que el formulario aplique la última respuesta antes de leerla.
-    await new Promise((r) => setTimeout(r, 0));
-    const { fields, values, confirmText } = latest.current;
-    latest.current.onActive?.(null);
-    const summary = fields
-      .filter((f) => values[f.name])
-      .map((f) => `${speakableLabel(f.label)}: ${speakableValue(f, values[f.name] ?? "")}`)
-      .join(". ");
+  function pending(): VoiceField | undefined {
+    const { fields, values } = latest.current;
+    return fields.find(
+      (f) =>
+        !answered.current.has(f.name) &&
+        values[f.name] === started.current[f.name] &&
+        needsAnswer(f, values[f.name]),
+    );
+  }
+
+  /** Aplica lo que se haya entendido de la frase. Devuelve cuántos datos tomó. */
+  function apply(alts: string[], current?: VoiceField): number {
+    const { fields, onChange } = latest.current;
+    const today = todayLocal();
+    const options = alts.map((a) => extractAnswers(fields, a, today, current?.name));
+    const best = options.reduce(
+      (top, o) => (Object.keys(o.values).length > Object.keys(top.values).length ? o : top),
+      options[0] ?? { values: {}, rest: "" },
+    );
+    const values = { ...best.values };
+    if (current && values[current.name] === undefined) {
+      // Lo que no se reconoció como otro dato es la respuesta a lo que se acaba de preguntar.
+      const said = best.rest || (Object.keys(values).length === 0 ? (alts[0] ?? "") : "");
+      const direct =
+        current.type === "text" || current.type === "textarea" || current.type === "tag"
+          ? interpretAnswer(current, said, today)
+          : (alts.map((a) => interpretAnswer(current, a, today)).find((v) => v !== null) ?? null);
+      if (direct !== null) values[current.name] = direct;
+    }
+    for (const [name, value] of Object.entries(values)) {
+      answered.current.add(name);
+      for (const also of onChange(name, value) ?? []) answered.current.add(also);
+    }
+    return Object.keys(values).length;
+  }
+
+  async function run(id: number, opening: string, firstAsk?: VoiceField): Promise<void> {
     let misses = 0;
-    let say = `${summary}. ${confirmText ?? "¿Guardo?"}`;
+    let current = firstAsk ?? pending();
+    let say = opening;
+    let correcting = false;
+
     while (session.current === id) {
-      await speak(say);
+      markField(current?.name ?? null);
+      if (say) await speak(say);
       if (session.current !== id) return;
-      const res = await listen();
+      const res = await listen(id);
       if (session.current !== id) return;
+
       if ("error" in res) {
         const stop = fatal(res.error);
-        if (stop) return pause(id, stop, latest.current.fields.length);
+        if (stop) return pause(id, stop);
         misses++;
-      } else {
-        setHeard(res.alts[0] ?? "");
+        if (misses >= MAX_MISSES)
+          return pause(id, "No le escuché. Toque seguir por voz cuando quiera.");
+        say = current ? questionFor(current, true) : (latest.current.confirmText ?? "¿Guardo?");
+        continue;
+      }
+
+      const first = res.alts[0] ?? "";
+      setHeard(first);
+      const command = detectCommand(first);
+      if (command === "detener") return pause(id, "Detenido. Puede seguir escribiendo.");
+      if (command === "repetir") {
+        say = current ? questionFor(current, true) : "";
+        continue;
+      }
+      if (command === "saltar" && current) {
+        if (current.required === false) answered.current.add(current.name);
+        else {
+          say = `${questionFor(current)} Es obligatorio.`;
+          continue;
+        }
+      }
+
+      if (!current) {
         const fix = res.alts.map((a) => detectCorrection(a, latest.current.fields)).find(Boolean);
         if (fix) {
-          const at = latest.current.fields.findIndex((f) => f.name === fix.name);
-          return walk(id, at, true);
+          current = fix;
+          correcting = true;
+          say = questionFor(fix);
+          continue;
         }
-        const answer = res.alts.map(detectConfirmation).find(Boolean);
-        if (answer === "si") {
+        const yesNo = res.alts.map(detectConfirmation).find(Boolean);
+        const taken = apply(res.alts);
+        if (taken === 0 && yesNo === "si") {
           stopAudio();
           setStatus("idle");
+          markField(null);
+          setPrompt("");
           latest.current.onConfirm();
           return;
         }
-        if (answer === "no" || res.alts.some((a) => detectCommand(a) === "detener")) {
-          return pause(
-            id,
-            "Listo. Corrija lo que necesite y guarde con el botón.",
-            latest.current.fields.length,
-          );
+        if (taken === 0 && yesNo === "no") {
+          return pause(id, "Listo. Corrija lo que necesite y guarde con el botón.");
         }
-        misses++;
-      }
-      if (misses >= MAX_MISSES) {
-        return pause(
-          id,
-          "No le entendí. Revise y guarde con el botón.",
-          latest.current.fields.length,
-        );
-      }
-      say = "Diga sí para guardar, no para revisar, o corregir y el nombre del dato.";
-    }
-  }
-
-  /** Recorre los campos desde `start`. Con `single` solo corrige uno y vuelve a la confirmación. */
-  async function walk(id: number, start: number, single = false): Promise<void> {
-    let i = start;
-    let misses = 0;
-    let prefix = "";
-    while (session.current === id) {
-      const fields = latest.current.fields;
-      const field = fields[i];
-      if (!field) return confirmStep(id);
-      markField(field.name);
-      await speak(`${prefix}${questionFor(field)}`);
-      if (session.current !== id) return;
-      const res = await listen();
-      if (session.current !== id) return;
-
-      if ("error" in res) {
-        const stop = fatal(res.error);
-        if (stop) return pause(id, stop, i);
-        misses++;
-      } else {
-        const first = res.alts[0] ?? "";
-        setHeard(first);
-        const command = detectCommand(first);
-        if (command === "detener") return pause(id, "Detenido. Puede seguir escribiendo.", i);
-        if (command === "repetir") {
-          prefix = "";
+        if (taken === 0) {
+          misses++;
+          if (misses >= MAX_MISSES)
+            return pause(id, "No le entendí. Revise y guarde con el botón.");
+          say = "Diga sí, no, o el dato que quiera cambiar.";
           continue;
         }
-        if (command === "atras") {
-          i = Math.max(0, i - 1);
-          misses = 0;
-          prefix = "";
-          continue;
-        }
-        if (command === "saltar") {
-          if (field.required === false || latest.current.values[field.name]) {
-            if (field.required === false) latest.current.onChange(field.name, "");
-            if (single) return confirmStep(id);
-            i++;
-            misses = 0;
-            prefix = "";
-            continue;
+        misses = 0;
+      } else if (command !== "saltar") {
+        const taken = apply(res.alts, current);
+        if (taken === 0) {
+          misses++;
+          if (misses >= MAX_MISSES) {
+            return pause(id, "No le entendí. Escríbalo y toque seguir por voz.");
           }
-          prefix = "Este dato es obligatorio. ";
+          say = questionFor(current, true);
           continue;
         }
-        const today = todayLocal();
-        const value = res.alts
-          .map((a) => interpretAnswer(field, a, today))
-          .find((v): v is string => v !== null);
-        if (value !== undefined) {
-          latest.current.onChange(field.name, value);
-          if (single) return confirmStep(id);
-          i++;
-          misses = 0;
-          prefix = `${speakableValue(field, value)}. `;
-          // Da tiempo a que el formulario muestre el valor y actualice sus opciones.
-          await new Promise((r) => setTimeout(r, 0));
-          continue;
-        }
-        misses++;
+        misses = 0;
       }
-      if (misses >= MAX_MISSES) {
-        return pause(id, "No le entendí. Escríbalo y toque seguir por voz.", i);
+
+      await tick();
+      current = correcting ? undefined : pending();
+      correcting = false;
+      if (current) {
+        say = questionFor(current);
+        continue;
       }
-      prefix = "No le entendí. ";
+      if (endsWithSave(first)) {
+        stopAudio();
+        setStatus("idle");
+        markField(null);
+        setPrompt("");
+        latest.current.onConfirm();
+        return;
+      }
+      const { fields, values, confirmText } = latest.current;
+      const summary = fields
+        .filter((f) => values[f.name] && f.type !== "date")
+        .map((f) => speakableValue(f, values[f.name] ?? ""))
+        .join(", ");
+      say = `${summary}. ${confirmText ?? "¿Guardo?"}`;
     }
   }
 
-  function start(at: number) {
+  function start() {
     stopAudio();
     const id = ++session.current;
     setHeard("");
-    void walk(id, at);
+    if (status !== "paused") {
+      answered.current = new Set();
+      started.current = { ...latest.current.values };
+    }
+    const next = pending();
+    const opening = status === "paused" && next ? questionFor(next) : "Dígame los datos.";
+    void run(id, opening, next);
   }
 
   function stop() {
     session.current++;
     stopAudio();
-    latest.current.onActive?.(null);
+    markField(null);
+    setLive("");
     setStatus("paused");
     setPrompt("Detenido. Puede seguir escribiendo.");
   }
 
+  function toggleSilent() {
+    const next = !silent;
+    setSilent(next);
+    silentRef.current = next;
+    if (next && "speechSynthesis" in window) window.speechSynthesis.cancel();
+    try {
+      localStorage.setItem(SILENT_KEY, next ? "1" : "0");
+    } catch {
+      /* sin almacenamiento: vale solo por esta vez */
+    }
+  }
+
   // biome-ignore lint/correctness/useExhaustiveDependencies: arranca una sola vez y se limpia al cerrar
   useEffect(() => {
-    if (props.autoStart && voiceSupported()) start(0);
+    if (props.autoStart && voiceSupported()) start();
     return () => {
       session.current++;
       stopAudio();
@@ -334,21 +453,40 @@ export function VoiceAssistant(props: {
           <Square size={16} aria-hidden="true" /> Detener
         </button>
       ) : (
-        <button
-          type="button"
-          className="btn btn-primary btn-sm"
-          onClick={() => start(status === "paused" ? resumeAt.current : 0)}
-        >
+        <button type="button" className="btn btn-primary btn-sm" onClick={start}>
           <Mic size={16} aria-hidden="true" />
           {status === "paused" ? "Seguir por voz" : "Llenar por voz"}
         </button>
       )}
+      <button
+        type="button"
+        className="icon-btn voice-sound"
+        aria-pressed={!silent}
+        aria-label={silent ? "Activar preguntas en voz alta" : "Silenciar preguntas"}
+        title={silent ? "Preguntas solo en pantalla" : "Preguntas en voz alta"}
+        onClick={toggleSilent}
+      >
+        {silent ? (
+          <VolumeX size={18} aria-hidden="true" />
+        ) : (
+          <Volume2 size={18} aria-hidden="true" />
+        )}
+      </button>
       <div className="voice-text" aria-live="polite">
         {status === "idle" && !prompt && (
-          <small>Le pregunto cada dato y usted responde. Siempre puede corregir a mano.</small>
+          <small>
+            Diga todo de una vez o responda lo que le pregunte. Siempre puede corregir a mano.
+          </small>
         )}
         {prompt && <strong>{prompt}</strong>}
-        {status === "listening" && <small className="voice-listening">Escuchando…</small>}
+        {status === "listening" &&
+          (live ? (
+            <small className="voice-live">«{live}»</small>
+          ) : (
+            <small className="voice-listening">
+              <span className="voice-dot" aria-hidden="true" /> Escuchando…
+            </small>
+          ))}
         {heard && status !== "listening" && <small>Escuché: «{heard}»</small>}
       </div>
     </div>
