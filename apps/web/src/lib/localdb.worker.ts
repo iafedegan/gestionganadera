@@ -620,12 +620,13 @@ const api = {
   },
 
   /** Eventos de los animales, del más reciente al más antiguo. */
-  async listAnimalEvents(orgId: string): Promise<LocalAnimalEvent[]> {
+  async listAnimalEvents(orgId: string, animalId?: string): Promise<LocalAnimalEvent[]> {
     const rows = requireDb().selectObjects(
       `SELECT e.id, e.farm_id, e.animal_id, a.tag, e.type, e.occurred_on, e.sync_state, e.payload
          FROM animal_event e JOIN animal a ON a.id = e.animal_id
-        WHERE e.org_id = ? ORDER BY e.occurred_on DESC, e.id DESC`,
-      [orgId],
+        WHERE e.org_id = ? AND (? IS NULL OR e.animal_id = ?)
+        ORDER BY e.occurred_on DESC, e.id DESC`,
+      [orgId, animalId ?? null, animalId ?? null],
     ) as Record<string, unknown>[];
     return Promise.all(
       rows.map(async (r) => {

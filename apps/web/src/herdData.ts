@@ -58,7 +58,7 @@ export type EventInput = AnimalEventPayload extends infer E
 /** Días de lactancia en que se seca, o null si la finca aún no lo definió. */
 type DryOffLookup = (tag: string) => number | null;
 
-function toAnimal(a: LocalHerdAnimal, events: LocalAnimalEvent[]): RealAnimal {
+export function toAnimal(a: LocalHerdAnimal, events: LocalAnimalEvent[]): RealAnimal {
   const mine = events.filter((e) => e.animalId === a.id);
   const lastPeso = mine
     .filter((e) => e.type === "peso")
@@ -87,7 +87,7 @@ function toAnimal(a: LocalHerdAnimal, events: LocalAnimalEvent[]): RealAnimal {
   };
 }
 
-function toRep(e: LocalAnimalEvent): RepEvent | null {
+export function toRep(e: LocalAnimalEvent): RepEvent | null {
   const base = { tag: e.tag, fecha: e.occurredOn };
   const obs = (note?: string) => (note ? { obs: note } : {});
   switch (e.type) {

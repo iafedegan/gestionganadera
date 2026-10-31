@@ -17,8 +17,10 @@ import {
   FileText,
   Fingerprint,
   GitBranch,
+  Heart,
   History,
   Layers,
+  Milk,
   Nfc,
   PawPrint,
   PlusCircle,
@@ -27,11 +29,13 @@ import {
   Scan,
   Search,
   SlidersHorizontal,
+  Stethoscope,
   Upload,
   Weight,
   X,
 } from "lucide-react";
 import { type FormEvent, type ReactNode, useEffect, useRef, useState } from "react";
+import { ClinicalHistory, MilkHistory, ReproductiveHistory, WeightHistory } from "./AnimalHistory";
 import { FarmDialog } from "./FarmForm";
 import { VoiceAssistant } from "./VoiceAssistant";
 import { art } from "./art";
@@ -47,7 +51,14 @@ import {
   num,
   todayLocal,
 } from "./labels";
-import { type AnimalDetail, type LocalAnimal, type LocalFarm, localdb } from "./lib/localdb";
+import {
+  type AnimalDetail,
+  type LocalAnimal,
+  type LocalAnimalEvent,
+  type LocalFarm,
+  type LocalHerdAnimal,
+  localdb,
+} from "./lib/localdb";
 import { detectCapabilities, scanNfc } from "./lib/reader";
 import type { VoiceField } from "./lib/voice";
 import { useMedia, useSwipeDismiss } from "./native";
@@ -369,7 +380,7 @@ export function AnimalsScreen() {
               <button
                 type="button"
                 className="backdrop"
-                aria-label="Cerrar ficha"
+                aria-label="Cerrar hoja de vida"
                 tabIndex={-1}
                 onClick={() => setSelected(null)}
               />
@@ -503,12 +514,32 @@ function SessionCard() {
   );
 }
 
-type Tab = "genealogia" | "movimientos" | "pesos" | "documentos";
-const TABS: { key: Tab; label: string; icon: ReactNode }[] = [
+type Tab =
+  | "clinica"
+  | "reproduccion"
+  | "leche"
+  | "pesos"
+  | "genealogia"
+  | "movimientos"
+  | "documentos";
+const TABS: { key: Tab; label: string; icon: ReactNode; femaleOnly?: boolean }[] = [
+  { key: "clinica", label: "Historia clínica", icon: <Stethoscope size={15} aria-hidden="true" /> },
+  {
+    key: "reproduccion",
+    label: "Reproducción",
+    icon: <Heart size={15} aria-hidden="true" />,
+    femaleOnly: true,
+  },
+  {
+    key: "leche",
+    label: "Leche",
+    icon: <Milk size={15} aria-hidden="true" />,
+    femaleOnly: true,
+  },
+  { key: "pesos", label: "Pesos", icon: <Scale size={15} aria-hidden="true" /> },
   { key: "genealogia", label: "Genealogía", icon: <GitBranch size={15} aria-hidden="true" /> },
   { key: "movimientos", label: "Movimientos", icon: <History size={15} aria-hidden="true" /> },
-  { key: "pesos", label: "Pesos", icon: <Scale size={15} aria-hidden="true" /> },
-  { key: "documentos", label: "Documentos", icon: <FileText size={15} aria-hidden="true" /> },
+  { key: "documentos", label: "Fotos", icon: <FileText size={15} aria-hidden="true" /> },
 ];
 
 function Parent({ label, tag }: { label: string; tag: string | null }) {
@@ -529,22 +560,25 @@ function AnimalCard({
   farmName(id: string): string;
   onClose?: () => void;
 }) {
-  const { dataVersion } = useApp();
+  const { dataVersion, orgId } = useApp();
   const [a, setA] = useState<AnimalDetail | null>(null);
   const [mother, setMother] = useState<string | null>(null);
   const [father, setFather] = useState<string | null>(null);
-  const [tab, setTab] = useState<Tab>("genealogia");
+  const [pickedTab, setTab] = useState<Tab>("clinica");
+  const [events, setEvents] = useState<LocalAnimalEvent[]>([]);
   const swipe = useSwipeDismiss<HTMLElement>(() => onClose?.());
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: dataVersion fuerza la relectura
   useEffect(() => {
     if (!id) {
       setA(null);
+      setEvents([]);
       return;
     }
     void (async () => {
       const d = await localdb.getAnimal(id);
       setA(d);
+      setEvents(await localdb.listAnimalEvents(orgId, id));
       setMother(
         d?.motherId ? ((await localdb.getAnimal(d.motherId))?.tag ?? "No descargada") : null,
       );
@@ -552,23 +586,34 @@ function AnimalCard({
         d?.fatherId ? ((await localdb.getAnimal(d.fatherId))?.tag ?? "No descargado") : null,
       );
     })();
-  }, [id, dataVersion]);
+  }, [id, orgId, dataVersion]);
 
   if (!a) {
     return (
       <aside className="card sheet">
         <div className="empty-state">
           <Search size={28} aria-hidden="true" />
-          <h2>Ficha del animal</h2>
-          <p>Seleccione un animal de la lista para ver su ficha e historia individual.</p>
+          <h2>Hoja de vida</h2>
+          <p>Seleccione un animal de la lista para ver su hoja de vida e historia clínica.</p>
         </div>
       </aside>
     );
   }
+  const tabs = TABS.filter((t) => !t.femaleOnly || a.sex === "hembra");
+  const tab = tabs.some((t) => t.key === pickedTab) ? pickedTab : "clinica";
+  const herdAnimal: LocalHerdAnimal = {
+    id: a.id,
+    farmId: a.farmId,
+    tag: a.tag,
+    species: a.species,
+    sex: a.sex,
+    category: a.category,
+    birthDate: a.birthDate?.date ?? null,
+  };
   return (
     <aside
       className={onClose ? "drawer sheet-drawer" : "card sheet"}
-      aria-label="Ficha del animal"
+      aria-label="Hoja de vida del animal"
       ref={swipe.ref}
       {...(onClose ? swipe.bind : {})}
     >
@@ -583,7 +628,7 @@ function AnimalCard({
         </button>
       )}
       <header className="sheet-title">
-        <h2>Ficha del animal</h2>
+        <h2>Hoja de vida</h2>
         <span className="status status-pill">
           <span className={`dot dot-${a.status}`} />
           {STATUS_LABEL[a.status]}
@@ -619,7 +664,7 @@ function AnimalCard({
       </div>
       <h3 className="hist-title">Historia individual</h3>
       <div className="tabs" role="tablist" aria-label="Historia individual">
-        {TABS.map((t) => (
+        {tabs.map((t) => (
           <button
             key={t.key}
             type="button"
@@ -636,6 +681,10 @@ function AnimalCard({
         ))}
       </div>
       <div id="tabpanel" role="tabpanel" aria-labelledby={`tab-${tab}`} className="tabpanel">
+        {tab === "clinica" && <ClinicalHistory events={events} />}
+        {tab === "reproduccion" && <ReproductiveHistory animal={herdAnimal} events={events} />}
+        {tab === "leche" && <MilkHistory events={events} />}
+        {tab === "pesos" && <WeightHistory events={events} />}
         {tab === "genealogia" && (
           <div className="tree">
             <div className="tree-parents">
@@ -669,18 +718,11 @@ function AnimalCard({
           ) : (
             <p className="empty">Sin movimientos registrados.</p>
           ))}
-        {tab === "pesos" && (
-          <div className="empty-state">
-            <Scale size={26} aria-hidden="true" />
-            <p>Los pesajes medidos y estimados aparecerán aquí.</p>
-            <span className="chip chip-soon">Semana 6</span>
-          </div>
-        )}
         {tab === "documentos" && (
           <div className="empty-state">
             <FileText size={26} aria-hidden="true" />
-            <p>Fotos de hierros y soportes del animal (imágenes y PDF hasta 10 MB).</p>
-            <span className="chip chip-soon">Semana 12</span>
+            <p>Las fotos del animal y de sus hierros aún no están disponibles.</p>
+            <span className="chip chip-soon">Pendiente</span>
           </div>
         )}
       </div>
@@ -767,18 +809,17 @@ export function RegisterDialog(props: {
             name: "farm",
             label: "Finca",
             type: "select" as const,
+            ...(farmId ? { defaultOk: true } : {}),
             choices: farms.map((f) => ({ value: f.id, label: f.name })),
           },
         ]),
     { name: "tag", label: "Arete o número del animal", type: "tag" },
     {
-      name: "species",
-      label: "Especie",
+      name: "category",
+      label: "Categoría",
       type: "select",
-      choices: [
-        { value: "bovino", label: "Bovino" },
-        { value: "bufalino", label: "Bufalino" },
-      ],
+      // Por voz vale cualquier categoría: el sexo se ajusta según la que se diga.
+      choices: CATEGORIES.map((c) => ({ value: c, label: CATEGORY_LABEL[c] ?? c })),
     },
     {
       name: "sex",
@@ -790,15 +831,20 @@ export function RegisterDialog(props: {
       ],
     },
     {
-      name: "category",
-      label: "Categoría",
+      name: "species",
+      label: "Especie",
       type: "select",
-      choices: cats.map((c) => ({ value: c, label: CATEGORY_LABEL[c] ?? c })),
+      defaultOk: true,
+      choices: [
+        { value: "bovino", label: "Bovino" },
+        { value: "bufalino", label: "Bufalino" },
+      ],
     },
     {
       name: "reason",
       label: "Motivo de entrada",
       type: "select",
+      defaultOk: true,
       choices: Object.entries(REASON_LABEL).map(([value, label]) => ({ value, label })),
     },
     { name: "entryDate", label: "Fecha de entrada", type: "date" },
@@ -828,7 +874,7 @@ export function RegisterDialog(props: {
     mother: motherId,
     notes,
   };
-  function setByVoice(name: string, value: string) {
+  function setByVoice(name: string, value: string): string[] | undefined {
     if (name === "farm") setFarmId(value);
     else if (name === "tag") setTag(value);
     else if (name === "species") {
@@ -836,12 +882,21 @@ export function RegisterDialog(props: {
       setMotherId("");
       setFatherId("");
     } else if (name === "sex") changeSex(value as "hembra" | "macho");
-    else if (name === "category") setCategory(value);
-    else if (name === "reason") setReason(value);
+    else if (name === "category") {
+      setCategory(value);
+      // «Vaca» ya dice que es hembra y «toro» que es macho: no se pregunta el sexo.
+      const onlyFemale = categoryMatchesSex(value, "hembra") && !categoryMatchesSex(value, "macho");
+      const onlyMale = categoryMatchesSex(value, "macho") && !categoryMatchesSex(value, "hembra");
+      if (onlyFemale || onlyMale) {
+        setSex(onlyFemale ? "hembra" : "macho");
+        return ["sex"];
+      }
+    } else if (name === "reason") setReason(value);
     else if (name === "entryDate") setEntryDate(value);
     else if (name === "birth") setBirth(value);
     else if (name === "mother") setMotherId(value);
     else if (name === "notes") setNotes(value);
+    return undefined;
   }
 
   function changeSex(s: "hembra" | "macho") {
