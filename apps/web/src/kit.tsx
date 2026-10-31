@@ -1,6 +1,8 @@
 import { Search } from "lucide-react";
 import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
+import { VoiceAssistant } from "./VoiceAssistant";
 import { CardHead } from "./components";
+import type { VoiceField } from "./lib/voice";
 
 /* ───────────── Utilidades de fecha y número ───────────── */
 
@@ -412,6 +414,16 @@ export function FormDialog(props: {
       ]),
     );
   const [vals, setVals] = useState<Record<string, string>>(init);
+  const [voiceField, setVoiceField] = useState<string | null>(null);
+  const formRef = useRef<HTMLFormElement>(null);
+  const voiceFields: VoiceField[] = props.fields.map((f) => ({
+    name: f.name,
+    label: f.label,
+    type: f.type,
+    ...(f.options ? { choices: f.options.map((o) => ({ value: o, label: o })) } : {}),
+    // Las notas nunca son obligatorias; el resto sigue la misma regla del formulario.
+    required: f.type === "textarea" ? false : f.required !== false,
+  }));
   // biome-ignore lint/correctness/useExhaustiveDependencies: se reinicia solo al abrir
   useEffect(() => {
     const d = ref.current;
@@ -430,6 +442,7 @@ export function FormDialog(props: {
       aria-labelledby="kf-title"
     >
       <form
+        ref={formRef}
         onSubmit={(e) => {
           e.preventDefault();
           props.onSubmit(vals);
@@ -444,12 +457,26 @@ export function FormDialog(props: {
         <div className="dialog-body">
           <section className="fsec">
             {props.sub && <p className="hint">{props.sub}</p>}
+            {props.open && (
+              <VoiceAssistant
+                fields={voiceFields}
+                values={vals}
+                onChange={(name, value) => setVals((p) => ({ ...p, [name]: value }))}
+                onActive={setVoiceField}
+                onConfirm={() => formRef.current?.requestSubmit()}
+              />
+            )}
             <div className="kf-grid">
               {props.fields.map((f) => (
                 <label
                   key={f.name}
                   htmlFor={`kf-${f.name}`}
-                  className={f.type === "textarea" ? "span2" : ""}
+                  className={[
+                    f.type === "textarea" ? "span2" : "",
+                    voiceField === f.name ? "voice-field" : "",
+                  ]
+                    .filter(Boolean)
+                    .join(" ")}
                 >
                   {f.label}
                   {f.type === "select" ? (

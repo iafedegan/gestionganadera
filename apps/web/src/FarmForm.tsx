@@ -10,6 +10,7 @@ import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import { Building2, Crosshair, Pencil, Plus } from "lucide-react";
 import { type FormEvent, useEffect, useRef, useState } from "react";
+import { VoiceAssistant } from "./VoiceAssistant";
 import { useFarms } from "./animals";
 import { CardHead } from "./components";
 import { PARAMS } from "./herd";
@@ -17,6 +18,7 @@ import { num } from "./kit";
 import { SPECIES_LABEL } from "./labels";
 import { ApiError, api } from "./lib/api";
 import { type LocalFarm, localdb } from "./lib/localdb";
+import type { VoiceField } from "./lib/voice";
 import { useApp } from "./state";
 
 const FOCUS: { value: ProductionFocus; label: string }[] = [
@@ -256,14 +258,98 @@ export function FarmDialog({ farm, onClose }: { farm?: LocalFarm; onClose(): voi
 
   const unitPlural = UNITS.find((u) => u.value === unit)?.plural;
 
+  const usedVoice = useRef(false);
+  const [voiceField, setVoiceField] = useState<string | null>(null);
+  const formRef = useRef<HTMLFormElement>(null);
+  const stepOneFields: VoiceField[] = [
+    { name: "name", label: "Nombre de la finca", type: "text" },
+    {
+      name: "focus",
+      label: "Especialidad",
+      type: "select",
+      required: false,
+      choices: FOCUS,
+    },
+    {
+      name: "system",
+      label: "Tipo de explotación",
+      type: "select",
+      required: false,
+      choices: SYSTEM,
+    },
+    {
+      name: "unit",
+      label: "Unidad de medida",
+      type: "select",
+      choices: UNITS.map((u) => ({ value: u.value, label: u.label.replace(/ \(.*\)/, "") })),
+    },
+    { name: "total", label: "Área total", type: "number", required: false },
+    { name: "livestock", label: "Área en ganadería", type: "number", required: false },
+    { name: "location", label: "Municipio o vereda", type: "text", required: false },
+  ];
+  const stepOneValues: Record<string, string> = {
+    name,
+    focus,
+    system,
+    unit,
+    total,
+    livestock,
+    location,
+  };
+  function setStepOne(field: string, value: string) {
+    if (field === "name") {
+      setName(value);
+      if (!farm && !codeEdited) setCode(suggestCode(value));
+    } else if (field === "focus") setFocus(value as ProductionFocus | "");
+    else if (field === "system") setSystem(value as ProductionSystem | "");
+    else if (field === "unit") setUnit(value as AreaUnit);
+    else if (field === "total") setTotal(value);
+    else if (field === "livestock") setLivestock(value);
+    else if (field === "location") setLocation(value);
+  }
+  const stepTwoFields: VoiceField[] = species.flatMap((s) => [
+    {
+      name: `${s}.weaningMonths`,
+      label: `Edad de destete de ${SPECIES_LABEL[s]}, en meses`,
+      type: "number" as const,
+    },
+    {
+      name: `${s}.dryOffDays`,
+      label: `Secado de ${SPECIES_LABEL[s]}, en días de lactancia`,
+      type: "number" as const,
+    },
+  ]);
+  const stepTwoValues: Record<string, string> = Object.fromEntries(
+    species.flatMap((s) => [
+      [`${s}.weaningMonths`, settings[s].weaningMonths],
+      [`${s}.dryOffDays`, settings[s].dryOffDays],
+    ]),
+  );
+  function setStepTwo(field: string, value: string) {
+    const [s, key] = field.split(".") as [Species, "weaningMonths" | "dryOffDays"];
+    setSettings((v) => ({ ...v, [s]: { ...v[s], [key]: value } }));
+  }
+
   return (
     <dialog ref={ref} className="dialog" onClose={onClose} aria-labelledby="farm-title">
       {step === 1 ? (
-        <form onSubmit={next}>
+        <form ref={formRef} onSubmit={next}>
           <h2 id="farm-title">{farm ? `Editar ${farm.name}` : "Registrar finca"}</h2>
           <p className="farm-step">Paso 1 de 2 · Datos de la finca</p>
+          <VoiceAssistant
+            key="paso-1"
+            fields={stepOneFields}
+            values={stepOneValues}
+            onChange={setStepOne}
+            onActive={setVoiceField}
+            confirmText="¿Seguimos con las especies?"
+            onConfirm={() => {
+              usedVoice.current = true;
+              formRef.current?.requestSubmit();
+            }}
+          />
           <div className="grid">
-            <label>
+            <label className={voiceField === "name" ? "voice-field" : undefined}>
               Nombre de la finca
               <input
                 required
@@ -289,7 +375,7 @@ export function FarmDialog({ farm, onClose }: { farm?: LocalFarm; onClose(): voi
                 }}
               />
             </label>
-            <label>
+            <label className={voiceField === "focus" ? "voice-field" : undefined}>
               Especialidad
               <select
                 value={focus}
@@ -303,7 +389,7 @@ export function FarmDialog({ farm, onClose }: { farm?: LocalFarm; onClose(): voi
                 ))}
               </select>
             </label>
-            <label>
+            <label className={voiceField === "system" ? "voice-field" : undefined}>
               Tipo de explotación
               <select
                 value={system}
@@ -321,7 +407,7 @@ export function FarmDialog({ farm, onClose }: { farm?: LocalFarm; onClose(): voi
           <fieldset>
             <legend>Área</legend>
             <div className="grid farm-area">
-              <label>
+              <label className={voiceField === "unit" ? "voice-field" : undefined}>
                 Unidad de medida
                 <select value={unit} onChange={(e) => setUnit(e.target.value as AreaUnit)}>
                   {UNITS.map((o) => (
@@ -331,7 +417,7 @@ export function FarmDialog({ farm, onClose }: { farm?: LocalFarm; onClose(): voi
                   ))}
                 </select>
               </label>
-              <label>
+              <label className={voiceField === "total" ? "voice-field" : undefined}>
                 Área total ({unitPlural})
                 <input
                   type="number"
@@ -342,7 +428,7 @@ export function FarmDialog({ farm, onClose }: { farm?: LocalFarm; onClose(): voi
                   onChange={(e) => setTotal(e.target.value)}
                 />
               </label>
-              <label>
+              <label className={voiceField === "livestock" ? "voice-field" : undefined}>
                 Área en ganadería ({unitPlural})
                 <input
                   type="number"
@@ -356,7 +442,7 @@ export function FarmDialog({ farm, onClose }: { farm?: LocalFarm; onClose(): voi
             </div>
             <small>Con el área en pastos para ganadería se calcula la carga de la finca.</small>
           </fieldset>
-          <label>
+          <label className={voiceField === "location" ? "voice-field" : undefined}>
             Municipio o vereda
             <input maxLength={200} value={location} onChange={(e) => setLocation(e.target.value)} />
           </label>
@@ -376,9 +462,18 @@ export function FarmDialog({ farm, onClose }: { farm?: LocalFarm; onClose(): voi
           </div>
         </form>
       ) : (
-        <form onSubmit={submit}>
+        <form ref={formRef} onSubmit={submit}>
           <h2 id="farm-title">{farm ? `Editar ${farm.name}` : "Registrar finca"}</h2>
           <p className="farm-step">Paso 2 de 2 · Especies y manejo</p>
+          <VoiceAssistant
+            key="paso-2"
+            fields={stepTwoFields}
+            values={stepTwoValues}
+            onChange={setStepTwo}
+            onActive={setVoiceField}
+            autoStart={usedVoice.current}
+            onConfirm={() => formRef.current?.requestSubmit()}
+          />
           {ALL_SPECIES.map((s) => {
             const on = species.includes(s);
             return (
@@ -399,7 +494,9 @@ export function FarmDialog({ farm, onClose }: { farm?: LocalFarm; onClose(): voi
                 </legend>
                 {on && (
                   <div className="grid">
-                    <label>
+                    <label
+                      className={voiceField === `${s}.weaningMonths` ? "voice-field" : undefined}
+                    >
                       Edad de destete (meses)
                       <input
                         required
@@ -417,7 +514,7 @@ export function FarmDialog({ farm, onClose }: { farm?: LocalFarm; onClose(): voi
                       />
                       <small>Avisa cuando las crías cumplen esta edad.</small>
                     </label>
-                    <label>
+                    <label className={voiceField === `${s}.dryOffDays` ? "voice-field" : undefined}>
                       Secado (días de lactancia)
                       <input
                         required

@@ -33,6 +33,7 @@ import {
 } from "lucide-react";
 import { type FormEvent, type ReactNode, useEffect, useRef, useState } from "react";
 import { FarmDialog } from "./FarmForm";
+import { VoiceAssistant } from "./VoiceAssistant";
 import { art } from "./art";
 import { PageHead } from "./components";
 import {
@@ -48,6 +49,7 @@ import {
 } from "./labels";
 import { type AnimalDetail, type LocalAnimal, type LocalFarm, localdb } from "./lib/localdb";
 import { detectCapabilities, scanNfc } from "./lib/reader";
+import type { VoiceField } from "./lib/voice";
 import { useMedia, useSwipeDismiss } from "./native";
 import { useApp } from "./state";
 
@@ -754,6 +756,94 @@ export function RegisterDialog(props: {
   const fathers = parents.filter((p) => p.sex === "macho" && p.id !== init?.id);
   const cats = CATEGORIES.filter((c) => categoryMatchesSex(c, sex));
 
+  const farmOne = farms.length === 1 ? farms[0] : undefined;
+  const [voiceField, setVoiceField] = useState<string | null>(null);
+  const voiceClass = (name: string) => (voiceField === name ? "voice-field" : undefined);
+  const voiceFields: VoiceField[] = [
+    ...(farmOne
+      ? []
+      : [
+          {
+            name: "farm",
+            label: "Finca",
+            type: "select" as const,
+            choices: farms.map((f) => ({ value: f.id, label: f.name })),
+          },
+        ]),
+    { name: "tag", label: "Arete o número del animal", type: "tag" },
+    {
+      name: "species",
+      label: "Especie",
+      type: "select",
+      choices: [
+        { value: "bovino", label: "Bovino" },
+        { value: "bufalino", label: "Bufalino" },
+      ],
+    },
+    {
+      name: "sex",
+      label: "Sexo",
+      type: "select",
+      choices: [
+        { value: "hembra", label: "Hembra" },
+        { value: "macho", label: "Macho" },
+      ],
+    },
+    {
+      name: "category",
+      label: "Categoría",
+      type: "select",
+      choices: cats.map((c) => ({ value: c, label: CATEGORY_LABEL[c] ?? c })),
+    },
+    {
+      name: "reason",
+      label: "Motivo de entrada",
+      type: "select",
+      choices: Object.entries(REASON_LABEL).map(([value, label]) => ({ value, label })),
+    },
+    { name: "entryDate", label: "Fecha de entrada", type: "date" },
+    { name: "birth", label: "Fecha de nacimiento", type: "date", required: false },
+    ...(mothers.length > 0
+      ? [
+          {
+            name: "mother",
+            label: "Madre",
+            type: "select" as const,
+            required: false,
+            choices: mothers.map((p) => ({ value: p.id, label: p.tag })),
+          },
+        ]
+      : []),
+    { name: "notes", label: "Notas", type: "textarea", required: false },
+  ];
+  const voiceValues: Record<string, string> = {
+    farm: farmId,
+    tag,
+    species,
+    sex,
+    category,
+    reason,
+    entryDate,
+    birth,
+    mother: motherId,
+    notes,
+  };
+  function setByVoice(name: string, value: string) {
+    if (name === "farm") setFarmId(value);
+    else if (name === "tag") setTag(value);
+    else if (name === "species") {
+      setSpecies(value as Species);
+      setMotherId("");
+      setFatherId("");
+    } else if (name === "sex") changeSex(value as "hembra" | "macho");
+    else if (name === "category") setCategory(value);
+    else if (name === "reason") setReason(value);
+    else if (name === "entryDate") setEntryDate(value);
+    else if (name === "birth") setBirth(value);
+    else if (name === "mother") setMotherId(value);
+    else if (name === "notes") setNotes(value);
+  }
+
   function changeSex(s: "hembra" | "macho") {
     setSex(s);
     if (!categoryMatchesSex(category, s)) setCategory(s === "hembra" ? "vaca" : "toro");
@@ -842,8 +932,6 @@ export function RegisterDialog(props: {
     }
   }
 
-  const farmOne = farms.length === 1 ? farms[0] : undefined;
-
   return (
     <dialog
       ref={ref}
@@ -861,6 +949,13 @@ export function RegisterDialog(props: {
         </header>
 
         <div className="dialog-body">
+          <VoiceAssistant
+            fields={voiceFields}
+            values={voiceValues}
+            onChange={setByVoice}
+            onActive={setVoiceField}
+            onConfirm={() => formRef.current?.requestSubmit()}
+          />
           <section className="fsec">
             <h3 className="fsec-t">
               <Fingerprint size={18} aria-hidden="true" /> Identificación
@@ -885,7 +980,7 @@ export function RegisterDialog(props: {
               </label>
             )}
 
-            <label>
+            <label className={voiceClass("tag")}>
               Arete o identificación visible
               <input
                 ref={tagRef}
@@ -919,6 +1014,7 @@ export function RegisterDialog(props: {
             </label>
 
             <Segmented
+              className={voiceClass("species")}
               legend="Especie"
               value={species}
               onChange={(v) => {
@@ -937,6 +1033,7 @@ export function RegisterDialog(props: {
               <Layers size={18} aria-hidden="true" /> Clasificación
             </h3>
             <Segmented
+              className={voiceClass("sex")}
               legend="Sexo"
               value={sex}
               onChange={changeSex}
@@ -946,6 +1043,7 @@ export function RegisterDialog(props: {
               ]}
             />
             <Segmented
+              className={voiceClass("category")}
               legend="Categoría"
               value={category}
               onChange={setCategory}
@@ -958,13 +1056,14 @@ export function RegisterDialog(props: {
               <CalendarDays size={18} aria-hidden="true" /> Entrada al hato
             </h3>
             <Segmented
+              className={voiceClass("reason")}
               legend="Motivo de entrada"
               value={reason}
               onChange={setReason}
               wrap
               options={Object.entries(REASON_LABEL).map(([value, label]) => ({ value, label }))}
             />
-            <label>
+            <label className={voiceClass("entryDate")}>
               Fecha de entrada
               <input
                 type="date"
@@ -982,7 +1081,7 @@ export function RegisterDialog(props: {
           >
             <summary>Más datos (opcional)</summary>
             <div className="more-body">
-              <label>
+              <label className={voiceClass("birth")}>
                 Fecha de nacimiento
                 <input
                   type="date"
@@ -1071,6 +1170,7 @@ export function RegisterDialog(props: {
 }
 
 export function Segmented<T extends string>(props: {
+  className?: string | undefined;
   legend: string;
   value: T;
   options: { value: T; label: string }[];
@@ -1078,7 +1178,7 @@ export function Segmented<T extends string>(props: {
   wrap?: boolean;
 }) {
   return (
-    <fieldset className="seg">
+    <fieldset className={["seg", props.className].filter(Boolean).join(" ")}>
       <legend>{props.legend}</legend>
       <div className={props.wrap ? "seg-row wrap" : "seg-row"}>
         {props.options.map((o) => (
