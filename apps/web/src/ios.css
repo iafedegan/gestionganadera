@@ -1,0 +1,953 @@
+/*
+ * Capa visual estilo iPhone para toda la aplicación, en celular y en computador.
+ * Va al final de los estilos: reemplaza tokens y unifica los componentes compartidos.
+ * Colores con contraste AA sobre blanco; el azul es el de Apple para web (4,6:1).
+ */
+:root {
+  --ios-azul: #0071e3;
+  --ios-azul-suave: rgb(0 113 227 / 0.1);
+  --ios-verde: #248a3d;
+  --ios-rojo: #d70015;
+  --ios-naranja: #b25000;
+  --ios-fondo: #f2f2f7;
+  --ios-relleno: rgb(118 118 128 / 0.12);
+  --ios-separador: rgb(60 60 67 / 0.18);
+  --ios-barra: rgb(249 249 249 / 0.82);
+  --ios-texto: #1c1c1e;
+  --ios-texto-2: #6c6c70;
+
+  --lienzo: var(--ios-fondo);
+  --superficie: #fff;
+  --texto: var(--ios-texto);
+  --texto-suave: var(--ios-texto-2);
+  --borde: var(--ios-separador);
+  --radio: 12px;
+  --filete: 0.5px solid var(--ios-separador);
+  --filete-foco: 0.5px solid var(--ios-separador);
+  --sombra: none;
+  --oro-texto: var(--ios-texto-2);
+  --fuente-titular: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Inter", system-ui,
+    sans-serif;
+  --fuente-interfaz: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Inter", system-ui,
+    sans-serif;
+  --fuente-lectura: var(--fuente-interfaz);
+  --fuente-datos: ui-monospace, "SF Mono", SFMono-Regular, Menlo, monospace;
+  --curva: cubic-bezier(0.32, 0.72, 0, 1);
+}
+
+html,
+body {
+  background: var(--ios-fondo);
+  -webkit-font-smoothing: antialiased;
+  -webkit-tap-highlight-color: transparent;
+}
+body {
+  color: var(--ios-texto);
+  font-family: var(--fuente-interfaz);
+  font-size: 15px;
+  letter-spacing: -0.01em;
+}
+:focus-visible {
+  outline: 2px solid var(--ios-azul);
+  outline-offset: 2px;
+}
+h1,
+h2,
+h3 {
+  font-family: var(--fuente-titular);
+  color: var(--ios-texto);
+  letter-spacing: -0.02em;
+}
+h2 {
+  font-size: 1.25rem;
+  font-weight: 700;
+}
+h3 {
+  font-size: 1.06rem;
+  font-weight: 600;
+}
+.mono {
+  letter-spacing: 0;
+}
+
+/* ───── Títulos grandes ───── */
+.page-head h1,
+h1 {
+  font-size: 2.125rem;
+  font-weight: 700;
+  letter-spacing: -0.025em;
+  color: var(--ios-texto);
+}
+.page-head .kicker {
+  display: none;
+}
+.kicker {
+  font-size: 0.8rem;
+  font-weight: 600;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--ios-texto-2);
+}
+.lead,
+.page-head .lead {
+  font-family: var(--fuente-interfaz);
+  font-size: 0.94rem;
+  color: var(--ios-texto-2);
+}
+.hint {
+  color: var(--ios-texto-2);
+}
+
+/* ───── Botones ───── */
+.btn {
+  min-height: 44px;
+  padding: 0 18px;
+  border: 0;
+  border-radius: 12px;
+  font-size: 1rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  text-transform: none;
+  box-shadow: none;
+  transition: opacity 120ms linear, background 120ms linear;
+}
+.btn:not(:disabled):hover {
+  transform: none;
+  box-shadow: none;
+}
+.btn:not(:disabled):active {
+  opacity: 0.55;
+  transform: none;
+}
+.btn-primary,
+.btn-primary:not(:disabled):hover {
+  background: var(--ios-azul);
+  border: 0;
+  color: #fff;
+  box-shadow: none;
+}
+.btn-ghost,
+.btn-ghost:not(:disabled):hover {
+  background: var(--ios-azul-suave);
+  border: 0;
+  color: var(--ios-azul);
+}
+.btn-sm {
+  min-height: 36px;
+  padding: 0 14px;
+  border-radius: 10px;
+  font-size: 0.94rem;
+}
+.link {
+  color: var(--ios-azul);
+  font-weight: 500;
+  text-decoration: none;
+}
+.icon-btn {
+  color: var(--ios-azul);
+  border: 0;
+}
+.icon-btn:hover {
+  background: var(--ios-relleno);
+}
+.dot {
+  background: #ff3b30;
+}
+
+/* ───── Campos ───── */
+label {
+  font-size: 0.82rem;
+  font-weight: 500;
+  color: var(--ios-texto-2);
+}
+input,
+select,
+textarea {
+  min-height: 44px;
+  background: var(--ios-relleno);
+  border: 0;
+  border-radius: 10px;
+  color: var(--ios-texto);
+  font-size: 1rem;
+  letter-spacing: -0.01em;
+}
+input::placeholder,
+textarea::placeholder {
+  color: rgb(60 60 67 / 0.6);
+}
+input:focus,
+select:focus,
+textarea:focus {
+  background: #fff;
+  border-color: transparent;
+  box-shadow: 0 0 0 2px var(--ios-azul);
+}
+select {
+  appearance: none;
+  padding-right: 32px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' fill='none' stroke='%236c6c70' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m1 1.5 5 5 5-5'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+}
+/* Interruptor de iOS en lugar de la casilla */
+input[type="checkbox"] {
+  appearance: none;
+  position: relative;
+  flex: none;
+  width: 51px;
+  height: 31px;
+  min-height: 31px;
+  padding: 0;
+  border: 0;
+  border-radius: 31px;
+  background: rgb(120 120 128 / 0.32);
+  cursor: pointer;
+  transition: background 180ms var(--curva);
+}
+input[type="checkbox"]::after {
+  content: "";
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 27px;
+  height: 27px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 2px 6px rgb(0 0 0 / 0.2);
+  transition: transform 180ms var(--curva);
+}
+input[type="checkbox"]:checked {
+  background: #34c759;
+}
+input[type="checkbox"]:checked::after {
+  transform: translateX(20px);
+}
+input[type="checkbox"]:focus {
+  background: rgb(120 120 128 / 0.32);
+  box-shadow: none;
+}
+input[type="checkbox"]:checked:focus {
+  background: #34c759;
+}
+.check {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--ios-texto);
+  font-size: 1rem;
+  font-weight: 400;
+}
+fieldset {
+  border: 0;
+  border-radius: 12px;
+  background: #fff;
+  padding: 12px 14px;
+  margin: 0;
+}
+legend {
+  float: left;
+  width: 100%;
+  padding: 0 0 8px;
+  font-size: 0.82rem;
+  font-weight: 500;
+  color: var(--ios-texto-2);
+}
+fieldset > :not(legend) {
+  clear: both;
+}
+.form-error {
+  color: var(--ios-rojo);
+  font-weight: 500;
+}
+
+/* ───── Tarjetas agrupadas ───── */
+.card,
+.tile,
+.kpi,
+.kit-stat,
+.statstrip,
+.install-nudge,
+.kit-panel,
+.table-card {
+  border: 0;
+  border-radius: 14px;
+  background: #fff;
+  box-shadow: none;
+}
+.card:hover,
+.tile:hover,
+.kit-stat:hover,
+.kpi:hover {
+  transform: none;
+  box-shadow: none;
+}
+.tile {
+  border: 0;
+}
+.kit-stat {
+  border-left: 0;
+}
+.ks-value,
+.figure {
+  font-family: var(--fuente-titular);
+  font-weight: 700;
+  letter-spacing: -0.025em;
+  color: var(--ios-texto);
+}
+.ks-label,
+.kpi-label,
+.tile-label,
+.card-label,
+.ks-meta,
+.kpi-meta,
+.tile-meta,
+.card-source {
+  letter-spacing: -0.005em;
+  text-transform: none;
+  color: var(--ios-texto-2);
+}
+.ch-text h2 {
+  font-size: 1.1rem;
+  font-weight: 600;
+}
+.ch-icon,
+.ph-icon,
+.ks-icon,
+.kpi-icon,
+.tile-icon {
+  border-radius: 10px;
+}
+
+/* ───── Control segmentado ───── */
+.seg-row,
+.kit-seg {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 0;
+  padding: 2px;
+  border: 0;
+  border-radius: 10px;
+  background: var(--ios-relleno);
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.seg-row.wrap {
+  flex-wrap: wrap;
+}
+.seg-opt,
+.kit-seg button {
+  flex: 1 1 auto;
+  min-height: 34px;
+  padding: 4px 12px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--ios-texto);
+  font-size: 0.875rem;
+  font-weight: 500;
+  white-space: nowrap;
+  text-align: center;
+  justify-content: center;
+  box-shadow: none;
+}
+.seg-opt.on,
+.kit-seg button.on {
+  background: #fff;
+  color: var(--ios-texto);
+  font-weight: 600;
+  box-shadow: 0 3px 8px rgb(0 0 0 / 0.12), 0 3px 1px rgb(0 0 0 / 0.04);
+}
+
+/* ───── Pestañas: píldoras desplazables ───── */
+.kit-tabs,
+.tabs {
+  gap: 6px;
+  padding: 2px 0 8px;
+  border: 0;
+  background: none;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.kit-tabs::-webkit-scrollbar,
+.tabs::-webkit-scrollbar,
+.seg-row::-webkit-scrollbar,
+.kit-seg::-webkit-scrollbar {
+  display: none;
+}
+.kit-tab,
+.tab-btn {
+  flex: none;
+  min-height: 34px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 17px;
+  background: var(--ios-relleno);
+  color: var(--ios-texto);
+  font-size: 0.875rem;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+}
+.kit-tab.on,
+.tab-btn.active {
+  background: var(--ios-azul);
+  border: 0;
+  color: #fff;
+  font-weight: 600;
+}
+.kit-tab::after,
+.kit-tab::before,
+.tab-btn::after {
+  display: none;
+}
+.kit-tab.on svg,
+.tab-btn.active svg {
+  color: #fff;
+}
+.kit-tab.on .kit-badge,
+.kit-tab.on [class*="badge"] {
+  background: rgb(255 255 255 / 0.25);
+  color: #fff;
+}
+
+/* ───── Barras translúcidas ───── */
+.topbar {
+  background: var(--ios-barra);
+  -webkit-backdrop-filter: saturate(180%) blur(20px);
+  backdrop-filter: saturate(180%) blur(20px);
+  border-bottom: 0.5px solid var(--ios-separador);
+  box-shadow: none;
+}
+.topbar-title strong {
+  font-family: var(--fuente-titular);
+  font-size: 1.06rem;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  color: var(--ios-texto);
+}
+.bottom-nav {
+  background: var(--ios-barra);
+  -webkit-backdrop-filter: saturate(180%) blur(20px);
+  backdrop-filter: saturate(180%) blur(20px);
+  border-top: 0.5px solid var(--ios-separador);
+  box-shadow: none;
+}
+.tab {
+  color: #8e8e93;
+  font-size: 0.625rem;
+  font-weight: 500;
+  letter-spacing: 0;
+}
+.tab.active {
+  color: var(--ios-azul);
+  font-weight: 600;
+}
+.tab::before,
+.tab.active::before,
+.tab::after,
+.tab.active::after {
+  display: none;
+}
+
+/* ───── Tablas y listas ───── */
+.ptable,
+.kit-table {
+  border: 0;
+  border-collapse: collapse;
+}
+.ptable th,
+.kit-table th {
+  background: transparent;
+  border-bottom: 0.5px solid var(--ios-separador);
+  color: var(--ios-texto-2);
+  font-size: 0.8rem;
+  font-weight: 500;
+  letter-spacing: 0;
+  text-transform: none;
+}
+.ptable td,
+.kit-table td {
+  border-bottom: 0.5px solid var(--ios-separador);
+  color: var(--ios-texto);
+}
+.ptable tr:last-child td,
+.kit-table tr:last-child td {
+  border-bottom: 0;
+}
+.th-sort {
+  color: inherit;
+  font: inherit;
+  letter-spacing: 0;
+  text-transform: none;
+}
+.dev-row,
+.alert-rows li,
+.agenda li,
+.hist-rows li {
+  border-color: var(--ios-separador);
+  border-width: 0.5px;
+}
+
+/* ───── Avisos y etiquetas ───── */
+.banner {
+  border: 0;
+  border-radius: 12px;
+  font-size: 0.94rem;
+}
+.banner-warn {
+  background: #fff4e0;
+  color: #6b3d00;
+}
+.banner-info {
+  background: #e8f2fd;
+  color: #063b75;
+}
+.chip,
+.kbadge,
+.kit-badge,
+.status-pill {
+  border: 0;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0;
+  text-transform: none;
+}
+.toast {
+  border: 0;
+  border-radius: 14px;
+  background: rgb(44 44 46 / 0.92);
+  color: #fff;
+  -webkit-backdrop-filter: blur(20px);
+  backdrop-filter: blur(20px);
+  box-shadow: 0 8px 28px rgb(0 0 0 / 0.25);
+}
+.toast::before {
+  display: none;
+}
+.toast .icon-btn {
+  color: #fff;
+}
+.fab {
+  border: 0;
+  border-radius: 28px;
+  background: var(--ios-azul);
+  color: #fff;
+  box-shadow: 0 6px 20px rgb(0 113 227 / 0.35);
+}
+
+/* ───── Hojas y diálogos ───── */
+.backdrop,
+.dialog::backdrop {
+  background: rgb(0 0 0 / 0.35);
+}
+.dialog {
+  border: 0;
+  border-radius: 14px;
+  background: var(--ios-fondo);
+  box-shadow: 0 24px 60px rgb(0 0 0 / 0.3);
+}
+.dialog-head {
+  background: var(--ios-barra);
+  -webkit-backdrop-filter: saturate(180%) blur(20px);
+  backdrop-filter: saturate(180%) blur(20px);
+  border-bottom: 0.5px solid var(--ios-separador);
+}
+.dialog-head h2 {
+  font-size: 1.06rem;
+  font-weight: 600;
+}
+.dialog-head .icon-btn {
+  width: 30px;
+  height: 30px;
+  min-width: 30px;
+  background: var(--ios-relleno);
+  border: 0;
+  color: var(--ios-texto-2);
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+.dialog-body {
+  background: var(--ios-fondo);
+}
+.fsec {
+  border: 0;
+  border-radius: 12px;
+  background: #fff;
+  box-shadow: none;
+}
+.fsec-t {
+  color: var(--ios-texto-2);
+  font-family: var(--fuente-interfaz);
+  font-size: 0.82rem;
+  font-weight: 500;
+  letter-spacing: 0;
+  text-transform: none;
+}
+.dialog-actions {
+  background: var(--ios-barra);
+  border: 0;
+}
+.drawer {
+  border: 0;
+  background: var(--ios-fondo);
+  box-shadow: -8px 0 30px rgb(0 0 0 / 0.15);
+}
+.grabber {
+  background: rgb(60 60 67 / 0.3);
+}
+.voice-bar {
+  border: 0;
+  background: #fff;
+}
+.voice-on {
+  box-shadow: 0 0 0 2px var(--ios-azul);
+  border-color: transparent;
+}
+label.voice-field,
+fieldset.voice-field {
+  outline-color: var(--ios-azul);
+}
+
+/* ───── Barra lateral en computador ───── */
+.sidebar {
+  background: rgb(246 246 248 / 0.92);
+  -webkit-backdrop-filter: saturate(180%) blur(20px);
+  backdrop-filter: saturate(180%) blur(20px);
+  border-right: 0.5px solid var(--ios-separador);
+  color: var(--ios-texto);
+}
+
+/* ───── Celular ───── */
+@media (max-width: 900px) {
+  :root {
+    --lienzo: var(--ios-fondo);
+    --fuente-interfaz: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Inter", system-ui,
+      sans-serif;
+  }
+  body {
+    font-size: 17px;
+    background: var(--ios-fondo);
+  }
+  .btn {
+    min-height: 50px;
+    border-radius: 14px;
+    font-size: 1.0625rem;
+  }
+  .btn-sm {
+    min-height: 44px;
+    border-radius: 12px;
+    font-size: 1rem;
+  }
+  input,
+  select,
+  textarea {
+    font-size: 17px; /* evita el zoom automático de iOS al enfocar */
+  }
+  .card,
+  .tile,
+  .kpi,
+  .kit-stat,
+  .statstrip,
+  .install-nudge,
+  .kit-panel,
+  .table-card {
+    border-radius: 14px;
+    box-shadow: none;
+  }
+  .sheet-panel,
+  .drawer.sync-drawer,
+  .drawer.sheet-drawer {
+    border-radius: 14px 14px 0 0;
+  }
+  .topbar {
+    border-bottom: 0.5px solid var(--ios-separador);
+  }
+  .tab {
+    font-size: 0.625rem;
+  }
+  .tab.active {
+    font-weight: 600;
+  }
+  .dialog-form {
+    border-radius: 14px 14px 0 0;
+  }
+}
+
+/* ───── Navegación lateral y hoja «Más» ───── */
+.sidebar .brand-text strong,
+.sidebar .brand-text small,
+.sidebar .nav small {
+  color: var(--ios-texto-2);
+}
+.sidebar .brand-text strong {
+  color: var(--ios-texto);
+}
+.nav {
+  border-radius: 10px;
+  color: var(--ios-texto);
+  font-weight: 500;
+}
+.nav svg {
+  color: var(--ios-azul);
+}
+.nav:hover {
+  background: var(--ios-relleno);
+}
+.nav.active {
+  background: var(--ios-azul);
+  color: #fff;
+  font-weight: 600;
+}
+.nav.active svg {
+  color: #fff;
+}
+.nav.active::before {
+  display: none;
+}
+.nav:focus-visible {
+  outline-color: var(--ios-azul);
+}
+.sync-mini,
+.sync-mini:hover {
+  background: var(--ios-relleno);
+  border: 0;
+  color: var(--ios-texto);
+}
+.tab.active svg {
+  color: var(--ios-azul);
+}
+.tab:focus-visible {
+  outline-color: var(--ios-azul);
+}
+
+/* ───── Ajustes tras revisar cada sección ───── */
+/* La entrada animada dejaba un contexto de apilado: la barra de búsqueda tapaba las hojas. */
+.page > * {
+  animation-fill-mode: backwards;
+}
+/* Sin franjas de color: el tono queda en el ícono. */
+.kit-stat::before,
+.kpi::before,
+.tile::before {
+  display: none;
+}
+.kit-stat,
+.kpi {
+  border-radius: 14px;
+  box-shadow: none;
+}
+.kit-tabs {
+  margin-bottom: 12px;
+}
+.avatar {
+  background: linear-gradient(180deg, #a3a3a9, #85858b);
+  color: #fff;
+  border: 0;
+}
+@media (max-width: 900px) {
+  .kit-tabs {
+    padding: 2px 16px 8px;
+    scroll-padding-inline: 16px;
+    -webkit-mask-image: none;
+    mask-image: none;
+  }
+}
+
+/* Nada de versalitas ni letras separadas: en iOS las etiquetas van en texto normal. */
+.avatar,
+.btn,
+.btn-xl,
+.card-label,
+.dialog-form .fsec input.input-lg,
+.fab,
+.facts dt,
+.fsec-t,
+.hero-badge,
+.input-lg,
+.kicker,
+.nav small,
+.nav-group,
+.page-head .kicker,
+.ptable th,
+.quick-actions .btn,
+.report-meta dt,
+.statstrip span,
+.tree-node small,
+thead th {
+  letter-spacing: -0.01em;
+  text-transform: none;
+}
+
+/* ───── Listas agrupadas ───── */
+tr.selected {
+  background: var(--ios-azul-suave);
+}
+.row-btn .mono,
+.row-main .mono {
+  color: var(--ios-texto);
+  font-family: var(--fuente-interfaz);
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+.row-btn:hover .mono {
+  color: var(--ios-azul);
+}
+.statstrip span {
+  color: var(--ios-texto-2);
+  font-size: 0.8rem;
+}
+@media (max-width: 900px) {
+  .table-card {
+    border-radius: 14px;
+    background: #fff;
+    overflow: hidden;
+  }
+  .table-card tbody {
+    gap: 0;
+  }
+  .table-card tbody tr {
+    border: 0;
+    border-bottom: 0.5px solid var(--ios-separador);
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+  }
+  .table-card tbody tr:last-child {
+    border-bottom: 0;
+  }
+  .table-card tbody tr.selected {
+    background: var(--ios-azul-suave);
+    box-shadow: none;
+  }
+  .drawer.sheet-drawer {
+    border-radius: 14px 14px 0 0;
+  }
+  .fab {
+    border: 0;
+    background: var(--ios-azul);
+    box-shadow: 0 6px 20px rgb(0 113 227 / 0.35);
+  }
+}
+
+/* ───── Formularios y menú «Más» ───── */
+.dialog-form input,
+.dialog-form select,
+.dialog-form textarea,
+.dialog-form .fsec input.input-lg,
+.input-lg {
+  border: 0;
+  border-radius: 10px;
+  background-color: var(--ios-relleno);
+  color: var(--ios-texto);
+  box-shadow: none;
+}
+.dialog-form input:focus,
+.dialog-form select:focus,
+.dialog-form textarea:focus {
+  background-color: #fff;
+  box-shadow: 0 0 0 2px var(--ios-azul);
+}
+.dialog-form label {
+  color: var(--ios-texto-2);
+  font-weight: 500;
+}
+.dialog-form .dialog-actions .btn-primary {
+  background: var(--ios-azul);
+  color: #fff;
+  border: 0;
+}
+.kf-preview:empty {
+  display: none;
+}
+.dialog-head h2 {
+  flex: 1;
+  padding-right: 30px;
+  text-align: center;
+}
+.nav-sheet .nav.active,
+.sheet-panel .nav.active {
+  background: var(--ios-azul);
+  color: #fff;
+}
+.nav-sheet .nav.active svg,
+.sheet-panel .nav.active svg {
+  color: #fff;
+}
+.field-box,
+.farm-chip,
+.search input {
+  border: 0;
+  background: var(--ios-relleno);
+  border-radius: 10px;
+}
+.ptable-wrap {
+  border: 0;
+  border-radius: 12px;
+  box-shadow: none;
+}
+.kit-toolbar {
+  gap: 10px;
+}
+
+/* ───── Controles dentro de los formularios ───── */
+.dialog-form .fsec input:not([type="radio"]):not([type="checkbox"]),
+.dialog-form .fsec select,
+.dialog-form .fsec textarea,
+.dialog-form .more input,
+.dialog-form .more select,
+.dialog-form .more textarea {
+  border: 0;
+  border-radius: 10px;
+  background-color: var(--ios-relleno);
+  color: var(--ios-texto);
+  box-shadow: none;
+}
+.dialog-form .fsec input:not([type="radio"]):not([type="checkbox"]):focus,
+.dialog-form .fsec select:focus,
+.dialog-form .fsec textarea:focus,
+.dialog-form .more input:focus,
+.dialog-form .more select:focus,
+.dialog-form .more textarea:focus {
+  background-color: #fff;
+  box-shadow: 0 0 0 2px var(--ios-azul);
+}
+.dialog-form .fsec label {
+  color: var(--ios-texto-2);
+  font-weight: 500;
+}
+.seg {
+  padding: 0;
+  background: transparent;
+}
+.dialog-form .seg-opt {
+  min-height: 34px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--ios-texto);
+  box-shadow: none;
+}
+.seg-opt.on,
+.dialog-form .seg-opt.on {
+  border: 0;
+  background: #fff;
+  color: var(--ios-texto);
+  font-weight: 600;
+  box-shadow: 0 3px 8px rgb(0 0 0 / 0.12), 0 3px 1px rgb(0 0 0 / 0.04);
+}
+.seg-opt:has(input:focus-visible) {
+  outline-color: var(--ios-azul);
+}
+.seg-row.wrap .seg-opt {
+  flex: 1 1 30%;
+}
+
+.ph-icon {
+  background: var(--ios-azul);
+  color: #fff;
+  box-shadow: none;
+}
+.ph-icon svg {
+  color: #fff;
+}

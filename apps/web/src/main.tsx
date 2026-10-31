@@ -8,6 +8,7 @@ import { createRoot } from "react-dom/client";
 import { App } from "./App";
 import { AppProvider } from "./state";
 import "./styles.css";
+import "./ios.css";
 
 registerSW({ immediate: true });
 
