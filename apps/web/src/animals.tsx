@@ -1005,6 +1005,8 @@ export function RegisterDialog(props: {
 
         <div className="dialog-body">
           <VoiceAssistant
+            title="Registrar animal"
+            context={`Aretes ya usados en este dispositivo: ${parents.map((p) => p.tag).join(", ")}`}
             fields={voiceFields}
             values={voiceValues}
             onChange={setByVoice}

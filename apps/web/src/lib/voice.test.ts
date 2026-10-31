@@ -13,6 +13,7 @@ import {
   parseSpokenNumber,
   parseSpokenTag,
   questionFor,
+  sanityDoubt,
 } from "./voice";
 
 const TODAY = "2026-10-30";
@@ -303,5 +304,21 @@ describe("varios datos en una sola frase", () => {
     expect(endsWithSave("dieciocho litros guardar")).toBe(true);
     expect(endsWithSave("dieciocho litros, listo.")).toBe(true);
     expect(endsWithSave("guardar dieciocho")).toBe(false);
+  });
+});
+
+describe("valores raros", () => {
+  const litros: VoiceField = { name: "l", label: "Litros", type: "number" };
+  const nacer: VoiceField = { name: "n", label: "Peso al nacer (kg)", type: "number" };
+  const peso: VoiceField = { name: "p", label: "Peso (kg)", type: "number" };
+
+  it("duda de lo que no cuadra y deja pasar lo normal", () => {
+    expect(sanityDoubt(litros, "180")).toContain("180 litros");
+    expect(sanityDoubt(litros, "18")).toBeNull();
+    expect(sanityDoubt(nacer, "350")).toContain("al nacer");
+    expect(sanityDoubt(nacer, "36")).toBeNull();
+    expect(sanityDoubt(peso, "5000")).toContain("5000 kilos");
+    expect(sanityDoubt(peso, "350")).toBeNull();
+    expect(sanityDoubt({ name: "o", label: "Notas", type: "text" }, "180")).toBeNull();
   });
 });

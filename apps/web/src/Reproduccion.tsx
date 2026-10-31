@@ -973,6 +973,7 @@ export function ReproduccionScreen() {
       {cfg && form && (
         <FormDialog
           open
+          voiceContext={herd.voiceContext}
           title={cfg.title}
           sub={cfg.sub}
           fields={cfg.fields}

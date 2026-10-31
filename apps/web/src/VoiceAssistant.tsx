@@ -1,6 +1,7 @@
 import { Mic, MicOff, Square, Volume2, VolumeX } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { todayLocal } from "./labels";
+import { api } from "./lib/api";
 import {
   type VoiceField,
   detectCommand,
@@ -11,8 +12,10 @@ import {
   interpretAnswer,
   needsAnswer,
   questionFor,
+  sanityDoubt,
   speakableValue,
 } from "./lib/voice";
+import { useApp } from "./state";
 
 /**
  * Llena un formulario conversando. Se puede decir todo en una frase («vaca cero uno, en la tarde,
@@ -60,7 +63,11 @@ const WAIT_FOR_SPEECH_MS = 15_000;
 const END_OF_PHRASE_MS = 1_100;
 const SILENT_KEY = "gg.voz.silencio";
 
-type Status = "idle" | "speaking" | "listening" | "paused";
+type Status = "idle" | "speaking" | "listening" | "thinking" | "paused";
+
+/** Tiempo máximo esperando al asistente antes de seguir con las reglas del dispositivo. */
+const INTERPRET_MS = 9_000;
+const MAX_HISTORY = 30;
 
 const readSilent = () => {
   try {
@@ -71,6 +78,9 @@ const readSilent = () => {
 };
 
 export function VoiceAssistant(props: {
+  /** Nombre del formulario y datos de la finca con los que el asistente razona. */
+  title: string;
+  context?: string;
   fields: VoiceField[];
   values: Record<string, string>;
   /** Puede devolver otros campos que el valor deja resueltos (categoría «vaca» → sexo). */
@@ -80,7 +90,11 @@ export function VoiceAssistant(props: {
   onConfirm(): void;
   autoStart?: boolean;
 }) {
+  const { orgId } = useApp();
   const [status, setStatus] = useState<Status>("idle");
+  const [basic, setBasic] = useState(false);
+  const history = useRef<{ role: "app" | "usuario"; text: string }[]>([]);
+  const doubted = useRef(new Set<string>());
   const [prompt, setPrompt] = useState("");
   const [heard, setHeard] = useState("");
   const [live, setLive] = useState("");
@@ -116,7 +130,68 @@ export function VoiceAssistant(props: {
     if ("speechSynthesis" in window) window.speechSynthesis.cancel();
   }
 
+  function remember(role: "app" | "usuario", text: string) {
+    history.current = [...history.current, { role, text: text.slice(0, 800) }].slice(-MAX_HISTORY);
+  }
+
+  /** Pide al asistente que razone la frase. Devuelve null si hay que usar las reglas locales. */
+  async function interpret(alts: string[], current?: VoiceField) {
+    const { fields, values, title, context } = latest.current;
+    setStatus("thinking");
+    const timeout = new Promise<null>((resolve) => setTimeout(() => resolve(null), INTERPRET_MS));
+    const call = api
+      .voiceInterpret({
+        organizationId: orgId,
+        formTitle: title,
+        context: context ?? "",
+        fields: fields.map((f) => ({
+          name: f.name,
+          label: f.label,
+          type: f.type,
+          required: f.required !== false,
+          value: values[f.name] ?? "",
+          ...(f.choices ? { choices: f.choices } : {}),
+        })),
+        ...(current ? { current: current.name } : {}),
+        history: history.current,
+        alternatives: alts.slice(0, 5),
+      })
+      .catch(() => null);
+    const result = await Promise.race([call, timeout]);
+    setBasic(result === null);
+    return result;
+  }
+
+  function saveNow() {
+    stopAudio();
+    setStatus("idle");
+    markField(null);
+    setPrompt("");
+    latest.current.onConfirm();
+  }
+
+  /** Resumen para confirmar; antes avisa si algún valor no parece normal, una sola vez por valor. */
+  function confirmation(): string {
+    const { fields, values, confirmText } = latest.current;
+    let doubt = "";
+    for (const f of fields) {
+      const value = values[f.name];
+      const issue = sanityDoubt(f, value);
+      if (issue && !doubted.current.has(`${f.name}:${value}`)) {
+        doubted.current.add(`${f.name}:${value}`);
+        doubt = `${issue} `;
+        break;
+      }
+    }
+    const summary = fields
+      .filter((f) => values[f.name] && f.type !== "date")
+      .map((f) => speakableValue(f, values[f.name] ?? ""))
+      .join(", ");
+    return `${doubt}${summary}. ${confirmText ?? "¿Guardo?"}`;
+  }
+
   function speak(text: string): Promise<void> {
+    remember("app", text);
     setPrompt(text);
     if (silentRef.current || !("speechSynthesis" in window)) return Promise.resolve();
     setStatus("speaking");
@@ -315,6 +390,38 @@ export function VoiceAssistant(props: {
       setHeard(first);
       const command = detectCommand(first);
       if (command === "detener") return pause(id, "Detenido. Puede seguir escribiendo.");
+      remember("usuario", first);
+      if (command !== "repetir" && command !== "saltar") {
+        const ai = await interpret(res.alts, current);
+        if (session.current !== id) return;
+        if (ai) {
+          const names = Object.keys(ai.values);
+          for (const name of names) {
+            answered.current.add(name);
+            for (const also of latest.current.onChange(name, ai.values[name] ?? "") ?? []) {
+              answered.current.add(also);
+            }
+          }
+          if (ai.action === "detener") return pause(id, "Detenido. Puede seguir escribiendo.");
+          await tick();
+          const next = pending();
+          misses = names.length > 0 ? 0 : misses + 1;
+          if (ai.question || next) {
+            if (names.length === 0 && misses >= MAX_MISSES) {
+              return pause(id, "No le entendí. Escríbalo y toque seguir por voz.");
+            }
+            current = next;
+            correcting = false;
+            say = ai.question ?? questionFor(next as VoiceField, misses > 0);
+            continue;
+          }
+          if (ai.action === "guardar") return saveNow();
+          current = undefined;
+          correcting = false;
+          say = confirmation();
+          continue;
+        }
+      }
       if (command === "repetir") {
         say = current ? questionFor(current, true) : "";
         continue;
@@ -337,14 +444,7 @@ export function VoiceAssistant(props: {
         }
         const yesNo = res.alts.map(detectConfirmation).find(Boolean);
         const taken = apply(res.alts);
-        if (taken === 0 && yesNo === "si") {
-          stopAudio();
-          setStatus("idle");
-          markField(null);
-          setPrompt("");
-          latest.current.onConfirm();
-          return;
-        }
+        if (taken === 0 && yesNo === "si") return saveNow();
         if (taken === 0 && yesNo === "no") {
           return pause(id, "Listo. Corrija lo que necesite y guarde con el botón.");
         }
@@ -376,20 +476,8 @@ export function VoiceAssistant(props: {
         say = questionFor(current);
         continue;
       }
-      if (endsWithSave(first)) {
-        stopAudio();
-        setStatus("idle");
-        markField(null);
-        setPrompt("");
-        latest.current.onConfirm();
-        return;
-      }
-      const { fields, values, confirmText } = latest.current;
-      const summary = fields
-        .filter((f) => values[f.name] && f.type !== "date")
-        .map((f) => speakableValue(f, values[f.name] ?? ""))
-        .join(", ");
-      say = `${summary}. ${confirmText ?? "¿Guardo?"}`;
+      if (endsWithSave(first)) return saveNow();
+      say = confirmation();
     }
   }
 
@@ -399,6 +487,8 @@ export function VoiceAssistant(props: {
     setHeard("");
     if (status !== "paused") {
       answered.current = new Set();
+      history.current = [];
+      doubted.current = new Set();
       started.current = { ...latest.current.values };
     }
     const next = pending();
@@ -445,7 +535,7 @@ export function VoiceAssistant(props: {
     );
   }
 
-  const active = status === "speaking" || status === "listening";
+  const active = status === "speaking" || status === "listening" || status === "thinking";
   return (
     <div ref={root} className={active ? "voice-bar voice-on" : "voice-bar"}>
       {active ? (
@@ -487,7 +577,9 @@ export function VoiceAssistant(props: {
               <span className="voice-dot" aria-hidden="true" /> Escuchando…
             </small>
           ))}
+        {status === "thinking" && <small className="voice-listening">Pensando…</small>}
         {heard && status !== "listening" && <small>Escuché: «{heard}»</small>}
+        {basic && <small>Sin asistente inteligente en este momento: uso las reglas básicas.</small>}
       </div>
     </div>
   );

@@ -635,6 +635,21 @@ export function extractAnswers(
   return { values, rest: rest.replace(/\|/g, " ").replace(/\s+/g, " ").trim() };
 }
 
+/** Un valor posible pero raro merece una segunda mirada antes de guardar. */
+export function sanityDoubt(field: VoiceField, value: string | undefined): string | null {
+  if (field.type !== "number" || !value) return null;
+  const n = Number(value);
+  const label = norm(field.label);
+  if (label.includes("litro") && n > 60) return `${value} litros parece mucho para un ordeño.`;
+  if (label.includes("nacer") && (n < 10 || n > 80)) {
+    return `${value} kilos no es un peso normal al nacer.`;
+  }
+  if (label.includes("peso") && !label.includes("nacer") && (n < 10 || n > 1500)) {
+    return `${value} kilos no parece un peso normal.`;
+  }
+  return null;
+}
+
 /** «… guardar» o «… listo» al final de la frase: guardar sin que se pregunte. */
 export function endsWithSave(text: string): boolean {
   return /\b(guardar|guarda|guardalo|guarde|listo)$/.test(norm(text).replace(/[,.]/g, "").trim());

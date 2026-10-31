@@ -773,6 +773,7 @@ export function ProduccionScreen() {
       {open === "ordeno" && (
         <FormDialog
           open
+          voiceContext={herd.voiceContext}
           title="Registrar ordeño"
           fields={[
             { name: "tag", label: "Animal", type: "select", options: LACTATING.map((a) => a.tag) },
@@ -827,6 +828,7 @@ export function ProduccionScreen() {
       {open === "calidad" && (
         <FormDialog
           open
+          voiceContext={herd.voiceContext}
           title="Control de calidad"
           fields={[
             {
@@ -862,6 +864,7 @@ export function ProduccionScreen() {
       {open === "peso" && (
         <FormDialog
           open
+          voiceContext={herd.voiceContext}
           title="Registrar peso"
           fields={[
             { name: "tag", label: "Animal", type: "select", options: growth.map((a) => a.tag) },

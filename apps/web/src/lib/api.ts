@@ -5,6 +5,8 @@ import type {
   PullResponse,
   PushResponse,
   SessionDto,
+  VoiceInterpretRequest,
+  VoiceInterpretResponse,
 } from "@ganaderia/contracts";
 
 /** Sin respuesta del servidor: no hay red o el servidor no está disponible. */
@@ -62,6 +64,8 @@ export const api = {
     request<SessionDto>("POST", "/v1/auth/login", { email, password }),
   logout: () => request<{ ok: true }>("POST", "/v1/auth/logout"),
   me: () => request<SessionDto>("GET", "/v1/auth/me"),
+  voiceInterpret: (input: VoiceInterpretRequest) =>
+    request<VoiceInterpretResponse>("POST", "/v1/voice/interpret", input),
   approxLocation: () => request<{ lat: number; lng: number }>("GET", "/v1/geo/approx"),
   createFarm: (input: FarmCreate) => request<FarmDto>("POST", "/v1/farms", input),
   updateFarm: (id: string, input: FarmUpdate) => request<FarmDto>("PUT", `/v1/farms/${id}`, input),

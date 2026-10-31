@@ -339,6 +339,7 @@ export function FarmDialog({ farm, onClose }: { farm?: LocalFarm; onClose(): voi
           <p className="farm-step">Paso 1 de 2 · Datos de la finca</p>
           <VoiceAssistant
             key="paso-1"
+            title="Registrar finca: datos generales"
             fields={stepOneFields}
             values={stepOneValues}
             onChange={setStepOne}
@@ -468,6 +469,7 @@ export function FarmDialog({ farm, onClose }: { farm?: LocalFarm; onClose(): voi
           <p className="farm-step">Paso 2 de 2 · Especies y manejo</p>
           <VoiceAssistant
             key="paso-2"
+            title="Registrar finca: destete y secado por especie"
             fields={stepTwoFields}
             values={stepTwoValues}
             onChange={setStepTwo}

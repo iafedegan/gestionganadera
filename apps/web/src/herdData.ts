@@ -23,6 +23,7 @@ import {
 } from "./herd";
 import { addDays, ago, daysBetween, iso, today } from "./kit";
 import { todayLocal } from "./labels";
+import { activeWithdrawals } from "./lib/animalHistory";
 import { type LocalAnimalEvent, type LocalHerdAnimal, localdb } from "./lib/localdb";
 import { useApp } from "./state";
 
@@ -240,6 +241,32 @@ export function useHerdData() {
     [byTag, farms],
   );
 
+  /** Lo que una secretaria sabría de cada animal, para interpretar y detectar lo que no cuadra. */
+  const voiceContext = useMemo(() => {
+    if (!real) return "";
+    const today = todayLocal();
+    return herd
+      .slice(0, 400)
+      .map((a) => {
+        const mine = events.filter((e) => e.animalId === a.id);
+        const lastOf = (type: string) => mine.find((e) => e.type === type)?.occurredOn;
+        const parto = lastOf("parto");
+        const secado = lastOf("secado");
+        const retiro = activeWithdrawals(mine, today);
+        return [
+          `${a.tag}: ${a.species}, ${a.sex}, ${a.category}`,
+          a.birthDate && `nació ${a.birthDate}`,
+          parto && `último parto ${parto}`,
+          secado && (!parto || secado >= parto) && `seca desde ${secado}`,
+          retiro.milkUntil && `en retiro de leche hasta ${retiro.milkUntil}`,
+          retiro.meatUntil && `en retiro de carne hasta ${retiro.meatUntil}`,
+        ]
+          .filter(Boolean)
+          .join(", ");
+      })
+      .join("\n");
+  }, [real, herd, events]);
+
   /** Guarda uno o varios eventos en el dispositivo y los envía si hay conexión. */
   const record = useCallback(
     async (items: { tag: string; event: EventInput }[]) => {
@@ -313,6 +340,7 @@ export function useHerdData() {
     pesos,
     milkDays,
     dryOffDays,
+    voiceContext,
     record,
     registerCalf,
     responsible: session?.displayName ?? "",
