@@ -9,9 +9,11 @@ import {
   type FarmDto,
   type FarmMapDto,
   type FarmMapSavePayload,
+  type FarmUpdate,
   ORG_SCOPE_FARM_ID,
   type PullResponse,
   type PushResponse,
+  type Species,
   type StockConsumePayload,
   type StockMovementDto,
   type StockReceivePayload,
@@ -52,7 +54,33 @@ function farmDto(r: Record<string, unknown>): FarmDto {
     name: r.name as string,
     locationText: (r.location_text as string | null) ?? null,
     speciesPresent: r.species_present as FarmDto["speciesPresent"],
+    productionFocus: (r.production_focus as FarmDto["productionFocus"]) ?? null,
+    productionSystem: (r.production_system as FarmDto["productionSystem"]) ?? null,
+    totalAreaHa: (r.total_area_ha as number | null) ?? null,
+    livestockAreaHa: (r.livestock_area_ha as number | null) ?? null,
+    areaUnit: (r.area_unit as FarmDto["areaUnit"]) ?? "ha",
+    latitude: (r.latitude as number | null) ?? null,
+    longitude: (r.longitude as number | null) ?? null,
+    speciesSettings: (r.species_settings as FarmDto["speciesSettings"]) ?? {},
   };
+}
+
+/** Valores del perfil en el orden de las columnas production_focus … species_settings. */
+function farmProfileValues(input: FarmCreate | FarmUpdate) {
+  const species = new Set(input.speciesPresent);
+  const settings = Object.fromEntries(
+    Object.entries(input.speciesSettings ?? {}).filter(([k]) => species.has(k as Species)),
+  );
+  return [
+    input.productionFocus ?? null,
+    input.productionSystem ?? null,
+    input.totalAreaHa ?? null,
+    input.livestockAreaHa ?? null,
+    input.areaUnit ?? "ha",
+    input.latitude ?? null,
+    input.longitude ?? null,
+    JSON.stringify(settings),
+  ];
 }
 
 export async function createFarm(db: Db, user: AuthUser, input: FarmCreate): Promise<FarmDto> {
@@ -60,14 +88,17 @@ export async function createFarm(db: Db, user: AuthUser, input: FarmCreate): Pro
     input.organizationId,
     async (q) => {
       const rows = await q(
-        `INSERT INTO farm (organization_id, code, name, location_text, species_present)
-         VALUES ($1,$2,$3,$4,$5) RETURNING *`,
+        `INSERT INTO farm (organization_id, code, name, location_text, species_present,
+           production_focus, production_system, total_area_ha, livestock_area_ha, area_unit,
+           latitude, longitude, species_settings)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) RETURNING *`,
         [
           input.organizationId,
           input.code,
           input.name,
           input.locationText ?? null,
           input.speciesPresent,
+          ...farmProfileValues(input),
         ],
       );
       const dto = farmDto(rows[0] as Record<string, unknown>);
@@ -79,6 +110,56 @@ export async function createFarm(db: Db, user: AuthUser, input: FarmCreate): Pro
       await appendAudit(q, input.organizationId, {
         userId: user.id,
         action: "farm.create",
+        entity: "farm",
+        entityId: dto.id,
+        detail: { code: dto.code },
+      });
+      return dto;
+    },
+    { write: true },
+  );
+}
+
+/** Devuelve null si la finca no existe y lanza ESPECIE_CON_ANIMALES si se quita una especie en uso. */
+export async function updateFarm(
+  db: Db,
+  user: AuthUser,
+  farmId: string,
+  input: FarmUpdate,
+): Promise<FarmDto | null> {
+  return db.tenant(
+    input.organizationId,
+    async (q) => {
+      const inUse = await q<{ species: string }>(
+        "SELECT DISTINCT species FROM animal WHERE farm_id = $1 AND status = 'activo'",
+        [farmId],
+      );
+      if (inUse.some((a) => !input.speciesPresent.includes(a.species as Species))) {
+        throw new Error("ESPECIE_CON_ANIMALES");
+      }
+      const rows = await q(
+        `UPDATE farm SET name = $2, location_text = $3, species_present = $4,
+           production_focus = $5, production_system = $6, total_area_ha = $7, livestock_area_ha = $8,
+           area_unit = $9, latitude = $10, longitude = $11, species_settings = $12
+         WHERE id = $1 RETURNING *`,
+        [
+          farmId,
+          input.name,
+          input.locationText ?? null,
+          input.speciesPresent,
+          ...farmProfileValues(input),
+        ],
+      );
+      if (!rows[0]) return null;
+      const dto = farmDto(rows[0] as Record<string, unknown>);
+      const version = await nextVersion(q, input.organizationId);
+      await q(
+        "INSERT INTO change (organization_id, version, farm_id, entity, entity_id, data) VALUES ($1,$2,$3,'farm',$3,$4)",
+        [input.organizationId, version, dto.id, JSON.stringify(dto)],
+      );
+      await appendAudit(q, input.organizationId, {
+        userId: user.id,
+        action: "farm.update",
         entity: "farm",
         entityId: dto.id,
         detail: { code: dto.code },

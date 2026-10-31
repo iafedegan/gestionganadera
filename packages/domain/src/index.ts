@@ -292,3 +292,51 @@ export function validateStockReceive(
   }
   return issues;
 }
+
+/** Hectáreas por unidad. Fanegada y cuadra colombianas: 6.400 m²; pueden variar por región. */
+export const HA_PER_UNIT = { ha: 1, fanegada: 0.64, cuadra: 0.64, acre: 0.404686 } as const;
+export type AreaUnitKey = keyof typeof HA_PER_UNIT;
+
+export function toHectares(value: number, unit: AreaUnitKey): number {
+  return Math.round(value * HA_PER_UNIT[unit] * 10_000) / 10_000;
+}
+
+export function fromHectares(ha: number, unit: AreaUnitKey): number {
+  return Math.round((ha / HA_PER_UNIT[unit]) * 100) / 100;
+}
+
+/** UGG estimadas por categoría cuando no hay pesaje. 1 UGG = 450 kg de peso vivo. */
+const UGG_BY_CATEGORY: Record<string, number> = {
+  ternero: 0.3,
+  novilla: 0.7,
+  novillo: 0.7,
+  vaca: 1,
+  toro: 1.3,
+  otro: 0.7,
+};
+
+/** Carga estimada de la finca: UGG totales y UGG/ha sobre el área ganadera. */
+export function estimatedLoad(
+  byCategory: { category: string; n: number }[],
+  livestockAreaHa: number | null,
+): { ugg: number; perHa: number | null } {
+  const ugg = byCategory.reduce((s, c) => s + (UGG_BY_CATEGORY[c.category] ?? 0.7) * c.n, 0);
+  return { ugg, perHa: livestockAreaHa && livestockAreaHa > 0 ? ugg / livestockAreaHa : null };
+}
+
+/** Fecha en que un animal cumple la edad de destete (AAAA-MM-DD). Ajusta al último día del mes. */
+export function weaningDate(birthDate: string, months: number): string {
+  const b = new Date(`${birthDate}T00:00:00Z`);
+  const target = new Date(Date.UTC(b.getUTCFullYear(), b.getUTCMonth() + months, 1));
+  const lastDay = new Date(
+    Date.UTC(target.getUTCFullYear(), target.getUTCMonth() + 1, 0),
+  ).getUTCDate();
+  target.setUTCDate(Math.min(b.getUTCDate(), lastDay));
+  return target.toISOString().slice(0, 10);
+}
+
+/** El aviso de destete vive de 7 días antes a 30 después, para que no quede abierto para siempre. */
+export function isWeaningDue(birthDate: string, months: number, today: string): boolean {
+  const days = (Date.parse(weaningDate(birthDate, months)) - Date.parse(today)) / 86_400_000;
+  return days <= 7 && days >= -30;
+}

@@ -32,6 +32,7 @@ import {
   X,
 } from "lucide-react";
 import { type FormEvent, type ReactNode, useEffect, useRef, useState } from "react";
+import { FarmDialog } from "./FarmForm";
 import { art } from "./art";
 import { PageHead } from "./components";
 import {
@@ -45,17 +46,14 @@ import {
   num,
   todayLocal,
 } from "./labels";
-import { ApiError, api } from "./lib/api";
-import { type AnimalDetail, type LocalAnimal, localdb } from "./lib/localdb";
+import { type AnimalDetail, type LocalAnimal, type LocalFarm, localdb } from "./lib/localdb";
 import { detectCapabilities, scanNfc } from "./lib/reader";
 import { useMedia, useSwipeDismiss } from "./native";
 import { useApp } from "./state";
 
-type Farm = { id: string; code: string; name: string; species: string };
-
 export function useFarms() {
   const { orgId, dataVersion } = useApp();
-  const [farms, setFarms] = useState<Farm[]>([]);
+  const [farms, setFarms] = useState<LocalFarm[]>([]);
   // biome-ignore lint/correctness/useExhaustiveDependencies: dataVersion fuerza la relectura
   useEffect(() => {
     void localdb.listFarms(orgId).then(setFarms);
@@ -1097,118 +1095,5 @@ export function Segmented<T extends string>(props: {
         ))}
       </div>
     </fieldset>
-  );
-}
-
-function FarmDialog({ onClose }: { onClose(): void }) {
-  const { orgId, syncNow } = useApp();
-  const ref = useRef<HTMLDialogElement>(null);
-  const [code, setCode] = useState("");
-  const [name, setName] = useState("");
-  const [location, setLocation] = useState("");
-  const [bovino, setBovino] = useState(true);
-  const [bufalino, setBufalino] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
-
-  useEffect(() => {
-    ref.current?.showModal();
-  }, []);
-
-  function close() {
-    ref.current?.close();
-    onClose();
-  }
-
-  async function submit(e: FormEvent) {
-    e.preventDefault();
-    const speciesPresent: Species[] = [
-      ...(bovino ? (["bovino"] as const) : []),
-      ...(bufalino ? (["bufalino"] as const) : []),
-    ];
-    if (speciesPresent.length === 0) {
-      setError("Seleccione al menos una especie.");
-      return;
-    }
-    setBusy(true);
-    setError(null);
-    try {
-      await api.createFarm({
-        organizationId: orgId,
-        code,
-        name,
-        speciesPresent,
-        ...(location.trim() ? { locationText: location.trim() } : {}),
-      });
-      await syncNow();
-      close();
-    } catch (err) {
-      setError(
-        err instanceof ApiError ? err.message : "No se pudo crear la finca. Verifique la conexión.",
-      );
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  return (
-    <dialog ref={ref} className="dialog" onClose={onClose} aria-labelledby="farm-title">
-      <form onSubmit={submit}>
-        <h2 id="farm-title">Nueva finca</h2>
-        <div className="grid">
-          <label>
-            Código
-            <input
-              required
-              maxLength={20}
-              value={code}
-              onChange={(e) => setCode(e.target.value)}
-              className="mono"
-            />
-          </label>
-          <label>
-            Nombre
-            <input
-              required
-              maxLength={120}
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-            />
-          </label>
-        </div>
-        <label>
-          Ubicación (texto)
-          <input maxLength={200} value={location} onChange={(e) => setLocation(e.target.value)} />
-        </label>
-        <fieldset>
-          <legend>Especies presentes</legend>
-          <label className="check">
-            <input type="checkbox" checked={bovino} onChange={(e) => setBovino(e.target.checked)} />{" "}
-            Bovinos
-          </label>
-          <label className="check">
-            <input
-              type="checkbox"
-              checked={bufalino}
-              onChange={(e) => setBufalino(e.target.checked)}
-            />{" "}
-            Bufalinos
-          </label>
-        </fieldset>
-        {error && (
-          <p role="alert" className="form-error">
-            {error}
-          </p>
-        )}
-        <div className="dialog-actions">
-          <button type="button" className="btn btn-ghost" onClick={close}>
-            Cancelar
-          </button>
-          <button type="submit" className="btn btn-primary" disabled={busy}>
-            Crear finca
-          </button>
-        </div>
-      </form>
-    </dialog>
   );
 }

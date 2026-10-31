@@ -16,7 +16,7 @@ import { useEffect, useRef, useState } from "react";
 import { FORAGES } from "./herd";
 import { Badge, FormDialog, downloadCsv, num } from "./kit";
 import { api } from "./lib/api";
-import { type LocalFarmMap, localdb } from "./lib/localdb";
+import { type LocalFarm, type LocalFarmMap, localdb } from "./lib/localdb";
 import { useApp } from "./state";
 
 /**
@@ -184,6 +184,7 @@ export function FarmMap() {
   const { notify, orgId, online, syncNow, dataVersion, role, session } = useApp();
   const canEdit = role ? can(role, "farm.write") : false;
   const [farmId, setFarmId] = useState<string | null>(null);
+  const [farms, setFarms] = useState<LocalFarm[]>([]);
   const [meta, setMeta] = useState<LocalFarmMap | null>(null);
   const el = useRef<HTMLDivElement>(null);
   const map = useRef<L.Map | null>(null);
@@ -213,13 +214,25 @@ export function FarmMap() {
     if (!orgId) return;
     let live = true;
     void (async () => {
-      const farms = await localdb.listFarms(orgId);
-      const f = farmId ?? farms[0]?.id ?? null;
+      const list = await localdb.listFarms(orgId);
+      const f = farmId ?? list[0]?.id ?? null;
       if (!live || !f) return;
+      setFarms(list);
       setFarmId(f);
       const m = await localdb.getFarmMap(f);
       if (!live || modeRef.current !== "ver") return;
       setMeta(m);
+      const farm = list.find((x) => x.id === f);
+      const hasPoint = farm?.latitude != null && farm.longitude != null;
+      if (!m && (hasPoint || list.length > 1)) {
+        // Finca real sin mapa guardado: se abre en su punto, sin los potreros de ejemplo.
+        setData({ lindero: null, potreros: [] });
+        if (!fitted.current && hasPoint) {
+          fitted.current = true;
+          const at: Pt = [farm.latitude as number, farm.longitude as number];
+          setTimeout(() => map.current?.setView(at, 15), 300);
+        }
+      }
       if (m) {
         const d: MapData = {
           lindero: m.boundary,
@@ -240,7 +253,7 @@ export function FarmMap() {
     return () => {
       live = false;
     };
-  }, [orgId, dataVersion]);
+  }, [orgId, dataVersion, farmId]);
 
   const r7 = (n: number) => Math.round(n * 1e7) / 1e7;
   const save = (d: MapData) => {
@@ -611,6 +624,28 @@ export function FarmMap() {
 
   return (
     <div className="farm-map-wrap">
+      {farms.length > 1 && (
+        <label>
+          Finca
+          <select
+            value={farmId ?? ""}
+            onChange={(e) => {
+              if (walking) toggleWalk();
+              fitted.current = false;
+              setMode("ver");
+              setDraft([]);
+              setSel(null);
+              setFarmId(e.target.value);
+            }}
+          >
+            {farms.map((f) => (
+              <option key={f.id} value={f.id}>
+                {f.name}
+              </option>
+            ))}
+          </select>
+        </label>
+      )}
       <div className="fm-toolbar">
         <div className="fm-group">
           <button
@@ -671,7 +706,11 @@ export function FarmMap() {
         {!canEdit ? (
           <span>Solo lectura: su perfil no puede editar el mapa.</span>
         ) : !meta ? (
-          <span>Mapa de ejemplo, aún sin guardar. Al editarlo se guarda en el servidor.</span>
+          <span>
+            {data.lindero || data.potreros.length > 0
+              ? "Mapa de ejemplo, aún sin guardar. Al editarlo se guarda en el servidor."
+              : "Esta finca aún no tiene mapa. Trace el lindero y los potreros; se guardan en el servidor."}
+          </span>
         ) : meta.syncState === "sincronizado" ? (
           <span>
             Guardado en el servidor · revisión {meta.revision}

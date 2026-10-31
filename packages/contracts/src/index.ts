@@ -196,6 +196,14 @@ export interface FarmDto {
   name: string;
   locationText: string | null;
   speciesPresent: Species[];
+  productionFocus: ProductionFocus | null;
+  productionSystem: ProductionSystem | null;
+  totalAreaHa: number | null;
+  livestockAreaHa: number | null;
+  areaUnit: AreaUnit;
+  latitude: number | null;
+  longitude: number | null;
+  speciesSettings: Partial<Record<Species, SpeciesSetting>>;
 }
 
 export interface AnimalDto {
@@ -292,14 +300,85 @@ export interface SessionDto {
   offlineLeaseUntil: string;
 }
 
-export const FarmCreate = z.object({
-  organizationId: uuid,
-  code: z.string().trim().min(1).max(20),
+export const ProductionFocus = z.enum(["leche", "carne", "doble_proposito"]);
+export type ProductionFocus = z.infer<typeof ProductionFocus>;
+
+export const ProductionSystem = z.enum([
+  "cria",
+  "levante",
+  "ceba",
+  "ciclo_completo",
+  "puro",
+  "bravura",
+]);
+export type ProductionSystem = z.infer<typeof ProductionSystem>;
+
+export const AreaUnit = z.enum(["ha", "fanegada", "cuadra", "acre"]);
+export type AreaUnit = z.infer<typeof AreaUnit>;
+
+/** Parámetros de manejo por especie: edad de destete y días de lactancia al secado. */
+export const SpeciesSetting = z.object({
+  weaningMonths: z.number().int().min(1).max(24),
+  dryOffDays: z.number().int().min(60).max(600),
+});
+export type SpeciesSetting = z.infer<typeof SpeciesSetting>;
+
+const farmFields = {
   name: z.string().trim().min(1).max(120),
   locationText: z.string().trim().max(200).optional(),
   speciesPresent: z.array(Species).min(1),
-});
-export type FarmCreate = z.infer<typeof FarmCreate>;
+  productionFocus: ProductionFocus.optional(),
+  productionSystem: ProductionSystem.optional(),
+  totalAreaHa: z.number().positive().max(10_000_000).optional(),
+  livestockAreaHa: z.number().positive().max(10_000_000).optional(),
+  areaUnit: AreaUnit.default("ha"),
+  latitude: z.number().min(-90).max(90).optional(),
+  longitude: z.number().min(-180).max(180).optional(),
+  speciesSettings: z
+    .object({ bovino: SpeciesSetting, bufalino: SpeciesSetting })
+    .partial()
+    .default({}),
+};
+
+function checkFarm(
+  f: {
+    totalAreaHa?: number | undefined;
+    livestockAreaHa?: number | undefined;
+    latitude?: number | undefined;
+    longitude?: number | undefined;
+  },
+  ctx: z.RefinementCtx,
+) {
+  if (f.totalAreaHa !== undefined && f.livestockAreaHa !== undefined) {
+    if (f.livestockAreaHa > f.totalAreaHa) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["livestockAreaHa"],
+        message: "El área ganadera no puede ser mayor que el área total.",
+      });
+    }
+  }
+  if ((f.latitude === undefined) !== (f.longitude === undefined)) {
+    ctx.addIssue({
+      code: "custom",
+      path: ["latitude"],
+      message: "La ubicación necesita latitud y longitud.",
+    });
+  }
+}
+
+export const FarmCreate = z
+  .object({
+    organizationId: uuid,
+    code: z.string().trim().min(1).max(20),
+    ...farmFields,
+  })
+  .superRefine(checkFarm);
+export type FarmCreate = z.input<typeof FarmCreate>;
+
+/** Reemplaza los datos de la finca; lo que no llegue queda vacío. El código no cambia. */
+export const FarmUpdate = z.object({ organizationId: uuid, ...farmFields }).superRefine(checkFarm);
+export type FarmUpdate = z.input<typeof FarmUpdate>;
 
 /** Códigos de error de dominio (estables; la interfaz los traduce). */
 export const ErrorCodes = {

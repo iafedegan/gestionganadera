@@ -1,7 +1,7 @@
 import { existsSync } from "node:fs";
 import cookie from "@fastify/cookie";
 import fastifyStatic from "@fastify/static";
-import { FarmCreate, LoginRequest, PushRequest } from "@ganaderia/contracts";
+import { FarmCreate, FarmUpdate, LoginRequest, PushRequest } from "@ganaderia/contracts";
 import Fastify, { type FastifyInstance, type FastifyReply, type FastifyRequest } from "fastify";
 import { z } from "zod";
 import { verifyAuditChain } from "./audit.js";
@@ -16,7 +16,7 @@ import {
   toSessionDto,
 } from "./auth.js";
 import type { Db } from "./db.js";
-import { createFarm, listFarms, pull, push } from "./sync.js";
+import { createFarm, listFarms, pull, push, updateFarm } from "./sync.js";
 
 const COOKIE = "sid";
 
@@ -173,6 +173,35 @@ export async function buildApp(opts: AppOptions): Promise<FastifyInstance> {
         return reply
           .code(409)
           .send({ error: "CODIGO_DUPLICADO", message: "Ya existe una finca con ese código." });
+      }
+      throw err;
+    }
+  });
+
+  app.put("/v1/farms/:id", { preHandler: requireSession }, async (req, reply) => {
+    const body = FarmUpdate.safeParse(req.body);
+    const a = req.auth as NonNullable<FastifyRequest["auth"]>;
+    const id = (req.params as { id: string }).id;
+    if (!body.success)
+      return reply.code(400).send({ error: "VALIDACION", message: body.error.issues[0]?.message });
+    if (!z.string().uuid().safeParse(id).success)
+      return reply.code(404).send({ error: "NO_ENCONTRADO", message: "La finca no existe." });
+    if (!grants(a.memberships, body.data.organizationId, "farm.write", id)) {
+      return reply
+        .code(403)
+        .send({ error: "PERMISO_DENEGADO", message: "No puede editar esta finca." });
+    }
+    try {
+      const farm = await updateFarm(db, a.user, id, body.data);
+      if (!farm)
+        return reply.code(404).send({ error: "NO_ENCONTRADO", message: "La finca no existe." });
+      return farm;
+    } catch (err) {
+      if (String(err).includes("ESPECIE_CON_ANIMALES")) {
+        return reply.code(409).send({
+          error: "ESPECIE_CON_ANIMALES",
+          message: "No puede quitar una especie que aún tiene animales activos en la finca.",
+        });
       }
       throw err;
     }

@@ -1,6 +1,7 @@
 import type {
   FarmCreate,
   FarmDto,
+  FarmUpdate,
   PullResponse,
   PushResponse,
   SessionDto,
@@ -63,6 +64,7 @@ export const api = {
   me: () => request<SessionDto>("GET", "/v1/auth/me"),
   approxLocation: () => request<{ lat: number; lng: number }>("GET", "/v1/geo/approx"),
   createFarm: (input: FarmCreate) => request<FarmDto>("POST", "/v1/farms", input),
+  updateFarm: (id: string, input: FarmUpdate) => request<FarmDto>("PUT", `/v1/farms/${id}`, input),
   pull: (organizationId: string, since: number, limit = 200) =>
     request<PullResponse>(
       "GET",

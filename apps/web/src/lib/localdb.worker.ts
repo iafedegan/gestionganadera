@@ -5,6 +5,7 @@ import type {
   Change,
   CommandEnvelope,
   ConsumeTarget,
+  FarmDto,
   FarmMapSaveCommand,
   LatLng,
   MapPaddock,
@@ -68,6 +69,31 @@ interface MapPayload {
   updatedAt: string;
   updatedBy: string;
 }
+
+export type FarmProfile = Omit<
+  FarmDto,
+  "id" | "organizationId" | "code" | "name" | "speciesPresent"
+>;
+
+export interface LocalFarm extends FarmProfile {
+  id: string;
+  code: string;
+  name: string;
+  species: string;
+}
+
+/** Fincas descargadas antes de existir el perfil: quedan vacías hasta el próximo cambio. */
+const EMPTY_FARM_PROFILE: FarmProfile = {
+  locationText: null,
+  productionFocus: null,
+  productionSystem: null,
+  totalAreaHa: null,
+  livestockAreaHa: null,
+  areaUnit: "ha",
+  latitude: null,
+  longitude: null,
+  speciesSettings: {},
+};
 
 export interface LocalFarmMap extends MapPayload {
   farmId: string;
@@ -174,7 +200,8 @@ function requireDb(): Database {
 const SCHEMA = `
   CREATE TABLE IF NOT EXISTS meta (k TEXT PRIMARY KEY, v TEXT);
   CREATE TABLE IF NOT EXISTS farm (
-    id TEXT PRIMARY KEY, org_id TEXT NOT NULL, code TEXT NOT NULL, name TEXT NOT NULL, species TEXT NOT NULL);
+    id TEXT PRIMARY KEY, org_id TEXT NOT NULL, code TEXT NOT NULL, name TEXT NOT NULL, species TEXT NOT NULL,
+    profile BLOB);
   CREATE TABLE IF NOT EXISTS animal (
     id TEXT PRIMARY KEY, org_id TEXT NOT NULL, farm_id TEXT NOT NULL, tag TEXT NOT NULL,
     species TEXT NOT NULL, sex TEXT NOT NULL, category TEXT NOT NULL, status TEXT NOT NULL,
@@ -221,7 +248,11 @@ function migrate(d: Database): void {
               FROM outbox_v1 o LEFT JOIN animal a ON a.id = o.animal_id;
             DROP TABLE outbox_v1;`);
   }
-  if (version < 3) d.exec("PRAGMA user_version = 3");
+  const hasProfile =
+    Number(d.selectValue("SELECT count(*) FROM pragma_table_info('farm') WHERE name = 'profile'")) >
+    0;
+  if (!hasProfile) d.exec("ALTER TABLE farm ADD COLUMN profile BLOB");
+  if (version < 4) d.exec("PRAGMA user_version = 4");
 }
 
 async function openDb(userId: string): Promise<void> {
@@ -344,6 +375,24 @@ const api = {
             }),
           ),
         });
+      } else if (c.entity === "farm") {
+        const f = c.data;
+        prepared.push({
+          c,
+          payload: await seal(
+            JSON.stringify({
+              locationText: f.locationText,
+              productionFocus: f.productionFocus,
+              productionSystem: f.productionSystem,
+              totalAreaHa: f.totalAreaHa,
+              livestockAreaHa: f.livestockAreaHa,
+              areaUnit: f.areaUnit,
+              latitude: f.latitude,
+              longitude: f.longitude,
+              speciesSettings: f.speciesSettings,
+            }),
+          ),
+        });
       } else if (c.entity === "farm_map") {
         const m = c.data;
         prepared.push({
@@ -364,14 +413,16 @@ const api = {
       for (const { c, payload } of prepared) {
         if (c.entity === "farm") {
           d.exec({
-            sql: `INSERT INTO farm (id, org_id, code, name, species) VALUES (?,?,?,?,?)
-                  ON CONFLICT (id) DO UPDATE SET code=excluded.code, name=excluded.name, species=excluded.species`,
+            sql: `INSERT INTO farm (id, org_id, code, name, species, profile) VALUES (?,?,?,?,?,?)
+                  ON CONFLICT (id) DO UPDATE SET code=excluded.code, name=excluded.name,
+                    species=excluded.species, profile=excluded.profile`,
             bind: [
               c.data.id,
               c.data.organizationId,
               c.data.code,
               c.data.name,
               c.data.speciesPresent.join(","),
+              payload as Uint8Array,
             ],
           });
         } else if (c.entity === "animal") {
@@ -477,11 +528,48 @@ const api = {
     );
   },
 
-  listFarms(orgId: string): { id: string; code: string; name: string; species: string }[] {
-    return requireDb().selectObjects(
-      "SELECT id, code, name, species FROM farm WHERE org_id = ? ORDER BY name",
+  async listFarms(orgId: string): Promise<LocalFarm[]> {
+    const rows = requireDb().selectObjects(
+      "SELECT id, code, name, species, profile FROM farm WHERE org_id = ? ORDER BY name",
       [orgId],
-    ) as { id: string; code: string; name: string; species: string }[];
+    ) as { id: string; code: string; name: string; species: string; profile: unknown }[];
+    return Promise.all(
+      rows.map(async ({ profile, ...r }) => ({
+        ...r,
+        ...EMPTY_FARM_PROFILE,
+        ...(profile
+          ? (JSON.parse(await unseal(profile as Uint8Array<ArrayBuffer>)) as FarmProfile)
+          : {}),
+      })),
+    );
+  },
+
+  herdByFarm(orgId: string): { farmId: string; category: string; n: number }[] {
+    return requireDb().selectObjects(
+      `SELECT farm_id AS farmId, category, count(*) AS n FROM animal
+        WHERE org_id = ? AND status = 'activo' GROUP BY farm_id, category`,
+      [orgId],
+    ) as { farmId: string; category: string; n: number }[];
+  },
+
+  /** Crías activas con fecha de nacimiento, para los avisos de destete. */
+  async calves(
+    orgId: string,
+  ): Promise<{ farmId: string; species: string; tag: string; birthDate: string }[]> {
+    const rows = requireDb().selectObjects(
+      "SELECT farm_id, species, tag, payload FROM animal WHERE org_id = ? AND status = 'activo' AND category = 'ternero'",
+      [orgId],
+    ) as { farm_id: string; species: string; tag: string; payload: unknown }[];
+    const out: { farmId: string; species: string; tag: string; birthDate: string }[] = [];
+    for (const r of rows) {
+      const { birthDate } = JSON.parse(await unseal(r.payload as Uint8Array<ArrayBuffer>)) as {
+        birthDate: { date: string } | null;
+      };
+      if (birthDate) {
+        out.push({ farmId: r.farm_id, species: r.species, tag: r.tag, birthDate: birthDate.date });
+      }
+    }
+    return out;
   },
 
   listAnimals(args: {

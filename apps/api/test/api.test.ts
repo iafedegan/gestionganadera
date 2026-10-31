@@ -749,3 +749,101 @@ describe("ubicación aproximada", () => {
     expect((await get({ ...VERCEL, "x-vercel-ip-latitude": "999" })).statusCode).toBe(404);
   });
 });
+
+describe("perfil de la finca", () => {
+  const perfil = {
+    speciesPresent: ["bovino", "bufalino"],
+    productionFocus: "leche",
+    productionSystem: "ciclo_completo",
+    totalAreaHa: 64,
+    livestockAreaHa: 48,
+    areaUnit: "fanegada",
+    latitude: 8.47,
+    longitude: -75.73,
+    speciesSettings: {
+      bovino: { weaningMonths: 8, dryOffDays: 305 },
+      bufalino: { weaningMonths: 7, dryOffDays: 270 },
+    },
+  };
+  const send = (method: "POST" | "PUT", url: string, cookie: string, payload: unknown) =>
+    app.inject({ method, url, headers: { ...H, cookie }, payload: payload as object });
+
+  it("crea la finca con su perfil y lo publica en la sincronización", async () => {
+    const cookie = await loginAs("dueno-a@test.local");
+    const res = await send("POST", "/v1/farms", cookie, {
+      organizationId: orgA,
+      code: "PERFIL-1",
+      name: "La Esperanza",
+      ...perfil,
+    });
+    expect(res.statusCode).toBe(201);
+    expect(res.json()).toMatchObject({ name: "La Esperanza", ...perfil });
+    const feed = await app.inject({
+      method: "GET",
+      url: `/v1/sync/pull?organizationId=${orgA}&since=0&limit=500`,
+      headers: { ...H, cookie },
+    });
+    const change = (feed.json() as PullResponse).changes.find(
+      (c) => c.entity === "farm" && c.data.code === "PERFIL-1",
+    );
+    expect(change?.data).toMatchObject({ livestockAreaHa: 48, areaUnit: "fanegada" });
+  });
+
+  it("rechaza área ganadera mayor que la total y ubicación incompleta", async () => {
+    const cookie = await loginAs("dueno-a@test.local");
+    const base = { organizationId: orgA, code: "MAL", name: "Mal", speciesPresent: ["bovino"] };
+    const area = await send("POST", "/v1/farms", cookie, {
+      ...base,
+      totalAreaHa: 10,
+      livestockAreaHa: 11,
+    });
+    expect(area.statusCode).toBe(400);
+    expect((await send("POST", "/v1/farms", cookie, { ...base, latitude: 4 })).statusCode).toBe(
+      400,
+    );
+  });
+
+  it("edita el perfil; lo omitido queda vacío y solo se limita a especies presentes", async () => {
+    const cookie = await loginAs("dueno-a@test.local");
+    const res = await send("PUT", `/v1/farms/${farmA2}`, cookie, {
+      organizationId: orgA,
+      name: "Finca dos",
+      speciesPresent: ["bovino"],
+      totalAreaHa: 20,
+      speciesSettings: perfil.speciesSettings,
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toMatchObject({
+      name: "Finca dos",
+      totalAreaHa: 20,
+      livestockAreaHa: null,
+      latitude: null,
+      speciesSettings: { bovino: perfil.speciesSettings.bovino },
+    });
+    expect(res.json().speciesSettings.bufalino).toBeUndefined();
+  });
+
+  it("no deja quitar una especie con animales activos", async () => {
+    const cookie = await loginAs("dueno-a@test.local");
+    const pushed = await push(cookie, orgA, [cmd(farmA, "PERFIL-BOV")]);
+    expect(pushed.status).toBe(200);
+    const res = await send("PUT", `/v1/farms/${farmA}`, cookie, {
+      organizationId: orgA,
+      name: "A1",
+      speciesPresent: ["bufalino"],
+    });
+    expect(res.statusCode).toBe(409);
+    expect(res.json().error).toBe("ESPECIE_CON_ANIMALES");
+  });
+
+  it("respeta permisos, finca asignada y organización", async () => {
+    await addUser("operario-perfil@test.local", orgA, "operario");
+    const body = { organizationId: orgA, name: "X", speciesPresent: ["bovino"] };
+    const op = await loginAs("operario-perfil@test.local");
+    expect((await send("PUT", `/v1/farms/${farmA}`, op, body)).statusCode).toBe(403);
+    const soloFinca2 = await loginAs("solo-finca2@test.local");
+    expect((await send("PUT", `/v1/farms/${farmA}`, soloFinca2, body)).statusCode).toBe(403);
+    const dueno = await loginAs("dueno-a@test.local");
+    expect((await send("PUT", `/v1/farms/${farmB}`, dueno, body)).statusCode).toBe(404);
+  });
+});

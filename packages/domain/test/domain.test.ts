@@ -3,9 +3,14 @@ import { describe, expect, it } from "vitest";
 import {
   type ParentRef,
   can,
+  estimatedLoad,
+  fromHectares,
+  isWeaningDue,
   normalizeTag,
+  toHectares,
   uuidv7,
   validateRegistration,
+  weaningDate,
   wouldCreateCycle,
 } from "../src/index";
 
@@ -129,5 +134,33 @@ describe("permisos", () => {
   });
   it("propietario registra animales", () => {
     expect(can("propietario", "animal.write")).toBe(true);
+  });
+});
+
+describe("perfil de finca", () => {
+  it("convierte unidades de área", () => {
+    expect(toHectares(100, "fanegada")).toBe(64);
+    expect(fromHectares(64, "fanegada")).toBe(100);
+    expect(toHectares(10, "ha")).toBe(10);
+    expect(toHectares(1, "acre")).toBeCloseTo(0.4047, 4);
+  });
+
+  it("estima la carga sobre el área ganadera", () => {
+    const herd = [
+      { category: "vaca", n: 10 },
+      { category: "ternero", n: 10 },
+    ];
+    expect(estimatedLoad(herd, 13).ugg).toBeCloseTo(13);
+    expect(estimatedLoad(herd, 13).perHa).toBeCloseTo(1);
+    expect(estimatedLoad(herd, null).perHa).toBeNull();
+  });
+
+  it("calcula el destete y su ventana de aviso", () => {
+    expect(weaningDate("2026-01-31", 1)).toBe("2026-02-28");
+    expect(weaningDate("2026-03-15", 8)).toBe("2026-11-15");
+    expect(isWeaningDue("2026-03-15", 8, "2026-11-08")).toBe(true);
+    expect(isWeaningDue("2026-03-15", 8, "2026-11-07")).toBe(false);
+    expect(isWeaningDue("2026-03-15", 8, "2026-12-15")).toBe(true);
+    expect(isWeaningDue("2026-03-15", 8, "2026-12-16")).toBe(false);
   });
 });

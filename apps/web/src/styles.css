@@ -5970,3 +5970,38 @@ span.neg {
   background: #fdeee9;
   color: #8a2a1e;
 }
+
+.farm-step {
+  margin: -8px 0 0;
+  color: var(--texto-suave);
+  font-size: 0.86rem;
+  font-weight: 600;
+}
+.farm-area {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+.farm-pick-map {
+  height: 240px;
+  border-radius: 12px;
+  overflow: hidden;
+  z-index: 0;
+}
+.farm-pick-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin-top: 10px;
+}
+.farm-pick-status {
+  font-size: 0.82rem;
+  color: var(--texto-suave);
+}
+.farm-empty {
+  margin: 8px 0 0;
+}
+@media (max-width: 640px) {
+  .farm-area {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

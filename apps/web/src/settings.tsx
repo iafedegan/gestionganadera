@@ -12,6 +12,7 @@ import {
   XCircle,
 } from "lucide-react";
 import { type ReactNode, useEffect, useRef, useState } from "react";
+import { FarmsCard } from "./FarmForm";
 import { CardHead, PageHead } from "./components";
 import {
   type TagRead,
@@ -149,8 +150,10 @@ export function SettingsScreen() {
         kicker="Configuración"
         icon={<Settings size={30} aria-hidden="true" />}
         title="Configuración"
-        lead="Dispositivos de identificación: lea la chapeta o el chip del animal para abrir su hoja de vida o registrarlo sin escribir."
+        lead="Sus fincas y los dispositivos de identificación: lea la chapeta o el chip del animal para abrir su hoja de vida o registrarlo sin escribir."
       />
+
+      <FarmsCard />
 
       <div className="settings-grid">
         <article className="card">

@@ -1,10 +1,12 @@
-import type { AnimalRegisterPayload } from "@ganaderia/contracts";
-import { ROLE_LABEL } from "@ganaderia/domain";
+import type { AnimalRegisterPayload, Species } from "@ganaderia/contracts";
+import { ROLE_LABEL, can, isWeaningDue } from "@ganaderia/domain";
 import {
   AlertTriangle,
   ArrowLeft,
   ArrowRight,
+  Baby,
   Bell,
+  Building2,
   CalendarDays,
   CheckCircle2,
   ChevronDown,
@@ -34,10 +36,10 @@ import {
 } from "lucide-react";
 import { type FormEvent, type ReactNode, useEffect, useState } from "react";
 import { Pasture } from "./Pasture";
-import { RegisterDialog } from "./animals";
+import { RegisterDialog, useFarms } from "./animals";
 import { art } from "./art";
 import { CardHead, CountUp, PageHead, Tile } from "./components";
-import { CODE_LABEL, KIND_LABEL, fecha, fechaHora, num } from "./labels";
+import { CODE_LABEL, KIND_LABEL, fecha, fechaHora, num, todayLocal } from "./labels";
 import { type OutboxItem, localdb } from "./lib/localdb";
 import { lastEmail } from "./lib/session";
 import { MODULES, type ModuleDef, type ModuleKey, moduleByKey } from "./modules";
@@ -672,13 +674,26 @@ export function Home({
   onOpenSync(): void;
   onModule(m: ModuleKey): void;
 }) {
-  const { orgId, counts, dataVersion, lastSync, online, session, syncNow, syncing } = useApp();
+  const { orgId, counts, dataVersion, lastSync, online, role, session, syncNow, syncing } =
+    useApp();
+  const farms = useFarms();
+  const [weaning, setWeaning] = useState(0);
   const [inv, setInv] = useState<{ total: number; bovino: number; bufalino: number } | null>(null);
   const [stock, setStock] = useState({ low: 0, soon: 0, expired: 0 });
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: dataVersion fuerza la relectura
   useEffect(() => {
     void localdb.counts(orgId).then(setInv);
+    void localdb.calves(orgId).then((list) => {
+      const today = todayLocal();
+      setWeaning(
+        list.filter((c) => {
+          const months = farms.find((f) => f.id === c.farmId)?.speciesSettings[c.species as Species]
+            ?.weaningMonths;
+          return months !== undefined && isWeaningDue(c.birthDate, months, today);
+        }).length,
+      );
+    });
     void localdb.supplyOverview({ orgId }).then((list) => {
       const c = { low: 0, soon: 0, expired: 0 };
       for (const s of list) {
@@ -689,7 +704,7 @@ export function Home({
       }
       setStock(c);
     });
-  }, [orgId, dataVersion]);
+  }, [orgId, dataVersion, farms]);
 
   const demo = Boolean(
     session?.memberships[0]?.organizationName.toLowerCase().includes("demostrativa"),
@@ -713,6 +728,24 @@ export function Home({
       title: `${revisar} registro(s) no se pudieron confirmar`,
       text: "Fueron rechazados o chocan con un dato ya confirmado. Corríjalos para que se envíen.",
       go: onOpenSync,
+    });
+  }
+  if (role && can(role, "farm.write") && farms.length === 0 && online) {
+    alerts.push({
+      tone: "info",
+      icon: <Building2 size={22} />,
+      title: "Registre su finca para empezar",
+      text: "Con sus datos y áreas ya puede cargar animales y calcular la carga.",
+      go: () => onModule("configuracion"),
+    });
+  }
+  if (weaning > 0) {
+    alerts.push({
+      tone: "info",
+      icon: <Baby size={22} />,
+      title: `${weaning} cría(s) en edad de destete`,
+      text: "Según la edad de destete definida para la finca. Revíselas en Animales.",
+      go: () => onModule("animales"),
     });
   }
   if (stock.expired > 0) {
