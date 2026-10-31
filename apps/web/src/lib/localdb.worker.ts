@@ -2,6 +2,8 @@
 import type {
   AnimalCommand,
   AnimalDto,
+  AnimalEventCommand,
+  AnimalEventPayload,
   Change,
   CommandEnvelope,
   ConsumeTarget,
@@ -69,6 +71,22 @@ interface MapPayload {
   updatedAt: string;
   updatedBy: string;
 }
+
+export interface LocalHerdAnimal {
+  id: string;
+  farmId: string;
+  tag: string;
+  species: string;
+  sex: string;
+  category: string;
+  birthDate: string | null;
+}
+
+export type LocalAnimalEvent = AnimalEventPayload & {
+  farmId: string;
+  tag: string;
+  syncState: SyncState;
+};
 
 export type FarmProfile = Omit<
   FarmDto,
@@ -202,6 +220,10 @@ const SCHEMA = `
   CREATE TABLE IF NOT EXISTS farm (
     id TEXT PRIMARY KEY, org_id TEXT NOT NULL, code TEXT NOT NULL, name TEXT NOT NULL, species TEXT NOT NULL,
     profile BLOB);
+  CREATE TABLE IF NOT EXISTS animal_event (
+    id TEXT PRIMARY KEY, org_id TEXT NOT NULL, farm_id TEXT NOT NULL, animal_id TEXT NOT NULL,
+    type TEXT NOT NULL, occurred_on TEXT NOT NULL, sync_state TEXT NOT NULL, payload BLOB NOT NULL);
+  CREATE INDEX IF NOT EXISTS animal_event_org ON animal_event (org_id, type, occurred_on);
   CREATE TABLE IF NOT EXISTS animal (
     id TEXT PRIMARY KEY, org_id TEXT NOT NULL, farm_id TEXT NOT NULL, tag TEXT NOT NULL,
     species TEXT NOT NULL, sex TEXT NOT NULL, category TEXT NOT NULL, status TEXT NOT NULL,
@@ -252,7 +274,7 @@ function migrate(d: Database): void {
     Number(d.selectValue("SELECT count(*) FROM pragma_table_info('farm') WHERE name = 'profile'")) >
     0;
   if (!hasProfile) d.exec("ALTER TABLE farm ADD COLUMN profile BLOB");
-  if (version < 4) d.exec("PRAGMA user_version = 4");
+  if (version < 5) d.exec("PRAGMA user_version = 5");
 }
 
 async function openDb(userId: string): Promise<void> {
@@ -322,7 +344,7 @@ const api = {
   wipe(): void {
     const d = requireDb();
     d.exec(
-      "DELETE FROM animal; DELETE FROM farm; DELETE FROM supply; DELETE FROM stock_movement; DELETE FROM farm_map; DELETE FROM outbox; DELETE FROM meta;",
+      "DELETE FROM animal_event; DELETE FROM animal; DELETE FROM farm; DELETE FROM supply; DELETE FROM stock_movement; DELETE FROM farm_map; DELETE FROM outbox; DELETE FROM meta;",
     );
   },
 
@@ -392,6 +414,11 @@ const api = {
               speciesSettings: f.speciesSettings,
             }),
           ),
+        });
+      } else if (c.entity === "animal_event") {
+        prepared.push({
+          c,
+          payload: await seal(JSON.stringify({ data: c.data.data, recordedBy: c.data.recordedBy })),
         });
       } else if (c.entity === "farm_map") {
         const m = c.data;
@@ -483,6 +510,22 @@ const api = {
               payload as Uint8Array<ArrayBuffer>,
             ],
           });
+        } else if (c.entity === "animal_event") {
+          const e = c.data;
+          d.exec({
+            sql: `INSERT INTO animal_event (id, org_id, farm_id, animal_id, type, occurred_on, sync_state, payload)
+                  VALUES (?,?,?,?,?,?,'sincronizado',?)
+                  ON CONFLICT (id) DO UPDATE SET sync_state='sincronizado', payload=excluded.payload`,
+            bind: [
+              e.id,
+              e.organizationId,
+              e.farmId,
+              e.animalId,
+              e.type,
+              e.occurredOn,
+              payload as Uint8Array<ArrayBuffer>,
+            ],
+          });
         } else {
           const m = c.data;
           d.exec({
@@ -524,7 +567,7 @@ const api = {
   resetSynced(): void {
     const d = requireDb();
     d.exec(
-      "DELETE FROM animal WHERE sync_state = 'sincronizado'; DELETE FROM supply WHERE sync_state = 'sincronizado'; DELETE FROM stock_movement; DELETE FROM farm_map WHERE sync_state = 'sincronizado'; DELETE FROM farm; DELETE FROM meta WHERE k IN ('cursor','scope');",
+      "DELETE FROM animal_event WHERE sync_state = 'sincronizado'; DELETE FROM animal WHERE sync_state = 'sincronizado'; DELETE FROM supply WHERE sync_state = 'sincronizado'; DELETE FROM stock_movement; DELETE FROM farm_map WHERE sync_state = 'sincronizado'; DELETE FROM farm; DELETE FROM meta WHERE k IN ('cursor','scope');",
     );
   },
 
@@ -550,6 +593,91 @@ const api = {
         WHERE org_id = ? AND status = 'activo' GROUP BY farm_id, category`,
       [orgId],
     ) as { farmId: string; category: string; n: number }[];
+  },
+
+  /** Animales activos con su fecha de nacimiento (cifrada en el dispositivo). */
+  async herdAnimals(orgId: string): Promise<LocalHerdAnimal[]> {
+    const rows = requireDb().selectObjects(
+      "SELECT id, farm_id, tag, species, sex, category, payload FROM animal WHERE org_id = ? AND status = 'activo' ORDER BY tag",
+      [orgId],
+    ) as Record<string, unknown>[];
+    return Promise.all(
+      rows.map(async (r) => {
+        const { birthDate } = JSON.parse(await unseal(r.payload as Uint8Array<ArrayBuffer>)) as {
+          birthDate: { date: string } | null;
+        };
+        return {
+          id: r.id as string,
+          farmId: r.farm_id as string,
+          tag: r.tag as string,
+          species: r.species as string,
+          sex: r.sex as string,
+          category: r.category as string,
+          birthDate: birthDate?.date ?? null,
+        };
+      }),
+    );
+  },
+
+  /** Eventos de los animales, del más reciente al más antiguo. */
+  async listAnimalEvents(orgId: string): Promise<LocalAnimalEvent[]> {
+    const rows = requireDb().selectObjects(
+      `SELECT e.id, e.farm_id, e.animal_id, a.tag, e.type, e.occurred_on, e.sync_state, e.payload
+         FROM animal_event e JOIN animal a ON a.id = e.animal_id
+        WHERE e.org_id = ? ORDER BY e.occurred_on DESC, e.id DESC`,
+      [orgId],
+    ) as Record<string, unknown>[];
+    return Promise.all(
+      rows.map(async (r) => {
+        const { data } = JSON.parse(await unseal(r.payload as Uint8Array<ArrayBuffer>)) as {
+          data: unknown;
+        };
+        return {
+          id: r.id as string,
+          farmId: r.farm_id as string,
+          animalId: r.animal_id as string,
+          tag: r.tag as string,
+          type: r.type,
+          occurredOn: r.occurred_on as string,
+          syncState: r.sync_state as SyncState,
+          data,
+        } as LocalAnimalEvent;
+      }),
+    );
+  },
+
+  /** Encola varios eventos a la vez: o quedan todos guardados o ninguno. */
+  async enqueueAnimalEvents(args: {
+    orgId: string;
+    items: { command: AnimalEventCommand; farmId: string; label: string }[];
+  }): Promise<void> {
+    const d = requireDb();
+    const sealed = await Promise.all(
+      args.items.map(async (it) => ({
+        ...it,
+        payload: await seal(JSON.stringify({ data: it.command.payload.data, recordedBy: "" })),
+        body: await seal(JSON.stringify(it.command)),
+      })),
+    );
+    d.exec("BEGIN");
+    try {
+      for (const { command, farmId, label, payload, body } of sealed) {
+        const p = command.payload;
+        d.exec({
+          sql: `INSERT INTO animal_event (id, org_id, farm_id, animal_id, type, occurred_on, sync_state, payload)
+                VALUES (?,?,?,?,?,?,'pendiente',?)`,
+          bind: [p.id, args.orgId, farmId, p.animalId, p.type, p.occurredOn, payload],
+        });
+        d.exec({
+          sql: "INSERT INTO outbox (id, org_id, kind, entity_id, label, farm_id, state, body, created_at) VALUES (?,?,'animal.event.record',?,?,?,'pendiente',?,?)",
+          bind: [command.id, args.orgId, p.id, label, farmId, body, new Date().toISOString()],
+        });
+      }
+      d.exec("COMMIT");
+    } catch (err) {
+      d.exec("ROLLBACK");
+      throw err;
+    }
   },
 
   /** Crías activas con fecha de nacimiento, para los avisos de destete. */
@@ -747,6 +875,10 @@ const api = {
           bind: [animalState, r.id],
         });
         d.exec({
+          sql: "UPDATE animal_event SET sync_state = ? WHERE id = (SELECT entity_id FROM outbox WHERE id = ? AND kind = 'animal.event.record')",
+          bind: [animalState, r.id],
+        });
+        d.exec({
           sql: "UPDATE supply SET sync_state = ? WHERE id = (SELECT entity_id FROM outbox WHERE id = ? AND kind = 'supply.create')",
           bind: [animalState, r.id],
         });
@@ -787,6 +919,10 @@ const api = {
     try {
       d.exec({
         sql: "DELETE FROM animal WHERE sync_state IN ('rechazado','conflicto','pendiente') AND id = (SELECT entity_id FROM outbox WHERE id = ? AND kind = 'animal.register')",
+        bind: [id],
+      });
+      d.exec({
+        sql: "DELETE FROM animal_event WHERE sync_state IN ('rechazado','conflicto','pendiente') AND id = (SELECT entity_id FROM outbox WHERE id = ? AND kind = 'animal.event.record')",
         bind: [id],
       });
       d.exec({

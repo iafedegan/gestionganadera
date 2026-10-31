@@ -4,16 +4,15 @@ import { PageHead } from "./components";
 import {
   GROWTH_REF,
   HERD,
-  LACTATING,
   LACT_CURVE,
   PARAMS,
   QUALITY_SEED,
   REP_SEED,
   ageMonths,
-  animalOf,
   milkHistory,
   repState,
 } from "./herd";
+import { useHerdData } from "./herdData";
 import {
   type AlertItem,
   Alerts,
@@ -77,24 +76,32 @@ const interp = (xs: number[], ys: number[], x: number) => {
   return ys[ys.length - 1] as number;
 };
 
-const growth = HERD.filter((a) => a.lot === "Levante" || a.lot === "Crías");
-const GROWTH_SEED: Peso[] = growth.map((a, i) => ({
-  fecha: ago(3 + (i % 4)),
-  tag: a.tag,
-  peso: a.weight,
-  metodo: i % 3 === 0 ? "Cinta" : "Báscula",
-}));
+const GROWTH_SEED: Peso[] = HERD.filter((a) => a.lot === "Levante" || a.lot === "Crías").map(
+  (a, i) => ({
+    fecha: ago(3 + (i % 4)),
+    tag: a.tag,
+    peso: a.weight,
+    metodo: i % 3 === 0 ? "Cinta" : "Báscula",
+  }),
+);
 
 export function ProduccionScreen() {
   const { notify } = useApp();
-  const hist = useMemo(milkHistory, []);
-  const [extra, addOrd, resetOrd] = useStore<Ordeno>("ord", []);
-  const [quality, addQ, resetQ] = useStore<Q>("calidad", QUALITY_SEED);
-  const [pesos, addPeso, resetPeso] = useStore<Peso>("pesos", GROWTH_SEED);
+  const herd = useHerdData();
+  const { lactating: LACTATING, growing: growth, animalOf } = herd;
+  const sampleHist = useMemo(milkHistory, []);
+  const hist = herd.real ? herd.milkDays : sampleHist;
+  const repEvents = herd.real ? herd.rep : REP_SEED;
+  const [sampleExtra, addOrd, resetOrd] = useStore<Ordeno>("ord", []);
+  const extra = herd.real ? [] : sampleExtra;
+  const [quality, addQ, resetQ] = useStore<Q>("calidad", herd.real ? [] : QUALITY_SEED);
+  const [samplePesos, addPeso, resetPeso] = useStore<Peso>("pesos", GROWTH_SEED);
+  const pesos = herd.real ? herd.pesos : samplePesos;
   const [tab, setTab] = useState<Tab>("panel");
   const [sp, setSp] = useState<SpeciesF>("todos");
   const [open, setOpen] = useState<"ordeno" | "calidad" | "peso" | null>(null);
-  const [animal, setAnimal] = useState(LACTATING[0]?.tag ?? "");
+  const [picked, setAnimal] = useState("");
+  const animal = picked || (LACTATING[0]?.tag ?? "");
 
   const sel = LACTATING.filter((a) => sp === "todos" || a.species === sp);
   const day = (i: number, filter?: (t: string) => boolean) => {
@@ -118,13 +125,13 @@ export function ProduccionScreen() {
   const delta = semPrev ? ((sem - semPrev) / semPrev) * 100 : 0;
   const mes = hist.reduce((_, __, i) => _ + day(i), 0);
   const porVaca = sel.length ? hoy / sel.length : 0;
-  const isBuf = (t: string) => t.startsWith("BUF");
+  const isBuf = (t: string) => herd.speciesOf(t) === "bufalino";
 
   const rows = sel.map((a) => {
     const h = hist.map((d) => d.litros[a.tag] ?? 0);
     const hoyL = h[last] ?? 0;
     const prom7 = h.slice(-8, -1).reduce((x, y) => x + y, 0) / 7;
-    const rep = repState(a, REP_SEED);
+    const rep = repState(a, repEvents);
     return {
       a,
       hoyL,
@@ -211,7 +218,7 @@ export function ProduccionScreen() {
   const top = [...rows].sort((a, b) => b.hoyL - a.hoyL).slice(0, 8);
   const delRows = rows.filter((r) => r.del !== null).sort((a, b) => (a.del ?? 0) - (b.del ?? 0));
   const cur = animalOf(animal);
-  const curDel = cur ? (repState(cur, REP_SEED).del ?? 0) : 0;
+  const curDel = cur ? (repState(cur, repEvents).del ?? 0) : 0;
 
   const bov = pesos.filter((p) => animalOf(p.tag)?.species === "bovino");
   const lastWeight = (tag: string) =>
@@ -244,13 +251,29 @@ export function ProduccionScreen() {
         lead="Leche por animal, lactancias, calidad y crecimiento de terneras, novillas y búfalas."
         actions={
           <>
-            <button type="button" className="btn btn-primary" onClick={() => setOpen("ordeno")}>
+            <button
+              type="button"
+              className="btn btn-primary"
+              onClick={() =>
+                LACTATING.length > 0
+                  ? setOpen("ordeno")
+                  : notify("No hay hembras en lactancia. Registre un parto o una vaca.", "warn")
+              }
+            >
               Registrar ordeño
             </button>
             <button type="button" className="btn btn-ghost" onClick={() => setOpen("calidad")}>
               Control de calidad
             </button>
-            <button type="button" className="btn btn-ghost" onClick={() => setOpen("peso")}>
+            <button
+              type="button"
+              className="btn btn-ghost"
+              onClick={() =>
+                growth.length > 0
+                  ? setOpen("peso")
+                  : notify("No hay crías ni animales de levante para pesar.", "warn")
+              }
+            >
               Registrar peso
             </button>
           </>
@@ -258,18 +281,20 @@ export function ProduccionScreen() {
       />
       <div className="kit-toolbar">
         <SpeciesFilter value={sp} onChange={setSp} />
-        <button
-          type="button"
-          className="btn btn-ghost btn-sm"
-          onClick={() => {
-            resetOrd();
-            resetQ();
-            resetPeso();
-            notify("Datos de ejemplo restablecidos.", "info");
-          }}
-        >
-          Restablecer datos de ejemplo
-        </button>
+        {!herd.real && (
+          <button
+            type="button"
+            className="btn btn-ghost btn-sm"
+            onClick={() => {
+              resetOrd();
+              resetQ();
+              resetPeso();
+              notify("Datos de ejemplo restablecidos.", "info");
+            }}
+          >
+            Restablecer datos de ejemplo
+          </button>
+        )}
       </div>
       <Tabs
         value={tab}
@@ -280,7 +305,7 @@ export function ProduccionScreen() {
           { key: "lactancias", label: "Lactancias" },
           { key: "calidad", label: "Calidad de la leche" },
           { key: "crecimiento", label: "Crecimiento" },
-          { key: "destino", label: "Destino y ventas" },
+          ...(herd.real ? [] : [{ key: "destino", label: "Destino y ventas" }]),
         ]}
       />
 
@@ -312,7 +337,11 @@ export function ProduccionScreen() {
               tone="violeta"
               label="Producción 21 días"
               value={`${num(mes, 0)} L`}
-              meta={`≈ ${moneyM(hist.reduce((s, _, i) => s + day(i, (t) => !isBuf(t)) * PRECIO.bovino + day(i, isBuf) * PRECIO.bufalino, 0))} en ventas`}
+              meta={
+                herd.real
+                  ? "Según los ordeños registrados"
+                  : `≈ ${moneyM(hist.reduce((s, _, i) => s + day(i, (t) => !isBuf(t)) * PRECIO.bovino + day(i, isBuf) * PRECIO.bufalino, 0))} en ventas`
+              }
             />
             <Stat
               tone="ambar"
@@ -754,7 +783,7 @@ export function ProduccionScreen() {
           preview={(v) => {
             const a = animalOf(v.tag ?? "");
             const l = Number(v.litros);
-            return a && l ? (
+            return a && l && a.milk > 0 ? (
               <p className="hint">
                 Promedio de {a.tag}: <b>{num(a.milk)} L/día</b>. Este ordeño equivale a{" "}
                 <b>{num((l / (a.milk / 2)) * 100, 0)} %</b> de un turno normal.
@@ -762,6 +791,27 @@ export function ProduccionScreen() {
             ) : null;
           }}
           onSubmit={(v) => {
+            if (herd.real) {
+              herd
+                .record([
+                  {
+                    tag: v.tag ?? "",
+                    event: {
+                      type: "leche",
+                      occurredOn: v.fecha ?? iso(today()),
+                      data: { liters: Number(v.litros), shift: v.turno as "Mañana" },
+                    },
+                  },
+                ])
+                .then(() => {
+                  setOpen(null);
+                  notify("Ordeño guardado. Se enviará al sincronizar.", "ok");
+                })
+                .catch((err: unknown) =>
+                  notify(err instanceof Error ? err.message : "No se pudo guardar.", "warn"),
+                );
+              return;
+            }
             addOrd({
               fecha: v.fecha ?? iso(today()),
               tag: v.tag ?? "",
@@ -835,6 +885,27 @@ export function ProduccionScreen() {
             );
           }}
           onSubmit={(v) => {
+            if (herd.real) {
+              herd
+                .record([
+                  {
+                    tag: v.tag ?? "",
+                    event: {
+                      type: "peso",
+                      occurredOn: v.fecha ?? iso(today()),
+                      data: { kg: Number(v.peso), method: v.metodo as "Báscula" },
+                    },
+                  },
+                ])
+                .then(() => {
+                  setOpen(null);
+                  notify("Peso guardado. Se enviará al sincronizar.", "ok");
+                })
+                .catch((err: unknown) =>
+                  notify(err instanceof Error ? err.message : "No se pudo guardar.", "warn"),
+                );
+              return;
+            }
             addPeso({
               fecha: v.fecha ?? iso(today()),
               tag: v.tag ?? "",

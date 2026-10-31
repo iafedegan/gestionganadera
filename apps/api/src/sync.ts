@@ -1,5 +1,7 @@
 import {
   type AnimalDto,
+  type AnimalEventDto,
+  type AnimalEventPayload,
   type AnimalRegisterPayload,
   type Change,
   CommandEnvelope,
@@ -24,6 +26,7 @@ import {
   allocateFefo,
   normalizeTag,
   round3,
+  validateAnimalEvent,
   validateRegistration,
   validateStockReceive,
 } from "@ganaderia/domain";
@@ -224,6 +227,10 @@ export async function pull(
       let data = r.data;
       if (r.entity === "stock_movement" && !grants(memberships, orgId, "economy.read", r.farm_id)) {
         data = { ...(r.data as StockMovementDto), unitCost: null };
+      }
+      if (r.entity === "animal_event" && !grants(memberships, orgId, "economy.read", r.farm_id)) {
+        const e = r.data as AnimalEventDto;
+        if (e.type === "salud") data = { ...e, data: { ...e.data, cost: null } };
       }
       return { version: Number(r.version), entity: r.entity, op: "upsert", data } as Change;
     });
@@ -692,6 +699,75 @@ async function applyFarmMapSave(
   return { id: commandId, status: "accepted", serverVersion: version };
 }
 
+/* ───────────── Eventos del animal ───────────── */
+
+async function applyAnimalEvent(
+  q: Q,
+  ctx: PushCtx,
+  commandId: string,
+  p: AnimalEventPayload,
+): Promise<CommandResult> {
+  const rows = await q<{
+    farm_id: string;
+    sex: string;
+    status: string;
+    birth_date: string | Date | null;
+  }>("SELECT farm_id, sex, status, birth_date FROM animal WHERE id = $1", [p.animalId]);
+  const animal = rows[0];
+  if (!animal) return rejected(commandId, ErrorCodes.ANIMAL_NO_EXISTE, "El animal no existe.");
+  if (!grants(ctx.memberships, ctx.orgId, "event.write", animal.farm_id)) {
+    return rejected(
+      commandId,
+      ErrorCodes.PERMISO_DENEGADO,
+      "No tiene permiso para registrar eventos en esta finca.",
+    );
+  }
+  if ((await q("SELECT 1 FROM animal_event WHERE id = $1", [p.id])).length > 0) {
+    return conflict(commandId, ErrorCodes.ID_EN_USO, "Ya existe un evento con ese identificador.");
+  }
+  const birth = animal.birth_date;
+  const issues = validateAnimalEvent(p, {
+    today: todayIn(),
+    sex: animal.sex,
+    status: animal.status,
+    birthDate: birth instanceof Date ? birth.toISOString().slice(0, 10) : birth,
+  });
+  const first = issues[0];
+  if (first) return rejected(commandId, first.code, first.message);
+
+  await q(
+    `INSERT INTO animal_event (id, organization_id, farm_id, animal_id, type, occurred_on, tz, user_id, source, payload)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
+    [
+      p.id,
+      ctx.orgId,
+      animal.farm_id,
+      p.animalId,
+      p.type,
+      p.occurredOn,
+      TZ,
+      ctx.user.id,
+      `dispositivo:${ctx.deviceId}`,
+      JSON.stringify(p.data),
+    ],
+  );
+  const dto: AnimalEventDto = {
+    ...p,
+    organizationId: ctx.orgId,
+    farmId: animal.farm_id,
+    recordedBy: ctx.user.displayName,
+  };
+  const version = await pushChange(q, ctx.orgId, animal.farm_id, "animal_event", p.id, dto);
+  await appendAudit(q, ctx.orgId, {
+    userId: ctx.user.id,
+    action: "animal.event.record",
+    entity: "animal",
+    entityId: p.animalId,
+    detail: { eventId: p.id, type: p.type, occurredOn: p.occurredOn, commandId },
+  });
+  return { id: commandId, status: "accepted", serverVersion: version };
+}
+
 async function processCommand(ctx: PushCtx, raw: unknown): Promise<CommandResult> {
   const rawId =
     raw && typeof raw === "object" && typeof (raw as { id?: unknown }).id === "string"
@@ -733,6 +809,9 @@ async function processCommand(ctx: PushCtx, raw: unknown): Promise<CommandResult
           break;
         case "farm.map.save":
           result = await applyFarmMapSave(q, ctx, cmd.id, cmd.payload);
+          break;
+        case "animal.event.record":
+          result = await applyAnimalEvent(q, ctx, cmd.id, cmd.payload);
           break;
       }
       await q(

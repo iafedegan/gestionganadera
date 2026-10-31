@@ -5,10 +5,12 @@ import {
   can,
   estimatedLoad,
   fromHectares,
+  isDryOffDue,
   isWeaningDue,
   normalizeTag,
   toHectares,
   uuidv7,
+  validateAnimalEvent,
   validateRegistration,
   weaningDate,
   wouldCreateCycle,
@@ -162,5 +164,39 @@ describe("perfil de finca", () => {
     expect(isWeaningDue("2026-03-15", 8, "2026-11-07")).toBe(false);
     expect(isWeaningDue("2026-03-15", 8, "2026-12-15")).toBe(true);
     expect(isWeaningDue("2026-03-15", 8, "2026-12-16")).toBe(false);
+  });
+});
+
+describe("eventos del animal", () => {
+  const ctx = { today: "2026-10-30", sex: "hembra", status: "activo", birthDate: "2020-01-01" };
+
+  it("valida fecha, estado y sexo", () => {
+    expect(validateAnimalEvent({ type: "parto", occurredOn: "2026-10-30" }, ctx)).toEqual([]);
+    const code = (type: string, occurredOn: string, c = ctx) =>
+      validateAnimalEvent({ type, occurredOn }, c)[0]?.code;
+    expect(code("parto", "2026-10-31")).toBe("FECHA_FUTURA");
+    expect(code("parto", "2019-12-31")).toBe("VALIDACION");
+    expect(code("leche", "2026-10-30", { ...ctx, sex: "macho" })).toBe("EVENTO_NO_APLICA");
+    expect(code("peso", "2026-10-30", { ...ctx, sex: "macho" })).toBeUndefined();
+    expect(code("peso", "2026-10-30", { ...ctx, status: "vendido" })).toBe("ANIMAL_INACTIVO");
+  });
+
+  it("deja que el operario y el técnico registren eventos, no animales", () => {
+    expect(can("operario", "event.write")).toBe(true);
+    expect(can("tecnico", "event.write")).toBe(true);
+    expect(can("operario", "animal.write")).toBe(false);
+  });
+
+  it("avisa el secado por días de lactancia hasta registrarlo", () => {
+    const parto = { type: "parto", occurredOn: "2026-01-01" };
+    expect(isDryOffDue([], 305, "2026-12-31")).toBe(false);
+    expect(isDryOffDue([parto], 305, "2026-11-01")).toBe(false);
+    expect(isDryOffDue([parto], 305, "2026-11-02")).toBe(true);
+    expect(
+      isDryOffDue([parto, { type: "secado", occurredOn: "2026-10-01" }], 305, "2026-12-01"),
+    ).toBe(false);
+    expect(
+      isDryOffDue([{ type: "secado", occurredOn: "2025-12-01" }, parto], 305, "2026-12-01"),
+    ).toBe(true);
   });
 });

@@ -1,5 +1,5 @@
 import type { AnimalRegisterPayload, Species } from "@ganaderia/contracts";
-import { ROLE_LABEL, can, isWeaningDue } from "@ganaderia/domain";
+import { ROLE_LABEL, can, isDryOffDue, isWeaningDue } from "@ganaderia/domain";
 import {
   AlertTriangle,
   ArrowLeft,
@@ -678,6 +678,7 @@ export function Home({
     useApp();
   const farms = useFarms();
   const [weaning, setWeaning] = useState(0);
+  const [dryOff, setDryOff] = useState(0);
   const [inv, setInv] = useState<{ total: number; bovino: number; bufalino: number } | null>(null);
   const [stock, setStock] = useState({ low: 0, soon: 0, expired: 0 });
 
@@ -694,6 +695,25 @@ export function Home({
         }).length,
       );
     });
+    void Promise.all([localdb.herdAnimals(orgId), localdb.listAnimalEvents(orgId)]).then(
+      ([herd, events]) => {
+        const today = todayLocal();
+        setDryOff(
+          herd.filter((a) => {
+            const days = farms.find((f) => f.id === a.farmId)?.speciesSettings[a.species as Species]
+              ?.dryOffDays;
+            return (
+              days !== undefined &&
+              isDryOffDue(
+                events.filter((e) => e.animalId === a.id),
+                days,
+                today,
+              )
+            );
+          }).length,
+        );
+      },
+    );
     void localdb.supplyOverview({ orgId }).then((list) => {
       const c = { low: 0, soon: 0, expired: 0 };
       for (const s of list) {
@@ -746,6 +766,15 @@ export function Home({
       title: `${weaning} cría(s) en edad de destete`,
       text: "Según la edad de destete definida para la finca. Revíselas en Animales.",
       go: () => onModule("animales"),
+    });
+  }
+  if (dryOff > 0) {
+    alerts.push({
+      tone: "info",
+      icon: <Baby size={22} />,
+      title: `${dryOff} hembra(s) para secar`,
+      text: "Llegaron a los días de lactancia definidos para la finca. Regístrelo en Reproducción.",
+      go: () => onModule("reproduccion"),
     });
   }
   if (stock.expired > 0) {

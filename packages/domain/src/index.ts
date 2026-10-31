@@ -139,6 +139,7 @@ export type Permission =
   | "farm.write"
   | "animal.read"
   | "animal.write"
+  | "event.write"
   | "economy.read"
   | "supply.write"
   | "stock.write"
@@ -150,6 +151,7 @@ const MATRIX: Record<Role, readonly Permission[]> = {
     "farm.write",
     "animal.read",
     "animal.write",
+    "event.write",
     "supply.write",
     "stock.write",
     "audit.read",
@@ -159,6 +161,7 @@ const MATRIX: Record<Role, readonly Permission[]> = {
     "farm.write",
     "animal.read",
     "animal.write",
+    "event.write",
     "economy.read",
     "supply.write",
     "stock.write",
@@ -166,9 +169,9 @@ const MATRIX: Record<Role, readonly Permission[]> = {
   ],
   // TDR: operario con consulta mínima y captura de eventos autorizados; sin administración.
   // Puede recibir y consumir insumos en bodega, pero no crear el catálogo ni ver costos.
-  operario: ["farm.read", "animal.read", "stock.write"],
+  operario: ["farm.read", "animal.read", "event.write", "stock.write"],
   // TDR: técnico con consulta y registro técnico; sin acceso económico por defecto.
-  tecnico: ["farm.read", "animal.read"],
+  tecnico: ["farm.read", "animal.read", "event.write"],
 };
 
 export function can(role: Role, permission: Permission): boolean {
@@ -339,4 +342,66 @@ export function weaningDate(birthDate: string, months: number): string {
 export function isWeaningDue(birthDate: string, months: number, today: string): boolean {
   const days = (Date.parse(weaningDate(birthDate, months)) - Date.parse(today)) / 86_400_000;
   return days <= 7 && days >= -30;
+}
+
+/* ───────────── Eventos del animal ───────────── */
+
+const FEMALE_EVENTS = new Set([
+  "servicio",
+  "celo",
+  "dx",
+  "parto",
+  "aborto",
+  "secado",
+  "leche",
+  "cmt",
+]);
+
+/** Reglas comunes para registrar un evento, en el dispositivo y en el servidor. */
+export function validateAnimalEvent(
+  input: { type: string; occurredOn: string },
+  ctx: { today: string; sex: string; status: string; birthDate: string | null },
+): DomainIssue[] {
+  const issues: DomainIssue[] = [];
+  if (ctx.status !== "activo") {
+    issues.push({ code: ErrorCodes.ANIMAL_INACTIVO, message: "El animal ya no está activo." });
+  }
+  if (input.occurredOn > ctx.today) {
+    issues.push({ code: ErrorCodes.FECHA_FUTURA, message: "La fecha del evento es futura." });
+  }
+  if (ctx.birthDate && input.occurredOn < ctx.birthDate) {
+    issues.push({
+      code: ErrorCodes.VALIDACION,
+      message: "El evento no puede ser anterior al nacimiento.",
+    });
+  }
+  if (FEMALE_EVENTS.has(input.type) && ctx.sex !== "hembra") {
+    issues.push({
+      code: ErrorCodes.EVENTO_NO_APLICA,
+      message: "Este evento solo aplica a hembras.",
+    });
+  }
+  return issues;
+}
+
+/**
+ * ¿La hembra llegó a los días de lactancia en que la finca acostumbra secar?
+ * Sigue activo hasta que se registre el secado o un parto nuevo reinicie la lactancia.
+ */
+export function isDryOffDue(
+  events: { type: string; occurredOn: string }[],
+  dryOffDays: number,
+  today: string,
+): boolean {
+  const lastOf = (type: string) =>
+    events
+      .filter((e) => e.type === type)
+      .map((e) => e.occurredOn)
+      .sort()
+      .pop();
+  const parto = lastOf("parto");
+  if (!parto) return false;
+  const secado = lastOf("secado");
+  if (secado && secado >= parto) return false;
+  return (Date.parse(today) - Date.parse(parto)) / 86_400_000 >= dryOffDays;
 }

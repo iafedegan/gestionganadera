@@ -847,3 +847,108 @@ describe("perfil de la finca", () => {
     expect((await send("PUT", `/v1/farms/${farmB}`, dueno, body)).statusCode).toBe(404);
   });
 });
+
+describe("eventos del animal", () => {
+  const evento = (animalId: string, type: string, data: object, occurredOn = "2026-01-15") => ({
+    id: uuidv7(),
+    type: "animal.event.record",
+    clientTs: new Date().toISOString(),
+    payload: { id: uuidv7(), animalId, occurredOn, type, data },
+  });
+  const salud = {
+    kind: "Vacunación",
+    product: "Vacuna antiaftosa",
+    reason: "Ciclo",
+    responsible: "Dra. Ruiz",
+    cost: 5000,
+    milkWithdrawalDays: 0,
+    meatWithdrawalDays: 0,
+  };
+  let vaca: string;
+  let toro: string;
+
+  beforeAll(async () => {
+    const cookie = await loginAs("dueno-a@test.local");
+    const v = cmd(farmA, "EV-VACA", { birthDate: { date: "2020-01-01", precision: "exacta" } });
+    const t = cmd(farmA, "EV-TORO", { sex: "macho", category: "toro" });
+    await push(cookie, orgA, [v, t]);
+    vaca = v.payload.id;
+    toro = t.payload.id;
+  });
+
+  it("registra, publica y es idempotente", async () => {
+    const cookie = await loginAs("dueno-a@test.local");
+    const c = evento(vaca, "parto", { calfTag: "EV-CRIA", calfSex: "Hembra", birthWeightKg: 36 });
+    const first = await push(cookie, orgA, [c]);
+    expect(first.body.results[0]?.status).toBe("accepted");
+    const again = await push(cookie, orgA, [c]);
+    expect(again.body.results[0]).toEqual(first.body.results[0]);
+    const feed = await app.inject({
+      method: "GET",
+      url: `/v1/sync/pull?organizationId=${orgA}&since=0&limit=500`,
+      headers: { ...H, cookie },
+    });
+    const found = (feed.json() as PullResponse).changes.filter(
+      (x) => x.entity === "animal_event" && x.data.id === c.payload.id,
+    );
+    expect(found).toHaveLength(1);
+    expect(found[0]?.data).toMatchObject({ animalId: vaca, farmId: farmA, type: "parto" });
+    const rows = await db.admin((q) =>
+      q("SELECT type, payload FROM animal_event WHERE id = $1", [c.payload.id]),
+    );
+    expect(rows[0]).toMatchObject({ type: "parto", payload: { calfTag: "EV-CRIA" } });
+  });
+
+  it("rechaza macho, fecha futura o anterior al nacimiento y animal inexistente", async () => {
+    const cookie = await loginAs("dueno-a@test.local");
+    const codeOf = (r: PushResponse) => {
+      const first = r.results[0];
+      return first && "code" in first ? first.code : undefined;
+    };
+    const code = async (c: unknown) => codeOf((await push(cookie, orgA, [c])).body);
+    expect(await code(evento(toro, "leche", { liters: 10, shift: "Mañana" }))).toBe(
+      "EVENTO_NO_APLICA",
+    );
+    expect(await code(evento(vaca, "secado", {}, "2999-01-01"))).toBe("FECHA_FUTURA");
+    expect(await code(evento(vaca, "secado", {}, "2019-01-01"))).toBe("VALIDACION");
+    expect(await code(evento(uuidv7(), "secado", {}))).toBe("ANIMAL_NO_EXISTE");
+    expect(await code(evento(vaca, "leche", { liters: -1, shift: "Mañana" }))).toBe("VALIDACION");
+  });
+
+  it("permite al operario y al técnico, y limita por finca y organización", async () => {
+    await addUser("op-eventos@test.local", orgA, "operario");
+    await addUser("tec-eventos@test.local", orgA, "tecnico");
+    await addUser("op-finca2@test.local", orgA, "operario", farmA2);
+    await addUser("dueno-b-ev@test.local", orgB, "propietario");
+    const status = async (email: string, org = orgA) => {
+      const { body } = await push(await loginAs(email), org, [
+        evento(vaca, "peso", { kg: 400, method: "Báscula" }),
+      ]);
+      const first = body.results[0];
+      return first && "code" in first ? first.code : "ok";
+    };
+    expect(await status("op-eventos@test.local")).toBe("ok");
+    expect(await status("tec-eventos@test.local")).toBe("ok");
+    expect(await status("op-finca2@test.local")).toBe("PERMISO_DENEGADO");
+    expect(await status("dueno-b-ev@test.local", orgB)).toBe("ANIMAL_NO_EXISTE");
+  });
+
+  it("oculta el costo sanitario a quien no ve economía", async () => {
+    const dueno = await loginAs("dueno-a@test.local");
+    const c = evento(vaca, "salud", salud);
+    await push(dueno, orgA, [c]);
+    const cost = async (cookie: string) => {
+      const feed = await app.inject({
+        method: "GET",
+        url: `/v1/sync/pull?organizationId=${orgA}&since=0&limit=500`,
+        headers: { ...H, cookie },
+      });
+      const e = (feed.json() as PullResponse).changes.find(
+        (x) => x.entity === "animal_event" && x.data.id === c.payload.id,
+      );
+      return e?.entity === "animal_event" && e.data.type === "salud" ? e.data.data.cost : undefined;
+    };
+    expect(await cost(dueno)).toBe(5000);
+    expect(await cost(await loginAs("tec-eventos@test.local"))).toBeNull();
+  });
+});

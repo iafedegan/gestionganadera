@@ -3,9 +3,11 @@ import type { WorkerApi } from "./localdb.worker";
 export type {
   AnimalDetail,
   Keystore,
+  LocalAnimalEvent,
   LocalFarm,
   LocalFarmMap,
   LocalAnimal,
+  LocalHerdAnimal,
   OutboxItem,
   StockRow,
   SupplyOverview,

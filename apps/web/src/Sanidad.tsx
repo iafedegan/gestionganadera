@@ -14,6 +14,7 @@ import {
   productOf,
   retiroActivo,
 } from "./herd";
+import { useHerdData } from "./herdData";
 import {
   type AlertItem,
   Alerts,
@@ -58,15 +59,21 @@ const Q_LABEL = {
   PD: "Posterior der.",
 };
 
-const animalTags = LACTATING.map((a) => a.tag);
+const WHOLE_HERD = "Todo el hato";
 
 export function SanidadScreen() {
   const { notify } = useApp();
-  const [events, add, reset] = useStore<HealthEvent>("san", HEALTH_SEED);
-  const [cmt, addCmt, resetCmt] = useStore<CmtRec>("cmt", CMT_SEED);
+  const herd = useHerdData();
+  const [sampleEvents, add, reset] = useStore<HealthEvent>("san", HEALTH_SEED);
+  const [sampleCmt, addCmt, resetCmt] = useStore<CmtRec>("cmt", CMT_SEED);
+  const events = herd.real ? herd.health : sampleEvents;
+  const cmt = herd.real ? herd.cmt : sampleCmt;
+  const animalTags = (herd.real ? herd.animals : LACTATING).map((a) => a.tag);
+  const cmtTags = herd.lactating.map((a) => a.tag);
   const [tab, setTab] = useState<Tab>("panel");
   const [open, setOpen] = useState<"evento" | "cmt" | null>(null);
-  const [check, setCheck] = useState(animalTags[0] ?? "");
+  const [checked, setCheck] = useState("");
+  const check = checked || (animalTags[0] ?? "");
 
   const retiros = useMemo(
     () =>
@@ -112,7 +119,9 @@ export function SanidadScreen() {
     .filter((e) => daysBetween(e.fecha, iso(today())) <= 90)
     .reduce((a, e) => a + e.costo, 0);
   const ev30 = events.filter((e) => daysBetween(e.fecha, iso(today())) <= 30).length;
-  const botBajo = BOTIQUIN.filter((b) => b.cant < b.min || daysFromNow(b.vence) < 60);
+  // El botiquín de ejemplo no aplica a un hato real: sus insumos están en Compras e insumos.
+  const botiquin = herd.real ? [] : BOTIQUIN;
+  const botBajo = botiquin.filter((b) => b.cant < b.min || daysFromNow(b.vence) < 60);
 
   const alerts: AlertItem[] = [
     ...retiros.map(({ e, r }) => ({
@@ -191,6 +200,44 @@ export function SanidadScreen() {
 
   const saveEvent = (v: Record<string, string>) => {
     const p = productOf(v.producto ?? "");
+    if (herd.real) {
+      const cost = Number(v.costo) || 0;
+      const tags = v.sujeto === WHOLE_HERD ? animalTags : [v.sujeto ?? ""];
+      herd
+        .record(
+          tags.map((tag) => ({
+            tag,
+            event: {
+              type: "salud" as const,
+              occurredOn: v.fecha ?? iso(today()),
+              data: {
+                kind: (v.tipo as HealthEvent["tipo"]) ?? "Tratamiento",
+                product: v.producto ?? "",
+                reason: v.motivo ?? "",
+                ...(p?.dosis ? { dose: p.dosis } : {}),
+                responsible: v.responsable ?? "",
+                // El costo escrito es del evento completo: se reparte entre los animales.
+                cost: Math.round(cost / tags.length),
+                milkWithdrawalDays: p?.retiroLeche ?? 0,
+                meatWithdrawalDays: p?.retiroCarne ?? 0,
+              },
+            },
+          })),
+        )
+        .then(() => {
+          setOpen(null);
+          notify(
+            tags.length > 1
+              ? `Evento sanitario guardado para ${tags.length} animales. Se enviará al sincronizar.`
+              : "Evento sanitario guardado. Los retiros se calcularon solos.",
+            "ok",
+          );
+        })
+        .catch((err: unknown) =>
+          notify(err instanceof Error ? err.message : "No se pudo guardar el evento.", "warn"),
+        );
+      return;
+    }
     add({
       tipo: (v.tipo as HealthEvent["tipo"]) ?? "Tratamiento",
       sujeto: v.sujeto ?? "",
@@ -234,7 +281,15 @@ export function SanidadScreen() {
             <button type="button" className="btn btn-primary" onClick={() => setOpen("evento")}>
               Registrar evento sanitario
             </button>
-            <button type="button" className="btn btn-ghost" onClick={() => setOpen("cmt")}>
+            <button
+              type="button"
+              className="btn btn-ghost"
+              onClick={() =>
+                cmtTags.length > 0
+                  ? setOpen("cmt")
+                  : notify("No hay hembras en lactancia para la prueba CMT.", "warn")
+              }
+            >
               Prueba CMT
             </button>
             <button type="button" className="btn btn-ghost" onClick={() => setTab("retiros")}>
@@ -248,17 +303,19 @@ export function SanidadScreen() {
           Los retiros son de referencia: siempre prevalecen el prospecto del producto y el criterio
           del veterinario.
         </p>
-        <button
-          type="button"
-          className="btn btn-ghost btn-sm"
-          onClick={() => {
-            reset();
-            resetCmt();
-            notify("Datos de ejemplo restablecidos.", "info");
-          }}
-        >
-          Restablecer datos de ejemplo
-        </button>
+        {!herd.real && (
+          <button
+            type="button"
+            className="btn btn-ghost btn-sm"
+            onClick={() => {
+              reset();
+              resetCmt();
+              notify("Datos de ejemplo restablecidos.", "info");
+            }}
+          >
+            Restablecer datos de ejemplo
+          </button>
+        )}
       </div>
       <Tabs
         value={tab}
@@ -578,7 +635,14 @@ export function SanidadScreen() {
       )}
 
       {tab === "botiquin" && (
-        <Panel title="Botiquín veterinario" sub="Existencias, lotes y vencimientos.">
+        <Panel
+          title="Botiquín veterinario"
+          sub={
+            herd.real
+              ? "Las existencias reales de medicamentos se llevan en Compras e insumos."
+              : "Existencias, lotes y vencimientos."
+          }
+        >
           <DataTable
             cols={[
               {
@@ -614,7 +678,7 @@ export function SanidadScreen() {
                   ),
               },
             ]}
-            rows={BOTIQUIN}
+            rows={botiquin}
             search={(b) => b.item}
           />
         </Panel>
@@ -633,12 +697,19 @@ export function SanidadScreen() {
               options: ["Vacunación", "Tratamiento", "Desparasitación", "Diagnóstico", "Control"],
             },
             { name: "fecha", label: "Fecha", type: "date" },
-            {
-              name: "sujeto",
-              label: "Animal o lote",
-              type: "text",
-              placeholder: "Ej. BOV-004 o Lote de ordeño",
-            },
+            herd.real
+              ? {
+                  name: "sujeto",
+                  label: "Animal",
+                  type: "select",
+                  options: [WHOLE_HERD, ...animalTags],
+                }
+              : {
+                  name: "sujeto",
+                  label: "Animal o lote",
+                  type: "text",
+                  placeholder: "Ej. BOV-004 o Lote de ordeño",
+                },
             {
               name: "producto",
               label: "Producto",
@@ -646,7 +717,12 @@ export function SanidadScreen() {
               options: PRODUCTS.map((p) => p.name),
             },
             { name: "motivo", label: "Motivo o diagnóstico", type: "text" },
-            { name: "responsable", label: "Responsable", type: "text", value: "Dra. Marcela Ruiz" },
+            {
+              name: "responsable",
+              label: "Responsable",
+              type: "text",
+              value: herd.real ? herd.responsible : "Dra. Marcela Ruiz",
+            },
             { name: "costo", label: "Costo (COP)", type: "number", value: "0" },
           ]}
           preview={(v) => {
@@ -695,7 +771,7 @@ export function SanidadScreen() {
           title="Registrar prueba CMT"
           sub="Resultado por cuarto: N, T, 1, 2 o 3."
           fields={[
-            { name: "tag", label: "Animal", type: "select", options: animalTags },
+            { name: "tag", label: "Animal", type: "select", options: cmtTags },
             { name: "fecha", label: "Fecha", type: "date" },
             ...Q.map((q) => ({
               name: q,
@@ -705,14 +781,34 @@ export function SanidadScreen() {
             })),
           ]}
           onSubmit={(v) => {
-            addCmt({
-              tag: v.tag ?? "",
-              fecha: v.fecha ?? iso(today()),
+            const rec = {
               AI: CMT_LEVELS.indexOf(v.AI ?? "N"),
               AD: CMT_LEVELS.indexOf(v.AD ?? "N"),
               PI: CMT_LEVELS.indexOf(v.PI ?? "N"),
               PD: CMT_LEVELS.indexOf(v.PD ?? "N"),
-            });
+            };
+            const fecha = v.fecha ?? iso(today());
+            if (herd.real) {
+              herd
+                .record([
+                  {
+                    tag: v.tag ?? "",
+                    event: { type: "cmt", occurredOn: fecha, data: rec },
+                  },
+                ])
+                .then(() => {
+                  setOpen(null);
+                  notify("Prueba CMT guardada. Se enviará al sincronizar.", "ok");
+                })
+                .catch((err: unknown) =>
+                  notify(
+                    err instanceof Error ? err.message : "No se pudo guardar la prueba.",
+                    "warn",
+                  ),
+                );
+              return;
+            }
+            addCmt({ tag: v.tag ?? "", fecha, ...rec });
             setOpen(null);
             notify("Prueba CMT registrada.", "ok");
           }}

@@ -129,6 +129,85 @@ export const FarmMapSavePayload = z.object({
 });
 export type FarmMapSavePayload = z.infer<typeof FarmMapSavePayload>;
 
+/* ───────────── Eventos del animal: reproducción, producción y sanidad ───────────── */
+
+const eventBase = { id: uuid, animalId: uuid, occurredOn: isoDate };
+const note = z.string().trim().max(500).optional();
+
+export const AnimalEventPayload = z.discriminatedUnion("type", [
+  z.object({
+    ...eventBase,
+    type: z.literal("servicio"),
+    data: z.object({
+      via: z.enum(["IA", "Monta", "Transferencia de embrión"]),
+      sire: z.string().trim().min(1).max(60),
+      note,
+    }),
+  }),
+  z.object({ ...eventBase, type: z.literal("celo"), data: z.object({ note }) }),
+  z.object({
+    ...eventBase,
+    type: z.literal("dx"),
+    data: z.object({
+      result: z.enum(["Preñada", "Vacía", "Dudosa"]),
+      method: z.enum(["Ecografía", "Palpación rectal"]),
+      note,
+    }),
+  }),
+  z.object({
+    ...eventBase,
+    type: z.literal("parto"),
+    data: z.object({
+      calfTag: z.string().trim().max(40).optional(),
+      calfSex: z.enum(["Hembra", "Macho", "Mellizos"]).optional(),
+      birthWeightKg: z.number().positive().max(120).optional(),
+      ease: z.enum(["Normal", "Asistido", "Distocia (cesárea)"]).optional(),
+      note,
+    }),
+  }),
+  z.object({ ...eventBase, type: z.literal("aborto"), data: z.object({ note }) }),
+  z.object({ ...eventBase, type: z.literal("secado"), data: z.object({ note }) }),
+  z.object({
+    ...eventBase,
+    type: z.literal("leche"),
+    data: z.object({ liters: z.number().positive().max(120), shift: z.enum(["Mañana", "Tarde"]) }),
+  }),
+  z.object({
+    ...eventBase,
+    type: z.literal("peso"),
+    data: z.object({
+      kg: z.number().positive().max(2000),
+      method: z.enum(["Báscula", "Cinta", "Estimado"]),
+    }),
+  }),
+  z.object({
+    ...eventBase,
+    type: z.literal("salud"),
+    data: z.object({
+      kind: z.enum(["Vacunación", "Tratamiento", "Desparasitación", "Diagnóstico", "Control"]),
+      product: z.string().trim().max(120),
+      reason: z.string().trim().max(200),
+      dose: z.string().trim().max(80).optional(),
+      responsible: z.string().trim().max(120),
+      cost: z.number().min(0).max(1_000_000_000).nullable(),
+      milkWithdrawalDays: z.number().int().min(0).max(365),
+      meatWithdrawalDays: z.number().int().min(0).max(365),
+    }),
+  }),
+  z.object({
+    ...eventBase,
+    type: z.literal("cmt"),
+    data: z.object({
+      AI: z.number().int().min(0).max(4),
+      AD: z.number().int().min(0).max(4),
+      PI: z.number().int().min(0).max(4),
+      PD: z.number().int().min(0).max(4),
+    }),
+  }),
+]);
+export type AnimalEventPayload = z.infer<typeof AnimalEventPayload>;
+export type AnimalEventType = AnimalEventPayload["type"];
+
 const base = { id: uuid, clientTs: z.string().datetime({ offset: true }) };
 
 export const AnimalCommand = z.object({
@@ -159,6 +238,12 @@ export const FarmMapSaveCommand = z.object({
   payload: FarmMapSavePayload,
 });
 export type FarmMapSaveCommand = z.infer<typeof FarmMapSaveCommand>;
+export const AnimalEventCommand = z.object({
+  ...base,
+  type: z.literal("animal.event.record"),
+  payload: AnimalEventPayload,
+});
+export type AnimalEventCommand = z.infer<typeof AnimalEventCommand>;
 export type SupplyCreateCommand = z.infer<typeof SupplyCreateCommand>;
 export type StockReceiveCommand = z.infer<typeof StockReceiveCommand>;
 export type StockConsumeCommand = z.infer<typeof StockConsumeCommand>;
@@ -170,6 +255,7 @@ export const CommandEnvelope = z.discriminatedUnion("type", [
   StockReceiveCommand,
   StockConsumeCommand,
   FarmMapSaveCommand,
+  AnimalEventCommand,
 ]);
 export type CommandEnvelope = z.infer<typeof CommandEnvelope>;
 
@@ -222,6 +308,12 @@ export interface AnimalDto {
   entry: { reason: EntryReason; occurredAt: string; origin: string | null } | null;
 }
 
+export type AnimalEventDto = AnimalEventPayload & {
+  organizationId: string;
+  farmId: string;
+  recordedBy: string;
+};
+
 export interface SupplyDto {
   id: string;
   organizationId: string;
@@ -264,7 +356,8 @@ export type Change =
   | { version: number; entity: "animal"; op: "upsert"; data: AnimalDto }
   | { version: number; entity: "supply"; op: "upsert"; data: SupplyDto }
   | { version: number; entity: "stock_movement"; op: "upsert"; data: StockMovementDto }
-  | { version: number; entity: "farm_map"; op: "upsert"; data: FarmMapDto };
+  | { version: number; entity: "farm_map"; op: "upsert"; data: FarmMapDto }
+  | { version: number; entity: "animal_event"; op: "upsert"; data: AnimalEventDto };
 
 /** Las existencias de insumos son del conjunto de la organización: usan esta "finca" nula en el feed. */
 export const ORG_SCOPE_FARM_ID = "00000000-0000-0000-0000-000000000000";
@@ -394,5 +487,8 @@ export const ErrorCodes = {
   INSUMO_NO_EXISTE: "INSUMO_NO_EXISTE",
   INSUMO_DUPLICADO: "INSUMO_DUPLICADO",
   MAPA_DESACTUALIZADO: "MAPA_DESACTUALIZADO",
+  ANIMAL_NO_EXISTE: "ANIMAL_NO_EXISTE",
+  ANIMAL_INACTIVO: "ANIMAL_INACTIVO",
+  EVENTO_NO_APLICA: "EVENTO_NO_APLICA",
 } as const;
 export type ErrorCode = (typeof ErrorCodes)[keyof typeof ErrorCodes];

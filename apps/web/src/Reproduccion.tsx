@@ -1,8 +1,8 @@
+import { isDryOffDue } from "@ganaderia/domain";
 import { Baby, CalendarClock, Heart, Stethoscope, Syringe } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { PageHead } from "./components";
 import {
-  FEMALES,
   PARAMS,
   REP_SEED,
   type RepEvent,
@@ -12,8 +12,8 @@ import {
   animalOf,
   milestones,
   repState,
-  speciesOf,
 } from "./herd";
+import { type EventInput, useHerdData } from "./herdData";
 import {
   type AlertItem,
   Alerts,
@@ -55,9 +55,10 @@ const STATUS_TONE: Record<RepStatus, Tone> = {
   "Parto reciente": "azul",
 };
 
-const tagOptions = FEMALES.filter((a) => a.cat !== "Novilla" || a.weight > 330).map((a) => a.tag);
-
-function formFor(kind: Kind): { title: string; fields: FField[]; sub: string } {
+function formFor(
+  kind: Kind,
+  tagOptions: string[],
+): { title: string; fields: FField[]; sub: string } {
   const tag: FField = { name: "tag", label: "Hembra", type: "select", options: tagOptions };
   const fecha: FField = { name: "fecha", label: "Fecha", type: "date" };
   switch (kind) {
@@ -182,7 +183,7 @@ function formFor(kind: Kind): { title: string; fields: FField[]; sub: string } {
   }
 }
 
-function previewFor(kind: Kind, v: Record<string, string>) {
+function previewFor(kind: Kind, v: Record<string, string>, speciesOf: (tag: string) => Species) {
   const sp: Species = speciesOf(v.tag ?? "");
   const p = PARAMS[sp];
   const f = v.fecha ?? iso(today());
@@ -228,7 +229,10 @@ function previewFor(kind: Kind, v: Record<string, string>) {
 
 export function ReproduccionScreen() {
   const { notify } = useApp();
-  const [events, add, reset] = useStore<RepEvent>("rep", REP_SEED);
+  const herd = useHerdData();
+  const { females, speciesOf } = herd;
+  const [sample, add, reset] = useStore<RepEvent>("rep", REP_SEED);
+  const events = herd.real ? herd.rep : sample;
   const [tab, setTab] = useState<Tab>("panel");
   const [sp, setSp] = useState<SpeciesF>("todos");
   const [form, setForm] = useState<Kind | null>(null);
@@ -241,10 +245,10 @@ export function ReproduccionScreen() {
 
   const states = useMemo(
     () =>
-      FEMALES.map((a) => repState(a, events)).filter(
-        (s) => sp === "todos" || s.animal.species === sp,
-      ),
-    [events, sp],
+      females
+        .map((a) => repState(a, events))
+        .filter((s) => sp === "todos" || s.animal.species === sp),
+    [events, sp, females],
   );
   const count = (st: RepStatus) => states.filter((s) => s.status === st).length;
   const gest = states.filter((s) => s.status === "Gestante" || s.status === "Seca gestante");
@@ -256,8 +260,28 @@ export function ReproduccionScreen() {
   );
   const paraSecar = states.filter(
     (s) =>
-      s.status === "Gestante" && s.fpp && daysFromNow(s.fpp) <= s.p.secarAntes && s.animal.milk > 0,
+      s.status === "Gestante" &&
+      s.fpp &&
+      daysFromNow(s.fpp) <= s.p.secarAntes &&
+      (herd.real || s.animal.milk > 0),
   );
+  // Secado por días de lactancia: el que definió cada finca en su registro.
+  const porLactancia = herd.real
+    ? states.filter((s) => {
+        const days = herd.dryOffDays(s.animal.tag);
+        return (
+          days !== null &&
+          !paraSecar.includes(s) &&
+          isDryOffDue(
+            events
+              .filter((e) => e.tag === s.animal.tag)
+              .map((e) => ({ type: e.tipo, occurredOn: e.fecha })),
+            days,
+            iso(today()),
+          )
+        );
+      })
+    : [];
   const prontoParto = states.filter((s) => s.fpp && daysFromNow(s.fpp) <= 30);
   const aptas = states.filter((s) => s.status === "Vacía" && (s.del ?? 0) >= s.p.esperaVoluntaria);
   const prom = (xs: number[]) => (xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : 0);
@@ -293,7 +317,13 @@ export function ReproduccionScreen() {
     ...paraSecar.map((s) => ({
       tone: "azul" as Tone,
       title: `${s.animal.tag} · programar secado`,
-      text: `Faltan ${daysFromNow(s.fpp ?? "")} días para el parto y aún da ${num(s.animal.milk)} L/día.`,
+      text: `Faltan ${daysFromNow(s.fpp ?? "")} días para el parto${s.animal.milk > 0 ? ` y aún da ${num(s.animal.milk)} L/día` : ""}.`,
+      action: { label: "Secar", run: () => setForm("secado") },
+    })),
+    ...porLactancia.map((s) => ({
+      tone: "azul" as Tone,
+      title: `${s.animal.tag} · programar secado`,
+      text: `Lleva ${s.del} días de lactancia; la finca seca a los ${herd.dryOffDays(s.animal.tag)}.`,
       action: { label: "Secar", run: () => setForm("secado") },
     })),
     ...vaciasLargas.map((s) => ({
@@ -426,8 +456,67 @@ export function ReproduccionScreen() {
     .filter((x) => daysFromNow(x.fecha) >= -3 && daysFromNow(x.fecha) <= 120)
     .sort((a, b) => (a.fecha < b.fecha ? -1 : 1));
 
+  const saveReal = async (kind: Kind, v: Record<string, string>) => {
+    const tag = v.tag ?? "";
+    const occurredOn = v.fecha ?? iso(today());
+    const note = v.obs?.trim() ? { note: v.obs.trim() } : {};
+    let event: EventInput;
+    let calfWarning: string | null = null;
+    if (kind === "servicio") {
+      event = {
+        type: "servicio",
+        occurredOn,
+        data: { via: v.via as "IA", sire: v.macho ?? "", ...note },
+      };
+    } else if (kind === "dx") {
+      event = {
+        type: "dx",
+        occurredOn,
+        data: { result: v.resultado as "Preñada", method: v.metodo as "Ecografía", ...note },
+      };
+    } else if (kind === "parto") {
+      const calfTag = v.cria?.trim();
+      const calfSex = v.sexo as "Hembra" | "Macho" | "Mellizos" | undefined;
+      if (calfTag && (calfSex === "Hembra" || calfSex === "Macho")) {
+        calfWarning = await herd.registerCalf(
+          tag,
+          calfTag,
+          calfSex === "Hembra" ? "hembra" : "macho",
+          occurredOn,
+        );
+      }
+      event = {
+        type: "parto",
+        occurredOn,
+        data: {
+          ...(calfTag ? { calfTag } : {}),
+          ...(calfSex ? { calfSex } : {}),
+          ...(Number(v.peso) > 0 ? { birthWeightKg: Number(v.peso) } : {}),
+          ...(v.facilidad ? { ease: v.facilidad as "Normal" } : {}),
+          ...note,
+        },
+      };
+    } else {
+      event = { type: kind, occurredOn, data: note };
+    }
+    await herd.record([{ tag, event }]);
+    setForm(null);
+    notify(
+      calfWarning
+        ? `Parto guardado, pero la cría no se creó: ${calfWarning}`
+        : "Evento reproductivo guardado. Se enviará al sincronizar.",
+      calfWarning ? "warn" : "ok",
+    );
+  };
+
   const save = (v: Record<string, string>) => {
     if (!form) return;
+    if (herd.real) {
+      saveReal(form, v).catch((err: unknown) =>
+        notify(err instanceof Error ? err.message : "No se pudo guardar el evento.", "warn"),
+      );
+      return;
+    }
     const e: RepEvent = { tipo: form, tag: v.tag ?? "", fecha: v.fecha ?? iso(today()) };
     for (const k of ["via", "macho", "resultado", "cria", "sexo", "peso", "obs"] as const)
       if (v[k]) e[k] = v[k];
@@ -439,12 +528,15 @@ export function ReproduccionScreen() {
 
   const fs = ficha
     ? (states.find((s) => s.animal.tag === ficha) ??
-      FEMALES.map((a) => repState(a, events)).find((s) => s.animal.tag === ficha))
+      females.map((a) => repState(a, events)).find((s) => s.animal.tag === ficha))
     : null;
   const fe = ficha
     ? events.filter((e) => e.tag === ficha).sort((a, b) => (a.fecha < b.fecha ? 1 : -1))
     : [];
-  const cfg = form ? formFor(form) : null;
+  const tagOptions = herd.real
+    ? females.map((a) => a.tag)
+    : females.filter((a) => a.cat !== "Novilla" || a.weight > 330).map((a) => a.tag);
+  const cfg = form ? formFor(form, tagOptions) : null;
 
   // Calculadora
   const [cSp, setCSp] = useState<Species>("bovino");
@@ -480,16 +572,18 @@ export function ReproduccionScreen() {
       />
       <div className="kit-toolbar">
         <SpeciesFilter value={sp} onChange={setSp} />
-        <button
-          type="button"
-          className="btn btn-ghost btn-sm"
-          onClick={() => {
-            reset();
-            notify("Datos de ejemplo restablecidos.", "info");
-          }}
-        >
-          Restablecer datos de ejemplo
-        </button>
+        {!herd.real && (
+          <button
+            type="button"
+            className="btn btn-ghost btn-sm"
+            onClick={() => {
+              reset();
+              notify("Datos de ejemplo restablecidos.", "info");
+            }}
+          >
+            Restablecer datos de ejemplo
+          </button>
+        )}
       </div>
       <Tabs
         value={tab}
@@ -880,7 +974,7 @@ export function ReproduccionScreen() {
           title={cfg.title}
           sub={cfg.sub}
           fields={cfg.fields}
-          preview={(v) => previewFor(form, v)}
+          preview={(v) => previewFor(form, v, speciesOf)}
           onSubmit={save}
           onClose={() => setForm(null)}
         />
@@ -962,7 +1056,7 @@ export function ReproduccionScreen() {
                             : "verde",
                   }))}
                 />
-                {animalOf(fs.animal.tag) && (
+                {!herd.real && animalOf(fs.animal.tag) && (
                   <p className="hint">
                     Hato demostrativo · lote {fs.animal.lot} · {fs.animal.weight} kg
                   </p>

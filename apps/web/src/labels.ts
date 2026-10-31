@@ -28,6 +28,7 @@ export const KIND_LABEL: Record<string, string> = {
   "stock.receive": "Recepción de insumo",
   "stock.consume": "Consumo de insumo",
   "farm.map.save": "Mapa de la finca",
+  "animal.event.record": "Evento del animal",
 };
 export const SUPPLY_CATEGORY_LABEL: Record<string, string> = {
   alimento: "Alimento",
@@ -69,6 +70,9 @@ export const CODE_LABEL: Record<string, string> = {
   ID_EN_USO: "Identificador en uso",
   STOCK_INSUFICIENTE: "Existencia insuficiente",
   INSUMO_NO_EXISTE: "Insumo no existe",
+  ANIMAL_NO_EXISTE: "Animal no existe",
+  ANIMAL_INACTIVO: "Animal inactivo",
+  EVENTO_NO_APLICA: "El evento no aplica",
   INSUMO_DUPLICADO: "Insumo duplicado",
 };
 
