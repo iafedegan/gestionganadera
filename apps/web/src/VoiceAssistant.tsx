@@ -37,6 +37,8 @@ interface Recognition {
   onresult: ((e: RecognitionResultEvent) => void) | null;
   onerror: ((e: { error: string }) => void) | null;
   onend: (() => void) | null;
+  onaudiostart?: (() => void) | null;
+  onspeechstart?: (() => void) | null;
   start(): void;
   abort(): void;
   stop(): void;
@@ -56,7 +58,7 @@ export const voiceSupported = () => typeof window !== "undefined" && getRecognit
 type Heard = { alts: string[] } | { error: string };
 const MAX_MISSES = 3;
 /** Cuánto se espera a que empiece a hablar antes de volver a preguntar. */
-const WAIT_FOR_SPEECH_MS = 15_000;
+const WAIT_FOR_SPEECH_MS = 10_000;
 /** Silencio tras palabras aún sin confirmar para dar la frase por terminada. */
 const END_OF_PHRASE_MS = 1_100;
 const SILENT_KEY = "gg.voz.silencio";
@@ -88,6 +90,8 @@ export function VoiceAssistant(props: {
   const [prompt, setPrompt] = useState("");
   const [heard, setHeard] = useState("");
   const [live, setLive] = useState("");
+  const [hearing, setHearing] = useState(false);
+  const listenTries = useRef(0);
   const [silent, setSilent] = useState(readSilent);
   const silentRef = useRef(silent);
   const latest = useRef(props);
@@ -184,15 +188,20 @@ export function VoiceAssistant(props: {
     if (!Ctor) return Promise.resolve({ error: "not-supported" });
     setStatus("listening");
     setLive("");
+    listenTries.current++;
     const deadline = Date.now() + WAIT_FOR_SPEECH_MS;
     return new Promise((resolve) => {
       let settled = false;
       let endTimer: ReturnType<typeof setTimeout> | undefined;
       let finals: string[][] = [];
       let interim = "";
+      // Algunos navegadores encienden el micrófono y nunca avisan nada: no se espera para siempre.
+      const watchdog = setTimeout(() => finish({ error: "no-speech" }), WAIT_FOR_SPEECH_MS);
       const finish = (v: Heard) => {
         if (settled) return;
         settled = true;
+        clearTimeout(watchdog);
+        setHearing(false);
         clearTimeout(endTimer);
         setLive("");
         const r = recognizer.current;
@@ -219,10 +228,15 @@ export function VoiceAssistant(props: {
         recognizer.current = r;
         r.lang = lang.current;
         // Sin modo continuo: en Android duplica las frases. Se reinicia al terminar cada tramo.
-        r.continuous = false;
+        // En iPhone, cada segundo intento usa el modo continuo por si el otro no entrega texto.
+        r.continuous =
+          /iPhone|iPad|iPod/.test(navigator.userAgent) && listenTries.current % 2 === 1;
+        r.onaudiostart = () => setHearing(true);
+        r.onspeechstart = () => setHearing(true);
         r.interimResults = true;
         r.maxAlternatives = 5;
         r.onresult = (e) => {
+          clearTimeout(watchdog);
           interim = "";
           const pending: string[] = [];
           for (let i = e.resultIndex; i < e.results.length; i++) {
@@ -342,8 +356,12 @@ export function VoiceAssistant(props: {
         const stop = fatal(res.error);
         if (stop) return pause(id, stop);
         misses++;
-        if (misses >= MAX_MISSES)
-          return pause(id, "No le escuché. Toque seguir por voz cuando quiera.");
+        if (misses >= 2) {
+          return pause(
+            id,
+            "Este celular no me entrega lo que oye. Toque la casilla y use el micrófono del teclado.",
+          );
+        }
         say = current ? questionFor(current, true) : (latest.current.confirmText ?? "¿Guardo?");
         continue;
       }
@@ -503,7 +521,8 @@ export function VoiceAssistant(props: {
             <small className="voice-live">«{live}»</small>
           ) : (
             <small className="voice-listening">
-              <span className="voice-dot" aria-hidden="true" /> Escuchando…
+              <span className="voice-dot" aria-hidden="true" />{" "}
+              {hearing ? "Micrófono activo, escuchando…" : "Escuchando…"}
             </small>
           ))}
         {heard && status !== "listening" && <small>Escuché: «{heard}»</small>}

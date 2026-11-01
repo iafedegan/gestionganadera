@@ -969,3 +969,79 @@ input[type="date"]::-webkit-date-and-time-value {
 label {
   min-width: 0;
 }
+
+/* ───── Áreas seguras: muesca, isla dinámica, barra de inicio y celular acostado ───── */
+:root {
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-right: env(safe-area-inset-right, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-left: env(safe-area-inset-left, 0px);
+}
+@media (max-width: 900px) {
+  /* Esta regla debe ir de última: otra anterior anulaba la distancia a la hora y la batería. */
+  .topbar {
+    padding-top: calc(8px + var(--safe-top));
+    padding-right: calc(12px + var(--safe-right));
+    padding-left: calc(12px + var(--safe-left));
+  }
+  .content {
+    padding-right: calc(16px + var(--safe-right));
+    padding-left: calc(16px + var(--safe-left));
+  }
+  .bottom-nav {
+    padding-right: calc(4px + var(--safe-right));
+    padding-left: calc(4px + var(--safe-left));
+  }
+  .dialog-form .dialog-head {
+    padding-top: calc(10px + var(--safe-top));
+  }
+  .drawer:not(.sheet-drawer):not(.sync-drawer) {
+    padding-top: calc(18px + var(--safe-top));
+  }
+}
+
+/* ───── Tamaños: del celular más angosto a la tableta ───── */
+html,
+body {
+  overflow-x: clip;
+}
+img,
+svg,
+video,
+canvas {
+  max-width: 100%;
+}
+.page,
+.card,
+.fsec,
+.kit-panel,
+.table-card {
+  min-width: 0;
+  max-width: 100%;
+}
+.page-head h1,
+h1 {
+  font-size: clamp(1.625rem, 8.2vw, 2.125rem);
+  overflow-wrap: break-word;
+}
+.page-actions,
+.quick-actions {
+  min-width: 0;
+}
+@media (max-width: 360px) {
+  .btn {
+    padding-inline: 12px;
+    font-size: 1rem;
+  }
+  .btn-sm {
+    padding-inline: 10px;
+    font-size: 0.875rem;
+  }
+  .tab {
+    font-size: 0.5625rem;
+  }
+  .tab svg {
+    width: 22px;
+    height: 22px;
+  }
+}
