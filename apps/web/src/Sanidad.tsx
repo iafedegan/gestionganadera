@@ -687,7 +687,6 @@ export function SanidadScreen() {
       {open === "evento" && (
         <FormDialog
           open
-          voiceContext={herd.voiceContext}
           title="Registrar evento sanitario"
           sub="Elija el producto: los retiros de leche y carne se calculan y quedan en el historial."
           fields={[
@@ -769,7 +768,6 @@ export function SanidadScreen() {
       {open === "cmt" && (
         <FormDialog
           open
-          voiceContext={herd.voiceContext}
           title="Registrar prueba CMT"
           sub="Resultado por cuarto: N, T, 1, 2 o 3."
           fields={[

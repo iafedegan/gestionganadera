@@ -403,8 +403,8 @@ export function FormDialog(props: {
   sub?: string;
   fields: FField[];
   submitLabel?: string;
-  /** Datos de la finca con los que el asistente de voz razona. */
-  voiceContext?: string;
+  /** Revisión por voz con los datos de la finca: lo que no cuadre se avisa antes de guardar. */
+  voiceReview?(v: Record<string, string>): string | null;
   preview?(v: Record<string, string>): ReactNode;
   onSubmit(v: Record<string, string>): void;
   onClose(): void;
@@ -463,8 +463,7 @@ export function FormDialog(props: {
             {props.sub && <p className="hint">{props.sub}</p>}
             {props.open && (
               <VoiceAssistant
-                title={props.title}
-                {...(props.voiceContext ? { context: props.voiceContext } : {})}
+                {...(props.voiceReview ? { review: props.voiceReview } : {})}
                 fields={voiceFields}
                 values={vals}
                 onChange={(name, value) => {

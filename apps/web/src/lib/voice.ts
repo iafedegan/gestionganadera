@@ -61,12 +61,14 @@ export function detectCommand(text: string): VoiceCommand | null {
 }
 
 export function detectConfirmation(text: string): "si" | "no" | null {
-  const t = norm(text).replace(/[,.]/g, "");
+  const t = norm(text).replace(/[,.]/g, "").replace(/ñ/g, "n");
   if (
-    /^(si|si señor|claro|guardar?|guarde|guardalo|listo|correcto|confirmo|dale|ok|okay)\b/.test(t)
+    /^(si|claro|guardar?|guarde|guardalo|listo|correcto|confirmo|dale|ok|okay|perfecto|hagale|eso|exacto|de una|asi esta bien|asi|esta bien|todo bien|bien)\b/.test(
+      t,
+    )
   )
     return "si";
-  if (/^no\b/.test(t)) return "no";
+  if (/^(no|nada que ver|esta mal|mal)\b/.test(t)) return "no";
   return null;
 }
 
@@ -271,6 +273,108 @@ export function parseSpokenDate(text: string, today: string): string | null {
   return null;
 }
 
+/**
+ * Cómo se dice cada opción en el campo. La clave es la opción normalizada. Se usa solo con las
+ * opciones del campo que se está llenando, así «normal» o «tarde» no chocan entre formularios.
+ */
+const SYNONYMS: Record<string, string[]> = {
+  manana: ["temprano", "madrugada", "am", "amanecer"],
+  tarde: ["pm", "tardecita"],
+  prenada: ["cargada", "llena", "gestante", "embarazada", "quedo", "cargo", "esta preñada"],
+  vacia: ["no quedo", "no cargo", "no esta prenada", "negativa", "abierta", "vacio"],
+  dudosa: ["duda", "dudoso", "no se sabe", "no es claro"],
+  ecografia: ["eco", "ecografo", "ultrasonido"],
+  "palpacion rectal": ["palpacion", "tacto", "palpada", "palpe"],
+  ia: ["inseminacion", "inseminada", "inseminar", "insemine", "pajilla", "artificial"],
+  monta: ["monta natural", "natural", "montada"],
+  "transferencia de embrion": ["embrion", "transferencia"],
+  normal: ["facil", "sola", "solita", "sin ayuda"],
+  asistido: ["ayudada", "ayudado", "ayuda", "asistida"],
+  distocia: ["cesarea", "dificil"],
+  hembra: ["hembrita", "femenina", "ternera", "becerra"],
+  macho: ["machito", "masculino", "ternero", "becerro"],
+  mellizos: ["gemelos", "mellizas", "dos crias"],
+  bovino: ["vacuno", "bovina", "res", "ganado"],
+  bufalino: ["bufalo", "bufala", "bufalina", "bufalos", "bufalas"],
+  ternero: ["ternera", "ternerito", "ternerita", "becerro", "becerra", "cria"],
+  novilla: ["novillona", "vaquilla", "vaquillona"],
+  novillo: ["torete", "torillo"],
+  vaca: ["vaquita", "parida"],
+  toro: ["semental", "padrote"],
+  compra: ["comprada", "comprado", "compre", "compramos"],
+  nacimiento: ["nacio", "nacida", "nacido"],
+  "inventario inicial": ["inventario", "ya estaba", "de la finca"],
+  reingreso: ["volvio", "regreso"],
+  vacunacion: ["vacuna", "vacunar", "vacune", "vacunada", "vacunamos"],
+  tratamiento: ["tratar", "tratada", "antibiotico", "inyectar", "inyeccion", "inyectada"],
+  desparasitacion: ["purga", "purgar", "purgue", "purgada", "desparasitar", "desparasite"],
+  control: ["revision", "chequeo"],
+  bascula: ["pesa", "balanza"],
+  cinta: ["metro"],
+  estimado: ["a ojo", "calculado", "aproximado", "mas o menos"],
+  n: ["negativo", "negativa", "limpio", "sano"],
+  t: ["trazas", "traza"],
+  leche: ["lechera", "lecheria"],
+  "doble proposito": ["doble"],
+  "ciclo completo": ["completo"],
+  puro: ["puros", "pura"],
+};
+
+const optionKey = (label: string) =>
+  norm(label)
+    .replace(/\s*\([^)]*\)/g, "")
+    .replace(/[,.]/g, "")
+    .trim();
+
+const hasPhrase = (text: string, phrase: string) => ` ${text} `.includes(` ${phrase} `);
+
+/**
+ * Busca la opción por su vocabulario o por una palabra que solo ella tiene («aftosa» para
+ * «Vacuna antiaftosa»). Si encaja más de una, no adivina.
+ */
+function spotChoice(choices: VoiceChoice[], text: string): VoiceChoice | null {
+  const said = norm(text).replace(/[,.|]/g, " ").replace(/\s+/g, " ").trim();
+  if (!said) return null;
+  // Gana la frase más larga: «no quedó» dice lo contrario de «quedó».
+  const scored = choices.map((c) => ({
+    c,
+    length: Math.max(
+      0,
+      ...(SYNONYMS[optionKey(c.label)] ?? [])
+        .map(norm)
+        .filter((w) => hasPhrase(said, w))
+        .map((w) => w.length),
+    ),
+  }));
+  const longest = Math.max(0, ...scored.map((x) => x.length));
+  if (longest > 0) {
+    const best = scored.filter((x) => x.length === longest);
+    return best.length === 1 ? (best[0]?.c as VoiceChoice) : null;
+  }
+
+  // Solo para nombres de varias palabras: un arete o una palabra suelta no se parten.
+  const tokens = said.split(" ").filter((w) => w.length >= 5);
+  const hits = choices.filter((c) => {
+    const words = optionKey(c.label).split(" ");
+    if (words.length < 2 && !/^[a-z]{8,}$/.test(words[0] ?? "")) return false;
+    return words.some((w) => {
+      if (w.length < 5) return false;
+      const shared = choices.filter((o) => o !== c && optionKey(o.label).includes(w));
+      return shared.length === 0 && tokens.some((t) => w.includes(t) || editDistance(t, w) <= 1);
+    });
+  });
+  return hits.length === 1 ? (hits[0] as VoiceChoice) : null;
+}
+
+/** Palabras de relleno al inicio de una respuesta dictada. */
+const FILLER =
+  /^(?:(?:bueno|pues|este|eh|mire|oiga|a ver|o sea|si|es|se llama|le dicen|el nombre es|el|la|los|las|ponga|ponle|pongale|anote|anotele|escriba)\s+)+/;
+
+const clearFiller = (text: string) => {
+  const cleaned = text.trim().replace(new RegExp(FILLER.source, "i"), "").trim();
+  return cleaned || text.trim();
+};
+
 /** «be o be cero cero uno» y similares: palabras de cifras a dígitos, sin separadores. */
 function compactKey(text: string) {
   const tokens = norm(text).split(/[\s-]+/);
@@ -291,6 +395,8 @@ function compactKey(text: string) {
   }
   return out.join("").replace(/[^a-z0-9ñ]/g, "");
 }
+
+const TAG_NOISE = new Set(["el", "la", "es", "de", "numero", "arete", "chapeta", "identificacion"]);
 
 const trailingNumber = (s: string) => {
   const m = /(\d+)\D*$/.exec(s);
@@ -319,6 +425,9 @@ export function matchChoice(choices: VoiceChoice[], text: string): VoiceChoice |
   if (contained.length === 1) return contained[0] as VoiceChoice;
   if (contained.length > 1) return null;
 
+  const spotted = spotChoice(choices, said);
+  if (spotted) return spotted;
+
   // «la setenta y ocho» cuando el arete es CRIA-78: vale si solo uno termina en ese número.
   const n = parseSpokenNumber(said);
   if (n !== null) {
@@ -330,13 +439,18 @@ export function matchChoice(choices: VoiceChoice[], text: string): VoiceChoice |
 
 /** Aretes y códigos dictados: mayúsculas, cifras en dígitos y sin espacios. */
 export function parseSpokenTag(text: string): string | null {
-  const key = compactKey(text).toUpperCase();
+  const words = norm(text)
+    .split(/[\s-]+/)
+    .filter((w) => !TAG_NOISE.has(w));
+  const key = compactKey(words.join(" ")).toUpperCase();
   return key || null;
 }
 
 export function interpretAnswer(field: VoiceField, text: string, today: string): string | null {
   const said = text.trim();
   if (!said) return null;
+  // Un «sí» o un «no» sueltos no son el contenido de un dato que se está preguntando.
+  if (field.type !== "select" && /^(si|no)$/.test(norm(said).replace(/[,.]/g, ""))) return null;
   switch (field.type) {
     case "number": {
       const n = parseSpokenNumber(said);
@@ -348,8 +462,10 @@ export function interpretAnswer(field: VoiceField, text: string, today: string):
       return matchChoice(field.choices ?? [], said)?.value ?? null;
     case "tag":
       return parseSpokenTag(said);
-    default:
-      return said.charAt(0).toUpperCase() + said.slice(1);
+    default: {
+      const clean = clearFiller(said);
+      return clean.charAt(0).toUpperCase() + clean.slice(1);
+    }
   }
 }
 
@@ -409,6 +525,8 @@ function keysFor(field: VoiceField): string[] {
   // «Litros» y «litro» cuentan igual.
   for (const k of [...keys]) keys.add(k.endsWith("s") ? k.slice(0, -1) : `${k}s`);
   if (field.type === "tag") for (const w of TAG_WORDS) keys.add(w);
+  // «por parásitos» dice el motivo sin nombrarlo.
+  if (keys.has("motivo")) keys.add("por");
   if (field.type === "textarea") for (const w of MEMO_WORDS) keys.add(w);
   return [...keys];
 }
@@ -446,6 +564,10 @@ const DATE_PATTERNS = [
   /\b(?:el )?(?:primero|\d{1,2}|[a-z]+(?: y [a-z]+)?) de (?:enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|setiembre|octubre|noviembre|diciembre)(?: de(?:l)? (?:\d{4}|dos mil(?: [a-z]+)?))?\b/,
   /\b(?:anteayer|antier|antes de ayer|ayer|hoy)\b/,
 ];
+
+const ANIMAL_WORDS = new Set(
+  "la el vaca novilla novillo ternera ternero toro bufala animal numero chapeta arete".split(" "),
+);
 
 const isNumberToken = (t: string) =>
   /^\d[\d.,]*$/.test(t) || UNITS[t] !== undefined || t === "mil" || t === "medio" || t === "media";
@@ -549,6 +671,13 @@ export function extractAnswers(
     }
   }
 
+  // Vocabulario del campo. La palabra no se consume: «ternera» dice categoría y también sexo.
+  for (const f of selects) {
+    if (values[f.name]) continue;
+    const hit = spotChoice(f.choices ?? [], rest);
+    if (hit) values[f.name] = hit.value;
+  }
+
   // 4. Aretes: nombrados («arete 05») o, si no hay números que llenar, palabra más cifras.
   const hasNumbers = order.some((f) => f.type === "number");
   for (const f of order.filter((x) => x.type === "tag")) {
@@ -575,7 +704,10 @@ export function extractAnswers(
 
   // 5. Números: el que tenga nombre al lado; los demás, en orden, a los campos que falten.
   const numberFields = order.filter((f) => f.type === "number");
-  if (numberFields.length > 0) {
+  const tagSelect = selects.find(
+    (f) => !values[f.name] && (f.choices ?? []).some((c) => /\d/.test(c.label)),
+  );
+  if (numberFields.length > 0 || tagSelect) {
     const tokens = rest.trim().split(" ");
     const runs: { from: number; to: number }[] = [];
     for (let i = 0; i < tokens.length; i++) {
@@ -623,6 +755,25 @@ export function extractAnswers(
       } else free.push(run);
     }
     for (const run of free) {
+      // «la quince», «vaca 15»: si solo un arete termina en ese número, es el animal.
+      if (tagSelect && !values[tagSelect.name]) {
+        const prev = tokens[run.from - 1] ?? "";
+        const n = parseSpokenNumber(tokens.slice(run.from, run.to).join(" "));
+        const hits = (tagSelect.choices ?? []).filter((c) => trailingNumber(c.label) === n);
+        const noNumberField = numberFields.length === 0;
+        // «vaca 02» con aretes VACA-…: nunca es BOV-002. Mejor volver a preguntar que equivocarse.
+        const seriesOf = (label: string) => norm(label).replace(/[^a-z].*$/, "");
+        const series = (tagSelect.choices ?? []).map((c) => seriesOf(c.label));
+        if (series.includes(prev) && hits.every((c) => seriesOf(c.label) !== prev)) {
+          for (let k = run.from; k < run.to; k++) used.add(k);
+          continue;
+        }
+        if ((ANIMAL_WORDS.has(prev) || noNumberField) && hits.length === 1 && hits[0]) {
+          values[tagSelect.name] = hits[0].value;
+          for (let k = run.from; k < run.to; k++) used.add(k);
+          continue;
+        }
+      }
       const target = numberFields.find((f) => !values[f.name]);
       const n = parseSpokenNumber(tokens.slice(run.from, run.to).join(" "));
       if (!target || n === null) continue;
@@ -661,10 +812,12 @@ export function speakableValue(field: VoiceField, value: string): string {
   if (field.type === "select") {
     return field.choices?.find((c) => c.value === value)?.label ?? value;
   }
-  if (field.type === "date") {
-    const [y, m, d] = value.split("-");
-    const month = Object.entries(MONTHS).find(([, n]) => n === Number(m))?.[0];
-    return month ? `${Number(d)} de ${month} de ${y}` : value;
-  }
+  if (field.type === "date") return speakableDate(value);
   return value;
+}
+
+export function speakableDate(value: string): string {
+  const [y, m, d] = value.split("-");
+  const month = Object.entries(MONTHS).find(([, n]) => n === Number(m))?.[0];
+  return month ? `${Number(d)} de ${month} de ${y}` : value;
 }

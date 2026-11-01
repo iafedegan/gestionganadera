@@ -773,8 +773,8 @@ export function ProduccionScreen() {
       {open === "ordeno" && (
         <FormDialog
           open
-          voiceContext={herd.voiceContext}
           title="Registrar ordeño"
+          voiceReview={(v) => herd.review("leche", v.tag ?? "", v.fecha ?? iso(today()))}
           fields={[
             { name: "tag", label: "Animal", type: "select", options: LACTATING.map((a) => a.tag) },
             { name: "fecha", label: "Fecha", type: "date", value: iso(today()) },
@@ -828,7 +828,6 @@ export function ProduccionScreen() {
       {open === "calidad" && (
         <FormDialog
           open
-          voiceContext={herd.voiceContext}
           title="Control de calidad"
           fields={[
             {
@@ -864,8 +863,10 @@ export function ProduccionScreen() {
       {open === "peso" && (
         <FormDialog
           open
-          voiceContext={herd.voiceContext}
           title="Registrar peso"
+          voiceReview={(v) =>
+            herd.review("peso", v.tag ?? "", v.fecha ?? iso(today()), Number(v.peso) || undefined)
+          }
           fields={[
             { name: "tag", label: "Animal", type: "select", options: growth.map((a) => a.tag) },
             { name: "fecha", label: "Fecha", type: "date" },

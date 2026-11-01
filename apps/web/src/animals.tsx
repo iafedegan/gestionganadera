@@ -1005,8 +1005,11 @@ export function RegisterDialog(props: {
 
         <div className="dialog-body">
           <VoiceAssistant
-            title="Registrar animal"
-            context={`Aretes ya usados en este dispositivo: ${parents.map((p) => p.tag).join(", ")}`}
+            review={(v) =>
+              parents.some((p) => p.tag === normalizeTag(v.tag ?? "") && p.id !== init?.id)
+                ? `Ya existe un animal con el arete ${normalizeTag(v.tag ?? "")}.`
+                : null
+            }
             fields={voiceFields}
             values={voiceValues}
             onChange={setByVoice}

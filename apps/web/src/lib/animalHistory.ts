@@ -1,4 +1,5 @@
 import type { AnimalEventPayload } from "@ganaderia/contracts";
+import { speakableDate } from "./voice";
 
 /** Cálculos de la hoja de vida a partir de los eventos de un animal. Funciones puras. */
 
@@ -116,4 +117,66 @@ export function weightSummary(events: Dated[]) {
     averageGainG:
       first && last && span > 0 ? Math.round(((last.kg - first.kg) / span) * 1000) : null,
   };
+}
+
+const latest = (events: Dated[], type: string) =>
+  events
+    .filter((e) => e.type === type)
+    .map((e) => e.occurredOn)
+    .sort()
+    .pop();
+
+/**
+ * Lo que una persona que conoce el animal preguntaría antes de anotar. No impide guardar:
+ * devuelve el aviso que se le dice a quien registra, o null si todo cuadra.
+ */
+export function reviewAnimalEvent(
+  event: { type: string; occurredOn: string; kg?: number },
+  tag: string,
+  events: Dated[],
+  today: string,
+): string | null {
+  const parto = latest(events, "parto");
+  const secado = latest(events, "secado");
+  const isDry = Boolean(secado && (!parto || secado >= parto));
+
+  if (event.type === "leche") {
+    const { milkUntil } = activeWithdrawals(events, today);
+    if (milkUntil) {
+      return `${tag} está en retiro de leche hasta el ${speakableDate(milkUntil)}: esa leche no se debe entregar.`;
+    }
+    if (isDry && secado) return `${tag} figura seca desde el ${speakableDate(secado)}.`;
+  }
+  if (event.type === "secado" && isDry && secado) {
+    return `${tag} ya figura seca desde el ${speakableDate(secado)}.`;
+  }
+  if (event.type === "parto" && parto) {
+    const days = daysBetween(parto, event.occurredOn);
+    if (days >= 0 && days < 240) return `${tag} parió hace solo ${days} días.`;
+  }
+  if (event.type === "servicio" || event.type === "dx") {
+    const since = (e: Dated) => !parto || e.occurredOn >= parto;
+    const lastService = latest(events.filter(since), "servicio");
+    const dx = events
+      .filter((e) => e.type === "dx" && since(e))
+      .sort((a, b) => (a.occurredOn < b.occurredOn ? 1 : -1))[0];
+    const aborto = latest(events.filter(since), "aborto");
+    const pregnant =
+      dx?.type === "dx" && dx.data.result === "Preñada" && (!aborto || aborto < dx.occurredOn);
+    if (event.type === "servicio" && pregnant) return `${tag} figura preñada.`;
+    if (event.type === "dx" && !lastService) {
+      return `${tag} no tiene un servicio registrado desde su último parto.`;
+    }
+  }
+  if (event.type === "peso" && event.kg) {
+    const { last } = weightSummary(events);
+    if (last) {
+      const change = Math.abs(event.kg - last.kg) / last.kg;
+      const days = Math.abs(daysBetween(last.date, event.occurredOn));
+      if (change > 0.3 && days < 90) {
+        return `${tag} pesaba ${last.kg} kilos hace ${days} días: es un cambio muy grande.`;
+      }
+    }
+  }
+  return null;
 }

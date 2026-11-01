@@ -973,10 +973,10 @@ export function ReproduccionScreen() {
       {cfg && form && (
         <FormDialog
           open
-          voiceContext={herd.voiceContext}
           title={cfg.title}
           sub={cfg.sub}
           fields={cfg.fields}
+          voiceReview={(v) => herd.review(form, v.tag ?? "", v.fecha ?? iso(today()))}
           preview={(v) => previewFor(form, v, speciesOf)}
           onSubmit={save}
           onClose={() => setForm(null)}

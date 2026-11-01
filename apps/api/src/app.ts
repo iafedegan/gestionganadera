@@ -1,14 +1,7 @@
 import { existsSync } from "node:fs";
-import Anthropic from "@anthropic-ai/sdk";
 import cookie from "@fastify/cookie";
 import fastifyStatic from "@fastify/static";
-import {
-  FarmCreate,
-  FarmUpdate,
-  LoginRequest,
-  PushRequest,
-  VoiceInterpretRequest,
-} from "@ganaderia/contracts";
+import { FarmCreate, FarmUpdate, LoginRequest, PushRequest } from "@ganaderia/contracts";
 import Fastify, { type FastifyInstance, type FastifyReply, type FastifyRequest } from "fastify";
 import { z } from "zod";
 import { verifyAuditChain } from "./audit.js";
@@ -23,13 +16,7 @@ import {
   toSessionDto,
 } from "./auth.js";
 import type { Db } from "./db.js";
-import { createFarm, listFarms, pull, push, todayIn, updateFarm } from "./sync.js";
-import {
-  type VoiceInterpreter,
-  VoiceThrottle,
-  createClaudeInterpreter,
-  sanitizeInterpretation,
-} from "./voice.js";
+import { createFarm, listFarms, pull, push, updateFarm } from "./sync.js";
 
 const COOKIE = "sid";
 
@@ -48,8 +35,6 @@ export interface AppOptions {
   landingDir?: string;
   /** Carpeta compilada de la PWA; se sirve en «/app/». */
   appDir?: string;
-  /** Intérprete de voz; por defecto Claude si hay credencial. Las pruebas inyectan uno propio. */
-  voiceInterpreter?: VoiceInterpreter | null;
 }
 
 /** Caché de estáticos: los archivos con huella son inmutables; el resto siempre se revalida. */
@@ -65,9 +50,6 @@ export async function buildApp(opts: AppOptions): Promise<FastifyInstance> {
     bodyLimit: 1_000_000,
   });
   const throttle = new LoginThrottle();
-  const voiceInterpreter =
-    opts.voiceInterpreter === undefined ? createClaudeInterpreter() : opts.voiceInterpreter;
-  const voiceThrottle = new VoiceThrottle();
   await app.register(cookie);
 
   app.addHook("onSend", async (req, reply) => {
@@ -158,46 +140,6 @@ export async function buildApp(opts: AppOptions): Promise<FastifyInstance> {
       return reply.code(404).send({ error: "SIN_UBICACION", message: "Ubicación no disponible." });
     }
     return { lat, lng };
-  });
-
-  // Sin intérprete o si falla, responde 503 y el dispositivo sigue con sus reglas locales.
-  app.post("/v1/voice/interpret", { preHandler: requireSession }, async (req, reply) => {
-    const body = VoiceInterpretRequest.safeParse(req.body);
-    const a = req.auth as NonNullable<FastifyRequest["auth"]>;
-    if (!body.success)
-      return reply.code(400).send({ error: "VALIDACION", message: body.error.issues[0]?.message });
-    if (!a.memberships.some((m) => m.organizationId === body.data.organizationId)) {
-      return reply
-        .code(403)
-        .send({ error: "PERMISO_DENEGADO", message: "Sin acceso a la organización." });
-    }
-    const unavailable = () =>
-      reply
-        .code(503)
-        .send({ error: "VOZ_NO_DISPONIBLE", message: "El asistente de voz no está disponible." });
-    // 424 y no 503: el cliente trata los 5xx como falta de conexión y aquí debe saber la causa.
-    if (!voiceInterpreter) {
-      return reply
-        .code(424)
-        .send({ error: "VOZ_SIN_CLAVE", message: "Falta configurar el asistente de voz." });
-    }
-    if (!voiceThrottle.allow(a.user.id)) {
-      return reply
-        .code(429)
-        .send({ error: "DEMASIADAS_PETICIONES", message: "Espere un momento e intente de nuevo." });
-    }
-    const today = todayIn();
-    try {
-      const raw = await voiceInterpreter(body.data, today);
-      const result = raw === null ? null : sanitizeInterpretation(body.data, raw, today);
-      return result ?? unavailable();
-    } catch (err) {
-      if (err instanceof Anthropic.RateLimitError) req.log.warn("voz: límite de la API");
-      else if (err instanceof Anthropic.APIError)
-        req.log.error({ status: err.status }, "voz: error de la API");
-      else req.log.error(err, "voz: fallo al interpretar");
-      return unavailable();
-    }
   });
 
   app.get("/v1/farms", { preHandler: requireSession }, async (req, reply) => {

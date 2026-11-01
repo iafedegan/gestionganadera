@@ -473,44 +473,6 @@ export type FarmCreate = z.input<typeof FarmCreate>;
 export const FarmUpdate = z.object({ organizationId: uuid, ...farmFields }).superRefine(checkFarm);
 export type FarmUpdate = z.input<typeof FarmUpdate>;
 
-/* ───────────── Interpretación de lo dictado por voz ───────────── */
-
-export const VoiceInterpretRequest = z.object({
-  organizationId: uuid,
-  formTitle: z.string().max(200),
-  fields: z
-    .array(
-      z.object({
-        name: z.string().max(80),
-        label: z.string().max(200),
-        type: z.enum(["text", "tag", "number", "date", "select", "textarea"]),
-        required: z.boolean(),
-        value: z.string().max(500),
-        choices: z
-          .array(z.object({ value: z.string().max(120), label: z.string().max(200) }))
-          .max(5000)
-          .optional(),
-      }),
-    )
-    .min(1)
-    .max(60),
-  /** Datos de la finca que ayudan a razonar: animales, estado, retiros. */
-  context: z.string().max(40_000),
-  current: z.string().max(80).optional(),
-  history: z
-    .array(z.object({ role: z.enum(["app", "usuario"]), text: z.string().max(800) }))
-    .max(30),
-  /** Alternativas del reconocedor para la misma frase, de la más a la menos probable. */
-  alternatives: z.array(z.string().max(800)).min(1).max(5),
-});
-export type VoiceInterpretRequest = z.infer<typeof VoiceInterpretRequest>;
-
-export interface VoiceInterpretResponse {
-  values: Record<string, string>;
-  question: string | null;
-  action: "continuar" | "guardar" | "detener";
-}
-
 /** Códigos de error de dominio (estables; la interfaz los traduce). */
 export const ErrorCodes = {
   TAG_DUPLICADO: "TAG_DUPLICADO",

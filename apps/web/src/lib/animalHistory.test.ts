@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { activeWithdrawals, milkSummary, weightSummary } from "./animalHistory";
+import { activeWithdrawals, milkSummary, reviewAnimalEvent, weightSummary } from "./animalHistory";
 
 type Dated = Parameters<typeof milkSummary>[0][number];
 
@@ -89,5 +89,46 @@ describe("peso", () => {
       weightSummary([peso("2026-01-01", 100), peso("2026-01-01", 102)]).averageGainG,
     ).toBeNull();
     expect(weightSummary([peso("2026-01-01", 100)]).averageGainG).toBeNull();
+  });
+});
+
+describe("revisión antes de anotar", () => {
+  const TODAY = "2026-10-30";
+  const check = (type: string, events: Dated[], occurredOn = TODAY, kg?: number) =>
+    reviewAnimalEvent({ type, occurredOn, ...(kg ? { kg } : {}) }, "VACA-1", events, TODAY);
+  const secado = (occurredOn: string): Dated => ({ type: "secado", occurredOn, data: {} });
+  const servicio = (occurredOn: string): Dated => ({
+    type: "servicio",
+    occurredOn,
+    data: { via: "IA", sire: "HOL-1" },
+  });
+  const dx = (occurredOn: string): Dated => ({
+    type: "dx",
+    occurredOn,
+    data: { result: "Preñada", method: "Ecografía" },
+  });
+
+  it("avisa leche en retiro o de una vaca seca", () => {
+    expect(check("leche", [salud("2026-10-28", 7, 0)])).toContain("retiro de leche");
+    expect(check("leche", [parto("2026-01-01"), secado("2026-09-01")])).toContain("seca");
+    expect(check("leche", [parto("2026-09-20"), secado("2026-01-01")])).toBeNull();
+    expect(check("leche", [])).toBeNull();
+  });
+
+  it("avisa secado repetido, parto muy seguido y servicio a una preñada", () => {
+    expect(check("secado", [secado("2026-10-01")])).toContain("ya figura seca");
+    expect(check("parto", [parto("2026-08-01")])).toContain("parió hace solo");
+    expect(check("parto", [parto("2025-08-01")])).toBeNull();
+    const prenada = [parto("2026-01-01"), servicio("2026-04-01"), dx("2026-05-15")];
+    expect(check("servicio", prenada)).toContain("preñada");
+    expect(check("servicio", [parto("2026-01-01")])).toBeNull();
+  });
+
+  it("avisa diagnóstico sin servicio y cambios de peso imposibles", () => {
+    expect(check("dx", [parto("2026-01-01")])).toContain("no tiene un servicio");
+    expect(check("dx", [parto("2026-01-01"), servicio("2026-08-01")])).toBeNull();
+    expect(check("peso", [peso("2026-10-01", 350)], TODAY, 35)).toContain("350 kilos");
+    expect(check("peso", [peso("2026-10-01", 350)], TODAY, 360)).toBeNull();
+    expect(check("peso", [peso("2024-01-01", 100)], TODAY, 400)).toBeNull();
   });
 });

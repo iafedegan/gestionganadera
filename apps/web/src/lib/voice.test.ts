@@ -199,7 +199,8 @@ describe("varios datos en una sola frase", () => {
   it("tolera errores del reconocedor en palabras, nunca en cifras", () => {
     expect(x("baca cero uno").values.tag).toBe("VACA-01");
     expect(x("en la mañanas").values.turno).toBe("Mañana");
-    expect(x("vaca cero dos").values.tag).toBeUndefined();
+    // Esa vaca no existe: no se anota en otro animal ni el número se toma como litros.
+    expect(x("vaca cero dos").values).toEqual({});
   });
 
   it("no inventa datos con ruido", () => {
@@ -320,5 +321,127 @@ describe("valores raros", () => {
     expect(sanityDoubt(peso, "5000")).toContain("5000 kilos");
     expect(sanityDoubt(peso, "350")).toBeNull();
     expect(sanityDoubt({ name: "o", label: "Notas", type: "text" }, "180")).toBeNull();
+  });
+});
+
+describe("vocabulario del campo", () => {
+  const pick = (labels: string[], said: string) => matchChoice(opts(...labels), said)?.value;
+
+  it("entiende cómo se dice cada opción", () => {
+    expect(pick(["Preñada", "Vacía", "Dudosa"], "quedó cargada")).toBe("Preñada");
+    expect(pick(["Preñada", "Vacía", "Dudosa"], "no quedó")).toBe("Vacía");
+    expect(pick(["Ecografía", "Palpación rectal"], "por tacto")).toBe("Palpación rectal");
+    expect(pick(["IA", "Monta"], "fue inseminada")).toBe("IA");
+    expect(pick(["Normal", "Asistido", "Distocia (cesárea)"], "le hicieron cesárea")).toBe(
+      "Distocia (cesárea)",
+    );
+    expect(pick(["Ternero", "Novilla", "Vaca"], "una becerra")).toBe("Ternero");
+    expect(pick(["Ternero", "Novilla", "Vaca"], "vaquilla")).toBe("Novilla");
+    expect(pick(["Vacunación", "Tratamiento", "Desparasitación"], "la purgué")).toBe(
+      "Desparasitación",
+    );
+    expect(pick(["Mañana", "Tarde"], "bien temprano")).toBe("Mañana");
+    expect(pick(["Báscula", "Cinta", "Estimado"], "a ojo")).toBe("Estimado");
+  });
+
+  it("encuentra un producto por la palabra que solo él tiene", () => {
+    const productos = ["Vacuna antiaftosa", "Vacuna rabia", "Ivermectina 1 %"];
+    expect(pick(productos, "aftosa")).toBe("Vacuna antiaftosa");
+    expect(pick(productos, "ivermectina")).toBe("Ivermectina 1 %");
+    expect(pick(productos, "vacuna")).toBeUndefined();
+  });
+
+  it("no adivina si la palabra no corresponde", () => {
+    expect(pick(["Mañana", "Tarde"], "por la noche")).toBeUndefined();
+    expect(pick(["Preñada", "Vacía"], "buenos días")).toBeUndefined();
+  });
+
+  it("llena varios campos con una sola palabra del campo", () => {
+    const f: VoiceField[] = [
+      { name: "cat", label: "Categoría", type: "select", choices: opts("Ternero", "Vaca") },
+      { name: "sexo", label: "Sexo", type: "select", choices: opts("Hembra", "Macho") },
+    ];
+    expect(extractAnswers(f, "una becerra", TODAY).values).toEqual({
+      cat: "Ternero",
+      sexo: "Hembra",
+    });
+  });
+
+  it("reconoce el animal por su número al hablar natural", () => {
+    const f: VoiceField[] = [
+      { name: "tag", label: "Animal", type: "select", choices: opts("VACA-15", "BOV-002") },
+      { name: "turno", label: "Turno", type: "select", choices: opts("Mañana", "Tarde") },
+      { name: "litros", label: "Litros", type: "number" },
+    ];
+    expect(extractAnswers(f, "la quince dio veinte litros en la tarde", TODAY).values).toEqual({
+      tag: "VACA-15",
+      turno: "Tarde",
+      litros: "20",
+    });
+    // Sin palabra de animal, el número es de los litros y no se confunde con el arete.
+    expect(extractAnswers(f, "quince", TODAY).values).toEqual({ litros: "15" });
+  });
+
+  it("identifica el animal por número aunque el formulario no pida cifras", () => {
+    const f: VoiceField[] = [
+      { name: "tag", label: "Hembra", type: "select", choices: opts("VACA-15", "BOV-002") },
+      { name: "fecha", label: "Fecha", type: "date" },
+    ];
+    expect(extractAnswers(f, "la quince, ayer", TODAY).values).toEqual({
+      tag: "VACA-15",
+      fecha: "2026-10-29",
+    });
+  });
+
+  it("limpia las muletillas al dictar", () => {
+    const tag: VoiceField = { name: "t", label: "T", type: "tag" };
+    const text: VoiceField = { name: "n", label: "Nombre", type: "text" };
+    expect(interpretAnswer(tag, "la número quince", TODAY)).toBe("15");
+    expect(interpretAnswer(text, "pues se llama el porvenir", TODAY)).toBe("Porvenir");
+    expect(interpretAnswer(text, "la", TODAY)).toBe("La");
+  });
+
+  it("entiende confirmaciones naturales", () => {
+    expect(detectConfirmation("así está bien")).toBe("si");
+    expect(detectConfirmation("hágale")).toBe("si");
+    expect(detectConfirmation("eso")).toBe("si");
+    expect(detectConfirmation("no")).toBe("no");
+  });
+});
+
+describe("respuestas de sanidad", () => {
+  const f: VoiceField[] = [
+    { name: "tipo", label: "Tipo", type: "select", choices: opts("Vacunación", "Desparasitación") },
+    { name: "tag", label: "Animal", type: "select", choices: opts("VACA-01", "BOV-002") },
+    {
+      name: "producto",
+      label: "Producto",
+      type: "select",
+      choices: opts("Ivermectina 1 %", "Albendazol 10 %"),
+    },
+    { name: "motivo", label: "Motivo o diagnóstico", type: "text" },
+    { name: "resp", label: "Responsable", type: "text" },
+  ];
+
+  it("saca el motivo de «por …» y separa cada dato", () => {
+    expect(
+      extractAnswers(
+        f,
+        "la purgué con ivermectina a la vaca cero uno por parásitos responsable juan",
+        TODAY,
+      ).values,
+    ).toEqual({
+      tipo: "Desparasitación",
+      tag: "VACA-01",
+      producto: "Ivermectina 1 %",
+      motivo: "Parasitos",
+      resp: "Juan",
+    });
+  });
+
+  it("no toma un sí o un no como contenido de un campo de texto", () => {
+    expect(interpretAnswer(f[3] as VoiceField, "sí", TODAY)).toBeNull();
+    expect(interpretAnswer(f[3] as VoiceField, "no", TODAY)).toBeNull();
+    expect(interpretAnswer(f[3] as VoiceField, "ciclo nacional", TODAY)).toBe("Ciclo nacional");
   });
 });
