@@ -1045,3 +1045,18 @@ h1 {
     height: 22px;
   }
 }
+
+.voice-tap {
+  flex: 1 1 100%;
+  min-height: 56px;
+  order: 3;
+}
+.voice-bar .voice-text {
+  order: 2;
+}
+
+.voice-tap {
+  flex: 1 1 100%;
+  min-height: 56px;
+  order: 3;
+}
