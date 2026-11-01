@@ -175,7 +175,12 @@ export async function buildApp(opts: AppOptions): Promise<FastifyInstance> {
       reply
         .code(503)
         .send({ error: "VOZ_NO_DISPONIBLE", message: "El asistente de voz no está disponible." });
-    if (!voiceInterpreter) return unavailable();
+    // 424 y no 503: el cliente trata los 5xx como falta de conexión y aquí debe saber la causa.
+    if (!voiceInterpreter) {
+      return reply
+        .code(424)
+        .send({ error: "VOZ_SIN_CLAVE", message: "Falta configurar el asistente de voz." });
+    }
     if (!voiceThrottle.allow(a.user.id)) {
       return reply
         .code(429)

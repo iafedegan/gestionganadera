@@ -951,3 +951,21 @@ tr.selected {
 .ph-icon svg {
   color: #fff;
 }
+
+/* En iPhone el campo de fecha tiene un ancho mínimo propio y se salía de la tarjeta. */
+input[type="date"] {
+  display: block;
+  -webkit-appearance: none;
+  appearance: none;
+  min-width: 0;
+  max-width: 100%;
+  width: 100%;
+  text-align: left;
+}
+input[type="date"]::-webkit-date-and-time-value {
+  min-height: 1.4em;
+  text-align: left;
+}
+label {
+  min-width: 0;
+}

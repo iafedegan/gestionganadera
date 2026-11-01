@@ -184,9 +184,15 @@ describe("POST /v1/voice/interpret", () => {
     expect((await send(app, await login(app), ORG_OTRA)).statusCode).toBe(403);
   });
 
-  it("responde 503 sin intérprete, si falla o si devuelve algo inválido", async () => {
+  it("distingue la clave sin configurar de un fallo del servicio", async () => {
+    const app = await start(null);
+    const res = await send(app, await login(app));
+    expect(res.statusCode).toBe(424);
+    expect(res.json().error).toBe("VOZ_SIN_CLAVE");
+  });
+
+  it("responde 503 si falla o si devuelve algo inválido", async () => {
     for (const interpreter of [
-      null,
       async () => {
         throw new Error("caído");
       },

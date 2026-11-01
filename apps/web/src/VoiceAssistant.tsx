@@ -1,7 +1,7 @@
 import { Mic, MicOff, Square, Volume2, VolumeX } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { todayLocal } from "./labels";
-import { api } from "./lib/api";
+import { ApiError, api } from "./lib/api";
 import {
   type VoiceField,
   detectCommand,
@@ -92,7 +92,8 @@ export function VoiceAssistant(props: {
 }) {
   const { orgId } = useApp();
   const [status, setStatus] = useState<Status>("idle");
-  const [basic, setBasic] = useState(false);
+  const [basic, setBasic] = useState<string | null>(null);
+  const noKey = useRef(false);
   const history = useRef<{ role: "app" | "usuario"; text: string }[]>([]);
   const doubted = useRef(new Set<string>());
   const [prompt, setPrompt] = useState("");
@@ -136,6 +137,8 @@ export function VoiceAssistant(props: {
 
   /** Pide al asistente que razone la frase. Devuelve null si hay que usar las reglas locales. */
   async function interpret(alts: string[], current?: VoiceField) {
+    // Sin clave la respuesta no va a cambiar: no se hace esperar a la persona en cada frase.
+    if (noKey.current) return null;
     const { fields, values, title, context } = latest.current;
     setStatus("thinking");
     const timeout = new Promise<null>((resolve) => setTimeout(() => resolve(null), INTERPRET_MS));
@@ -156,9 +159,18 @@ export function VoiceAssistant(props: {
         history: history.current,
         alternatives: alts.slice(0, 5),
       })
-      .catch(() => null);
+      .catch((err: unknown) => {
+        if (err instanceof ApiError && err.code === "VOZ_SIN_CLAVE") noKey.current = true;
+        return null;
+      });
     const result = await Promise.race([call, timeout]);
-    setBasic(result === null);
+    setBasic(
+      result
+        ? null
+        : noKey.current
+          ? "Asistente inteligente sin activar: falta configurar su clave. Uso las reglas básicas."
+          : "El asistente inteligente no respondió. Uso las reglas básicas en esta frase.",
+    );
     return result;
   }
 
@@ -579,7 +591,7 @@ export function VoiceAssistant(props: {
           ))}
         {status === "thinking" && <small className="voice-listening">Pensando…</small>}
         {heard && status !== "listening" && <small>Escuché: «{heard}»</small>}
-        {basic && <small>Sin asistente inteligente en este momento: uso las reglas básicas.</small>}
+        {basic && <small>{basic}</small>}
       </div>
     </div>
   );
