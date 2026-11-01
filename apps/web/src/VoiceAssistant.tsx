@@ -14,6 +14,7 @@ import {
   sanityDoubt,
   speakableValue,
 } from "./lib/voice";
+import { isIOS } from "./native";
 
 /**
  * Llena un formulario conversando. Se puede decir todo en una frase («vaca cero uno, en la tarde,
@@ -118,7 +119,107 @@ export function VoiceAssistant(props: {
     }, 0);
   }
 
+  /*
+   * iPhone: el micrófono solo enciende de forma fiable al tocar un botón, y hablar en voz alta
+   * interrumpe la escucha. Por eso se abre una sola vez, queda abierto toda la conversación y
+   * las preguntas van solo en pantalla. Cada frase se separa por la pausa al hablar.
+   */
+  const ios = useRef<{
+    on: boolean;
+    used: number;
+    waiter: ((h: Heard) => void) | null;
+    queued: Heard | null;
+    timer?: ReturnType<typeof setTimeout>;
+  }>({ on: false, used: 0, waiter: null, queued: null });
+
+  function iosDeliver(h: Heard) {
+    const st = ios.current;
+    if (st.waiter) {
+      const w = st.waiter;
+      st.waiter = null;
+      w(h);
+    } else st.queued = h;
+  }
+
+  function iosOpen() {
+    const Ctor = getRecognition();
+    const st = ios.current;
+    if (!Ctor || recognizer.current) return;
+    st.on = true;
+    st.used = 0;
+    const r = new Ctor();
+    recognizer.current = r;
+    r.lang = lang.current;
+    r.continuous = true;
+    r.interimResults = true;
+    r.maxAlternatives = 1;
+    r.onresult = (e) => {
+      // iOS puede repetir todo lo dicho en cada aviso: se toma solo lo nuevo.
+      let full = "";
+      let final = true;
+      for (let i = 0; i < e.results.length; i++) {
+        const res = e.results[i];
+        full += `${res?.[0]?.transcript ?? ""} `;
+        if (i === e.results.length - 1 && !res?.isFinal) final = false;
+      }
+      const fresh = full.slice(st.used).trim();
+      if (!fresh) return;
+      setLive(fresh);
+      clearTimeout(st.timer);
+      st.timer = setTimeout(
+        () => {
+          st.used = full.length;
+          setLive("");
+          iosDeliver({ alts: [fresh] });
+        },
+        final ? 150 : END_OF_PHRASE_MS,
+      );
+    };
+    r.onerror = (e) => {
+      if (e.error === "no-speech" || e.error === "aborted") return;
+      iosDeliver({ error: e.error });
+    };
+    r.onend = () => {
+      recognizer.current = null;
+      if (!st.on) return;
+      setTimeout(() => {
+        if (st.on && !recognizer.current) iosOpen();
+      }, 200);
+    };
+    try {
+      r.start();
+    } catch {
+      recognizer.current = null;
+      iosDeliver({ error: "audio-capture" });
+    }
+  }
+
+  function iosListen(): Promise<Heard> {
+    const st = ios.current;
+    setStatus("listening");
+    if (!recognizer.current) iosOpen();
+    if (st.queued) {
+      const q = st.queued;
+      st.queued = null;
+      return Promise.resolve(q);
+    }
+    return new Promise((resolve) => {
+      const limit = setTimeout(() => {
+        st.waiter = null;
+        resolve({ error: "no-speech" });
+      }, 20_000);
+      st.waiter = (h) => {
+        clearTimeout(limit);
+        resolve(h);
+      };
+    });
+  }
+
   function stopAudio() {
+    ios.current.on = false;
+    ios.current.waiter = null;
+    ios.current.queued = null;
+    clearTimeout(ios.current.timer);
     recognizer.current?.abort();
     recognizer.current = null;
     if ("speechSynthesis" in window) window.speechSynthesis.cancel();
@@ -159,7 +260,7 @@ export function VoiceAssistant(props: {
 
   function speak(text: string): Promise<void> {
     setPrompt(text);
-    if (silentRef.current || !("speechSynthesis" in window)) return Promise.resolve();
+    if (isIOS() || silentRef.current || !("speechSynthesis" in window)) return Promise.resolve();
     setStatus("speaking");
     return new Promise((resolve) => {
       const u = new SpeechSynthesisUtterance(text);
@@ -186,6 +287,7 @@ export function VoiceAssistant(props: {
   function listen(id: number): Promise<Heard> {
     const Ctor = getRecognition();
     if (!Ctor) return Promise.resolve({ error: "not-supported" });
+    if (isIOS()) return iosListen();
     setStatus("listening");
     setLive("");
     listenTries.current++;
@@ -433,6 +535,8 @@ export function VoiceAssistant(props: {
     stopAudio();
     const id = ++session.current;
     setHeard("");
+    // Debe ocurrir aquí, dentro del toque de la persona.
+    if (isIOS()) iosOpen();
     if (status !== "paused") {
       answered.current = new Set();
       doubted.current = new Set();
@@ -495,20 +599,22 @@ export function VoiceAssistant(props: {
           {status === "paused" ? "Seguir por voz" : "Llenar por voz"}
         </button>
       )}
-      <button
-        type="button"
-        className="icon-btn voice-sound"
-        aria-pressed={!silent}
-        aria-label={silent ? "Activar preguntas en voz alta" : "Silenciar preguntas"}
-        title={silent ? "Preguntas solo en pantalla" : "Preguntas en voz alta"}
-        onClick={toggleSilent}
-      >
-        {silent ? (
-          <VolumeX size={18} aria-hidden="true" />
-        ) : (
-          <Volume2 size={18} aria-hidden="true" />
-        )}
-      </button>
+      {!isIOS() && (
+        <button
+          type="button"
+          className="icon-btn voice-sound"
+          aria-pressed={!silent}
+          aria-label={silent ? "Activar preguntas en voz alta" : "Silenciar preguntas"}
+          title={silent ? "Preguntas solo en pantalla" : "Preguntas en voz alta"}
+          onClick={toggleSilent}
+        >
+          {silent ? (
+            <VolumeX size={18} aria-hidden="true" />
+          ) : (
+            <Volume2 size={18} aria-hidden="true" />
+          )}
+        </button>
+      )}
       <div className="voice-text" aria-live="polite">
         {status === "idle" && !prompt && (
           <small>
