@@ -6390,3 +6390,219 @@ fieldset.voice-field {
     justify-content: center;
   }
 }
+
+/* ═════════ Registro por pasos, pensado para el celular ═════════ */
+.reg-flow {
+  gap: 0;
+}
+.reg-top {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 18px;
+}
+.reg-back {
+  width: 44px;
+  height: 44px;
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: 50%;
+  background: rgb(15 61 46 / 0.07);
+  color: var(--verde-botella);
+  cursor: pointer;
+}
+.reg-progress {
+  flex: 1;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+}
+.reg-progress span {
+  height: 6px;
+  border-radius: 99px;
+  background: rgb(15 61 46 / 0.12);
+  transition: background 300ms ease;
+}
+.reg-progress span.on {
+  background: var(--verde-botella);
+}
+.reg-count {
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: var(--texto-suave);
+  min-width: 28px;
+  text-align: right;
+}
+.reg-body {
+  display: grid;
+  gap: 14px;
+  animation: regIn 320ms cubic-bezier(0.32, 0.72, 0, 1) both;
+}
+.reg-body h1 {
+  margin: 0;
+}
+.reg-body .lc-sub {
+  margin: -6px 0 4px;
+}
+@keyframes regIn {
+  from {
+    opacity: 0;
+    transform: translateX(24px);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .reg-body {
+    animation: none;
+  }
+}
+.reg-cta {
+  display: grid;
+  gap: 12px;
+  margin-top: 20px;
+}
+.reg-cta .btn-primary:disabled {
+  opacity: 0.45;
+}
+.pw-meter {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 4px;
+  margin-top: -4px;
+}
+.pw-meter span {
+  height: 5px;
+  border-radius: 99px;
+  background: rgb(0 0 0 / 0.08);
+}
+.pw-meter.l1 span:nth-child(-n + 1) {
+  background: #c0392b;
+}
+.pw-meter.l2 span:nth-child(-n + 2) {
+  background: #c98a12;
+}
+.pw-meter.l3 span:nth-child(-n + 3) {
+  background: #2e9e5b;
+}
+.pw-meter.l4 span {
+  background: #1f7a4d;
+}
+.pw-checks .pw-level {
+  margin-left: auto;
+  font-weight: 700;
+}
+.pw-checks:has(.pw-level) {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+}
+.consent {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  width: 100%;
+  padding: 14px;
+  border-radius: 14px;
+  border: 1px solid rgb(0 0 0 / 0.12);
+  background: #fbfbf8;
+  font: inherit;
+  font-size: 0.88rem;
+  line-height: 1.4;
+  text-align: left;
+  color: var(--texto);
+  cursor: pointer;
+}
+.consent.on {
+  border-color: var(--verde-botella);
+  background: #eef6f0;
+}
+.consent-box {
+  width: 24px;
+  height: 24px;
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  border-radius: 7px;
+  border: 2px solid rgb(0 0 0 / 0.25);
+  background: #fff;
+  color: #fff;
+}
+.consent.on .consent-box {
+  background: var(--verde-botella);
+  border-color: var(--verde-botella);
+}
+
+@media (max-width: 900px) {
+  /* En el celular el registro ocupa toda la pantalla: sin ilustración ni tarjeta. */
+  .login.is-register {
+    display: block;
+    min-height: 100dvh;
+    background: var(--superficie);
+  }
+  .login.is-register .login-hero,
+  .login.is-register .install-nudge,
+  .login.is-register .login-install {
+    display: none;
+  }
+  .login.is-register .login-panel {
+    padding: 0;
+    min-height: 100dvh;
+    display: block;
+    background: var(--superficie);
+  }
+  .login.is-register .reg-flow {
+    min-height: 100dvh;
+    display: flex;
+    flex-direction: column;
+    margin: 0;
+    padding: calc(12px + env(safe-area-inset-top)) 20px 0;
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+    background: var(--superficie);
+    width: 100%;
+    max-width: none;
+  }
+  .login.is-register .reg-flow::before {
+    display: none;
+  }
+  .login.is-register .reg-body {
+    flex: 1;
+    align-content: start;
+    padding-bottom: 16px;
+  }
+  .login.is-register .reg-body h1 {
+    font-size: 1.9rem;
+    line-height: 1.15;
+  }
+  /* Campos grandes y texto de 17 px: el iPhone no hace zoom al escribir. */
+  .login.is-register .field-box {
+    min-height: 58px;
+    border-radius: 16px;
+  }
+  .login.is-register .field-box input {
+    font-size: 17px;
+  }
+  /* Botón fijo abajo, siempre visible, también con el teclado abierto. */
+  .login.is-register .reg-cta {
+    position: sticky;
+    bottom: 0;
+    margin: 0 -20px;
+    padding: 12px 20px calc(14px + env(safe-area-inset-bottom));
+    background: color-mix(in srgb, var(--superficie) 92%, transparent);
+    backdrop-filter: blur(10px);
+    border-top: 1px solid var(--borde);
+  }
+  .login.is-register .reg-cta .btn {
+    min-height: 54px;
+    border-radius: 16px;
+    font-size: 1.05rem;
+  }
+}
+@media (max-width: 900px) {
+  .login.is-register .reg-body .lc-sub {
+    display: block;
+    font-size: 0.98rem;
+  }
+}

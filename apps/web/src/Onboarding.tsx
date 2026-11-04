@@ -13,36 +13,84 @@ import {
   Sprout,
   UserRound,
 } from "lucide-react";
-import { type FormEvent, useEffect, useState } from "react";
+import { type FormEvent, useEffect, useRef, useState } from "react";
 import { FarmDialog } from "./FarmForm";
 import { localdb } from "./lib/localdb";
 import { useApp } from "./state";
 
 /* ───────────── Registro de cuenta ───────────── */
 
+const REG_STEPS = 3;
+
+/** Fuerza de la contraseña: 0 a 4. Solo orienta; la regla real la valida el servidor. */
+function strength(p: string): number {
+  let s = 0;
+  if (p.length >= 8) s++;
+  if (p.length >= 12) s++;
+  if (/[A-Za-zÁÉÍÓÚáéíóúÑñ]/.test(p) && /\d/.test(p)) s++;
+  if (/[^A-Za-z0-9]/.test(p) || (/[a-z]/.test(p) && /[A-Z]/.test(p))) s++;
+  return s;
+}
+const STRENGTH = ["Muy débil", "Débil", "Aceptable", "Buena", "Excelente"];
+
+/**
+ * Registro en tres pantallas cortas, pensado para el celular: una pregunta a la vez,
+ * el teclado adecuado en cada campo y el botón siempre visible encima del teclado.
+ */
 export function RegisterForm({ onBack }: { onBack(): void }) {
   const { register } = useApp();
+  const [step, setStep] = useState(0);
   const [displayName, setDisplayName] = useState("");
-  const [email, setEmail] = useState("");
   const [organizationName, setOrganizationName] = useState("");
+  const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [confirm, setConfirm] = useState("");
-  const [accept, setAccept] = useState(false);
   const [showPw, setShowPw] = useState(false);
+  const [accept, setAccept] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const first = useRef<HTMLInputElement>(null);
+  const org = useRef<HTMLInputElement>(null);
 
-  const checks = [
-    { ok: password.length >= 8, label: "Al menos 8 caracteres" },
-    { ok: /[A-Za-zÁÉÍÓÚáéíóúÑñ]/.test(password) && /\d/.test(password), label: "Letras y números" },
-    { ok: password.length > 0 && password === confirm, label: "Las dos contraseñas coinciden" },
-  ];
-
-  async function submit(e: FormEvent) {
-    e.preventDefault();
+  // Cada pantalla abre con el cursor en su primer campo.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: se enfoca al cambiar de paso
+  useEffect(() => {
     setError(null);
-    if (!checks.every((c) => c.ok)) {
-      setError("Revise la contraseña: debe cumplir las tres condiciones.");
+    const t = setTimeout(() => first.current?.focus({ preventScroll: true }), 250);
+    return () => clearTimeout(t);
+  }, [step]);
+
+  const emailOk = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email.trim());
+  const pwRules = [
+    { ok: password.length >= 8, label: "8 caracteres o más" },
+    { ok: /[A-Za-zÁÉÍÓÚáéíóúÑñ]/.test(password) && /\d/.test(password), label: "Letras y números" },
+  ];
+  const pwOk = pwRules.every((r) => r.ok);
+  const ready = [
+    displayName.trim().length >= 2 && organizationName.trim().length >= 2,
+    emailOk,
+    pwOk && accept,
+  ][step];
+  // Mientras escribe, el medidor siempre muestra al menos una barra (en rojo).
+  const level = password ? Math.max(1, strength(password)) : 0;
+
+  async function next(e?: FormEvent) {
+    e?.preventDefault();
+    if (step === 0 && !ready) {
+      setError(
+        displayName.trim().length < 2 ? "Escriba su nombre." : "Escriba el nombre de la ganadería.",
+      );
+      return;
+    }
+    if (step === 1 && !emailOk) {
+      setError("Revise el correo: debe quedar como usted@correo.com");
+      return;
+    }
+    if (step < REG_STEPS - 1) {
+      setStep((s) => s + 1);
+      return;
+    }
+    if (!pwOk) {
+      setError("La contraseña necesita 8 caracteres o más, con letras y números.");
       return;
     }
     if (!accept) {
@@ -51,142 +99,221 @@ export function RegisterForm({ onBack }: { onBack(): void }) {
     }
     setBusy(true);
     const res = await register({
-      displayName,
-      email,
+      displayName: displayName.trim(),
+      email: email.trim(),
       password,
-      organizationName,
+      organizationName: organizationName.trim(),
       acceptTerms: true,
     });
-    if (!res.ok) setError(res.message);
+    if (!res.ok) {
+      setError(res.message);
+      // Si el correo ya existe, se vuelve a la pantalla del correo.
+      if (/correo/i.test(res.message)) setStep(1);
+    }
     setBusy(false);
   }
 
+  const back = () => (step === 0 ? onBack() : setStep((s) => s - 1));
+
   return (
-    <form className="login-card" onSubmit={(e) => void submit(e)} aria-labelledby="reg-title">
-      <header className="lc-head">
-        <p className="kicker">Cree su cuenta gratis</p>
-        <h1 id="reg-title">Registre su ganadería</h1>
-        <p className="lc-sub">
-          En dos minutos queda lista. Después le haremos unas preguntas para configurarla.
-        </p>
-      </header>
+    <form
+      className="login-card reg-flow"
+      onSubmit={(e) => void next(e)}
+      aria-labelledby="reg-title"
+      noValidate
+    >
+      <div className="reg-top">
+        <button
+          type="button"
+          className="reg-back"
+          onClick={back}
+          aria-label={step === 0 ? "Volver al ingreso" : "Paso anterior"}
+        >
+          <ArrowLeft size={22} aria-hidden="true" />
+        </button>
+        <div className="reg-progress" aria-hidden="true">
+          {Array.from({ length: REG_STEPS }, (_, i) => (
+            // biome-ignore lint/suspicious/noArrayIndexKey: segmentos fijos de la barra
+            <span key={i} className={i <= step ? "on" : ""} />
+          ))}
+        </div>
+        <span className="reg-count" aria-label={`Paso ${step + 1} de ${REG_STEPS}`}>
+          {step + 1}/{REG_STEPS}
+        </span>
+      </div>
 
-      <label className="field">
-        <span className="field-label">Su nombre</span>
-        <span className="field-box">
-          <UserRound size={18} aria-hidden="true" />
-          <input
-            required
-            autoComplete="name"
-            value={displayName}
-            onChange={(e) => setDisplayName(e.target.value)}
-            placeholder="Nombre y apellido"
-          />
-        </span>
-      </label>
-      <label className="field">
-        <span className="field-label">Correo electrónico</span>
-        <span className="field-box">
-          <Mail size={18} aria-hidden="true" />
-          <input
-            required
-            type="email"
-            autoComplete="email"
-            inputMode="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            placeholder="usted@correo.com"
-          />
-        </span>
-      </label>
-      <label className="field">
-        <span className="field-label">Nombre de la ganadería o empresa</span>
-        <span className="field-box">
-          <Building2 size={18} aria-hidden="true" />
-          <input
-            required
-            autoComplete="organization"
-            value={organizationName}
-            onChange={(e) => setOrganizationName(e.target.value)}
-            placeholder="Ej. Hacienda La Esperanza"
-          />
-        </span>
-      </label>
-      <label className="field">
-        <span className="field-label">Contraseña</span>
-        <span className="field-box">
-          <Lock size={18} aria-hidden="true" />
-          <input
-            required
-            type={showPw ? "text" : "password"}
-            autoComplete="new-password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            placeholder="Mínimo 8, con letras y números"
-          />
-          <button
-            type="button"
-            className="pw-toggle"
-            aria-label={showPw ? "Ocultar contraseña" : "Mostrar contraseña"}
-            onClick={() => setShowPw((v) => !v)}
-          >
-            {showPw ? <EyeOff size={18} /> : <Eye size={18} />}
-          </button>
-        </span>
-      </label>
-      <label className="field">
-        <span className="field-label">Repita la contraseña</span>
-        <span className="field-box">
-          <Lock size={18} aria-hidden="true" />
-          <input
-            required
-            type={showPw ? "text" : "password"}
-            autoComplete="new-password"
-            value={confirm}
-            onChange={(e) => setConfirm(e.target.value)}
-          />
-        </span>
-      </label>
-      <ul className="pw-checks" aria-live="polite">
-        {checks.map((c) => (
-          <li key={c.label} className={c.ok ? "ok" : ""}>
-            <Check size={14} aria-hidden="true" /> {c.label}
-          </li>
-        ))}
-      </ul>
-      <p className="lc-note">
-        <Lock size={18} aria-hidden="true" />
-        <span>
-          Sus datos de la finca son suyos. La copia del celular se guarda cifrada con su contraseña:
-          si la olvida sin conexión, no hay forma de recuperarla.
-        </span>
-      </p>
-      <label className="check-row">
-        <input type="checkbox" checked={accept} onChange={(e) => setAccept(e.target.checked)} />
-        <span>
-          Acepto el tratamiento de mis datos personales para operar el sistema (Ley 1581 de 2012).
-        </span>
-      </label>
-
-      {error && (
-        <p role="alert" className="login-alert">
-          {error}
-        </p>
-      )}
-      <button type="submit" className="btn btn-primary btn-block btn-xl" disabled={busy}>
-        {busy ? (
+      <div className="reg-body" key={step}>
+        {step === 0 && (
           <>
-            <RefreshCw size={18} className="spin" aria-hidden="true" /> Creando la cuenta…
-          </>
-        ) : (
-          <>
-            Crear cuenta <ArrowRight size={18} aria-hidden="true" className="arrow" />
+            <p className="kicker">Cree su cuenta gratis</p>
+            <h1 id="reg-title">¿Cómo se llama?</h1>
+            <p className="lc-sub">Y díganos el nombre de su ganadería o empresa.</p>
+            <label className="field">
+              <span className="field-label">Su nombre</span>
+              <span className="field-box">
+                <UserRound size={20} aria-hidden="true" />
+                <input
+                  ref={first}
+                  autoComplete="name"
+                  autoCapitalize="words"
+                  enterKeyHint="next"
+                  value={displayName}
+                  onChange={(e) => setDisplayName(e.target.value)}
+                  onKeyDown={(e) => {
+                    // «Siguiente» en el teclado pasa al campo de la ganadería.
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      org.current?.focus();
+                    }
+                  }}
+                  placeholder="Nombre y apellido"
+                />
+              </span>
+            </label>
+            <label className="field">
+              <span className="field-label">Ganadería o empresa</span>
+              <span className="field-box">
+                <Building2 size={20} aria-hidden="true" />
+                <input
+                  ref={org}
+                  autoComplete="organization"
+                  autoCapitalize="words"
+                  enterKeyHint="next"
+                  value={organizationName}
+                  onChange={(e) => setOrganizationName(e.target.value)}
+                  placeholder="Ej. Hacienda La Esperanza"
+                />
+              </span>
+            </label>
           </>
         )}
-      </button>
-      <button type="button" className="lc-back as-link" onClick={onBack}>
-        <ArrowLeft size={16} aria-hidden="true" /> Ya tengo cuenta: ingresar
-      </button>
+
+        {step === 1 && (
+          <>
+            <p className="kicker">Hola, {displayName.trim().split(" ")[0]}</p>
+            <h1 id="reg-title">¿Cuál es su correo?</h1>
+            <p className="lc-sub">
+              Con él ingresará a la app desde cualquier celular o computador.
+            </p>
+            <label className="field">
+              <span className="field-label">Correo electrónico</span>
+              <span className="field-box">
+                <Mail size={20} aria-hidden="true" />
+                <input
+                  ref={first}
+                  type="email"
+                  inputMode="email"
+                  autoComplete="email"
+                  autoCapitalize="none"
+                  autoCorrect="off"
+                  spellCheck={false}
+                  enterKeyHint="next"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="usted@correo.com"
+                  aria-invalid={error ? true : undefined}
+                />
+              </span>
+            </label>
+          </>
+        )}
+
+        {step === 2 && (
+          <>
+            <p className="kicker">Último paso</p>
+            <h1 id="reg-title">Cree su contraseña</h1>
+            <p className="lc-sub">También protege la copia cifrada de sus datos en este celular.</p>
+            <label className="field">
+              <span className="field-label">Contraseña</span>
+              <span className="field-box">
+                <Lock size={20} aria-hidden="true" />
+                <input
+                  ref={first}
+                  type={showPw ? "text" : "password"}
+                  autoComplete="new-password"
+                  autoCapitalize="none"
+                  autoCorrect="off"
+                  spellCheck={false}
+                  enterKeyHint="done"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="8 o más, con letras y números"
+                />
+                <button
+                  type="button"
+                  className="pw-toggle"
+                  aria-label={showPw ? "Ocultar contraseña" : "Mostrar contraseña"}
+                  aria-pressed={showPw}
+                  onClick={() => setShowPw((v) => !v)}
+                >
+                  {showPw ? <EyeOff size={20} /> : <Eye size={20} />}
+                </button>
+              </span>
+            </label>
+            <div className={`pw-meter l${level}`} aria-hidden="true">
+              <span />
+              <span />
+              <span />
+              <span />
+            </div>
+            <ul className="pw-checks" aria-live="polite">
+              {pwRules.map((c) => (
+                <li key={c.label} className={c.ok ? "ok" : ""}>
+                  <Check size={14} aria-hidden="true" /> {c.label}
+                </li>
+              ))}
+              {password && <li className="pw-level">{STRENGTH[level]}</li>}
+            </ul>
+            <button
+              type="button"
+              className={accept ? "consent on" : "consent"}
+              aria-pressed={accept}
+              onClick={() => setAccept((v) => !v)}
+            >
+              <span className="consent-box">
+                {accept && <Check size={16} aria-hidden="true" />}
+              </span>
+              <span>
+                Acepto el tratamiento de mis datos personales para operar el sistema (Ley 1581 de
+                2012).
+              </span>
+            </button>
+          </>
+        )}
+
+        {error && (
+          <p role="alert" className="login-alert">
+            {error}
+          </p>
+        )}
+      </div>
+
+      <div className="reg-cta">
+        <button
+          type="submit"
+          className="btn btn-primary btn-block btn-xl"
+          disabled={busy || !ready}
+        >
+          {busy ? (
+            <>
+              <RefreshCw size={18} className="spin" aria-hidden="true" /> Creando la cuenta…
+            </>
+          ) : step < REG_STEPS - 1 ? (
+            <>
+              Siguiente <ArrowRight size={18} aria-hidden="true" className="arrow" />
+            </>
+          ) : (
+            <>
+              Crear mi cuenta <ArrowRight size={18} aria-hidden="true" className="arrow" />
+            </>
+          )}
+        </button>
+        {step === 0 && (
+          <button type="button" className="lc-back as-link" onClick={onBack}>
+            Ya tengo cuenta: ingresar
+          </button>
+        )}
+      </div>
     </form>
   );
 }

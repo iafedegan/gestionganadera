@@ -109,7 +109,7 @@ export function Login() {
   }
 
   return (
-    <main className="login">
+    <main className={mode === "registro" ? "login is-register" : "login"}>
       {busy && (
         <output className="boot">
           <span className="brand-mark brand-big" aria-hidden="true" />
