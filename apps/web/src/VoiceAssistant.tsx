@@ -84,7 +84,17 @@ const readSilent = () => {
   }
 };
 
-export function VoiceAssistant(props: {
+/**
+ * Llenado por voz de los formularios. Está desactivado por decisión del producto: el botón
+ * «Llenar por voz» no aparece en ninguna pantalla. Para volver a mostrarlo, ponga `true`.
+ */
+export const VOICE_FORMS_ENABLED = false;
+
+export function VoiceAssistant(props: Parameters<typeof VoiceAssistantPanel>[0]) {
+  return VOICE_FORMS_ENABLED ? <VoiceAssistantPanel {...props} /> : null;
+}
+
+function VoiceAssistantPanel(props: {
   fields: VoiceField[];
   values: Record<string, string>;
   /** Puede devolver otros campos que el valor deja resueltos (categoría «vaca» → sexo). */
