@@ -377,6 +377,93 @@ export const LoginRequest = z.object({
 });
 export type LoginRequest = z.infer<typeof LoginRequest>;
 
+/** Contraseñas demasiado comunes que se rechazan siempre. */
+const COMMON_PASSWORDS = new Set([
+  "12345678",
+  "123456789",
+  "1234567890",
+  "password",
+  "contraseña",
+  "qwerty123",
+  "11111111",
+  "00000000",
+  "abcdefgh",
+  "ganaderia",
+  "finca123",
+  "colombia",
+]);
+
+/** Alta de una cuenta nueva: crea la organización con el usuario como propietario. */
+export const RegisterRequest = z.object({
+  displayName: z.string().trim().min(2).max(120),
+  email: z.string().trim().toLowerCase().email().max(200),
+  password: z
+    .string()
+    .min(8, "La contraseña debe tener al menos 8 caracteres.")
+    .max(200)
+    .refine((p) => !COMMON_PASSWORDS.has(p.toLowerCase()), "Esa contraseña es demasiado común.")
+    .refine((p) => /[A-Za-zÁÉÍÓÚáéíóúÑñ]/.test(p) && /\d/.test(p), "Use letras y números."),
+  organizationName: z.string().trim().min(2).max(120),
+  acceptTerms: z.literal(true),
+});
+export type RegisterRequest = z.infer<typeof RegisterRequest>;
+
+export const JobRole = z.enum([
+  "propietario",
+  "administrador",
+  "mayordomo",
+  "veterinario",
+  "zootecnista",
+  "asesor",
+  "otro",
+]);
+export type JobRole = z.infer<typeof JobRole>;
+
+export const OrgKind = z.enum(["persona_natural", "empresa", "asociacion", "cooperativa"]);
+export type OrgKind = z.infer<typeof OrgKind>;
+
+export const Goal = z.enum([
+  "reproduccion",
+  "leche",
+  "peso",
+  "sanidad",
+  "costos",
+  "trazabilidad",
+  "pasturas",
+  "personal",
+]);
+export type Goal = z.infer<typeof Goal>;
+
+const herdCount = z.number().int().min(0).max(100_000);
+/** Estimado inicial del hato por especie y categoría: orienta los tableros mientras se registra cada animal. */
+export const HerdEstimate = z
+  .object({
+    bovino: z
+      .object({ vacas: herdCount, novillas: herdCount, crias: herdCount, machos: herdCount })
+      .partial(),
+    bufalino: z
+      .object({ vacas: herdCount, novillas: herdCount, crias: herdCount, machos: herdCount })
+      .partial(),
+  })
+  .partial();
+export type HerdEstimate = z.infer<typeof HerdEstimate>;
+
+/** Respuestas del asistente inicial. Al guardarlas, la cuenta deja de estar pendiente de configurar. */
+export const OnboardingRequest = z.object({
+  organizationId: z.string().uuid(),
+  displayName: z.string().trim().min(2).max(120),
+  phone: z.string().trim().max(30).optional(),
+  jobRole: JobRole,
+  experienceYears: z.number().int().min(0).max(80).optional(),
+  orgKind: OrgKind,
+  taxId: z.string().trim().max(30).optional(),
+  department: z.string().trim().max(80).optional(),
+  municipality: z.string().trim().max(80).optional(),
+  goals: z.array(Goal).max(8).default([]),
+  herdEstimate: HerdEstimate.default({}),
+});
+export type OnboardingRequest = z.input<typeof OnboardingRequest>;
+
 export interface MembershipDto {
   organizationId: string;
   organizationName: string;
@@ -391,6 +478,8 @@ export interface SessionDto {
   memberships: MembershipDto[];
   /** Instante máximo hasta el cual se admite operar sin renovar en línea (72 h). */
   offlineLeaseUntil: string;
+  /** Cuenta recién creada que aún no completa el asistente inicial. */
+  onboardingPending?: boolean;
 }
 
 export const ProductionFocus = z.enum(["leche", "carne", "doble_proposito"]);
@@ -487,6 +576,7 @@ export const ErrorCodes = {
   INSUMO_NO_EXISTE: "INSUMO_NO_EXISTE",
   INSUMO_DUPLICADO: "INSUMO_DUPLICADO",
   MAPA_DESACTUALIZADO: "MAPA_DESACTUALIZADO",
+  CORREO_EN_USO: "CORREO_EN_USO",
   ANIMAL_NO_EXISTE: "ANIMAL_NO_EXISTE",
   ANIMAL_INACTIVO: "ANIMAL_INACTIVO",
   EVENTO_NO_APLICA: "EVENTO_NO_APLICA",

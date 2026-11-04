@@ -2,8 +2,10 @@ import type {
   FarmCreate,
   FarmDto,
   FarmUpdate,
+  OnboardingRequest,
   PullResponse,
   PushResponse,
+  RegisterRequest,
   SessionDto,
 } from "@ganaderia/contracts";
 
@@ -60,6 +62,8 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
 export const api = {
   login: (email: string, password: string) =>
     request<SessionDto>("POST", "/v1/auth/login", { email, password }),
+  register: (input: RegisterRequest) => request<SessionDto>("POST", "/v1/auth/register", input),
+  onboarding: (input: OnboardingRequest) => request<SessionDto>("POST", "/v1/onboarding", input),
   logout: () => request<{ ok: true }>("POST", "/v1/auth/logout"),
   me: () => request<SessionDto>("GET", "/v1/auth/me"),
   approxLocation: () => request<{ lat: number; lng: number }>("GET", "/v1/geo/approx"),

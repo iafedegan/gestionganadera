@@ -35,6 +35,7 @@ import {
   X,
 } from "lucide-react";
 import { type FormEvent, type ReactNode, useEffect, useState } from "react";
+import { RegisterForm } from "./Onboarding";
 import { Pasture } from "./Pasture";
 import { RegisterDialog, useFarms } from "./animals";
 import { art } from "./art";
@@ -75,6 +76,9 @@ function ModIcon({ k, size = 20 }: { k: ModuleKey; size?: number }) {
 
 export function Login() {
   const { login } = useApp();
+  const [mode, setMode] = useState<"ingreso" | "registro">(() =>
+    new URLSearchParams(window.location.search).get("registro") !== null ? "registro" : "ingreso",
+  );
   const [email, setEmail] = useState(lastEmail());
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -202,93 +206,104 @@ export function Login() {
           </div>
         )}
 
-        <form
-          className="login-card"
-          onSubmit={submit}
-          aria-labelledby="login-title"
-          noValidate={false}
-        >
-          <header className="lc-head">
-            <p className="kicker">Sistema Integral de Gestión Ganadera</p>
-            <h1 id="login-title">Ingrese a su finca</h1>
-            <p className="lc-sub">Use el correo y la contraseña de su cuenta.</p>
-          </header>
+        {mode === "registro" ? (
+          <RegisterForm onBack={() => setMode("ingreso")} />
+        ) : (
+          <form
+            className="login-card"
+            onSubmit={submit}
+            aria-labelledby="login-title"
+            noValidate={false}
+          >
+            <header className="lc-head">
+              <p className="kicker">Sistema Integral de Gestión Ganadera</p>
+              <h1 id="login-title">Ingrese a su finca</h1>
+              <p className="lc-sub">Use el correo y la contraseña de su cuenta.</p>
+            </header>
 
-          <label className="field">
-            <span className="field-label">Correo electrónico</span>
-            <span className="field-box">
-              <Mail size={19} aria-hidden="true" />
-              <input
-                type="email"
-                inputMode="email"
-                autoComplete="username"
-                autoCapitalize="none"
-                spellCheck={false}
-                required
-                placeholder="usuario@finca.co"
-                value={email}
-                aria-invalid={error ? true : undefined}
-                onChange={(e) => setEmail(e.target.value)}
-              />
-            </span>
-          </label>
+            <label className="field">
+              <span className="field-label">Correo electrónico</span>
+              <span className="field-box">
+                <Mail size={19} aria-hidden="true" />
+                <input
+                  type="email"
+                  inputMode="email"
+                  autoComplete="username"
+                  autoCapitalize="none"
+                  spellCheck={false}
+                  required
+                  placeholder="usuario@finca.co"
+                  value={email}
+                  aria-invalid={error ? true : undefined}
+                  onChange={(e) => setEmail(e.target.value)}
+                />
+              </span>
+            </label>
 
-          <label className="field">
-            <span className="field-label">Contraseña</span>
-            <span className="field-box">
-              <Lock size={19} aria-hidden="true" />
-              <input
-                type={showPw ? "text" : "password"}
-                autoComplete="current-password"
-                required
-                placeholder="Su contraseña"
-                value={password}
-                aria-invalid={error ? true : undefined}
-                onChange={(e) => setPassword(e.target.value)}
-              />
-              <button
-                type="button"
-                className="pw-toggle"
-                aria-label={showPw ? "Ocultar contraseña" : "Mostrar contraseña"}
-                aria-pressed={showPw}
-                onClick={() => setShowPw((v) => !v)}
-              >
-                {showPw ? <EyeOff size={20} /> : <Eye size={20} />}
-              </button>
-            </span>
-          </label>
+            <label className="field">
+              <span className="field-label">Contraseña</span>
+              <span className="field-box">
+                <Lock size={19} aria-hidden="true" />
+                <input
+                  type={showPw ? "text" : "password"}
+                  autoComplete="current-password"
+                  required
+                  placeholder="Su contraseña"
+                  value={password}
+                  aria-invalid={error ? true : undefined}
+                  onChange={(e) => setPassword(e.target.value)}
+                />
+                <button
+                  type="button"
+                  className="pw-toggle"
+                  aria-label={showPw ? "Ocultar contraseña" : "Mostrar contraseña"}
+                  aria-pressed={showPw}
+                  onClick={() => setShowPw((v) => !v)}
+                >
+                  {showPw ? <EyeOff size={20} /> : <Eye size={20} />}
+                </button>
+              </span>
+            </label>
 
-          {error && (
-            <p key={shake} role="alert" className="login-alert">
-              <AlertTriangle size={18} aria-hidden="true" />
-              <span>{error}</span>
-            </p>
-          )}
-
-          <button type="submit" className="btn btn-primary btn-block btn-xl" disabled={busy}>
-            {busy ? (
-              <>
-                <RefreshCw size={18} className="spin" aria-hidden="true" /> Verificando…
-              </>
-            ) : (
-              <>
-                Ingresar <ArrowRight size={18} aria-hidden="true" className="arrow" />
-              </>
+            {error && (
+              <p key={shake} role="alert" className="login-alert">
+                <AlertTriangle size={18} aria-hidden="true" />
+                <span>{error}</span>
+              </p>
             )}
-          </button>
 
-          <p className="lc-note">
-            <CloudOff size={18} aria-hidden="true" />
-            <span>
-              <strong>¿Sin señal?</strong> Puede ingresar con su contraseña hasta 72 horas después
-              de su último inicio de sesión en línea.
-            </span>
-          </p>
+            <button type="submit" className="btn btn-primary btn-block btn-xl" disabled={busy}>
+              {busy ? (
+                <>
+                  <RefreshCw size={18} className="spin" aria-hidden="true" /> Verificando…
+                </>
+              ) : (
+                <>
+                  Ingresar <ArrowRight size={18} aria-hidden="true" className="arrow" />
+                </>
+              )}
+            </button>
 
-          <a className="lc-back" href="/">
-            <ArrowLeft size={16} aria-hidden="true" /> Volver al sitio
-          </a>
-        </form>
+            <p className="lc-note">
+              <CloudOff size={18} aria-hidden="true" />
+              <span>
+                <strong>¿Sin señal?</strong> Puede ingresar con su contraseña hasta 72 horas después
+                de su último inicio de sesión en línea.
+              </span>
+            </p>
+
+            <p className="lc-signup">
+              ¿Aún no tiene cuenta?{" "}
+              <button type="button" className="as-link" onClick={() => setMode("registro")}>
+                Créela gratis
+              </button>
+            </p>
+
+            <a className="lc-back" href="/">
+              <ArrowLeft size={16} aria-hidden="true" /> Volver al sitio
+            </a>
+          </form>
+        )}
       </section>
     </main>
   );

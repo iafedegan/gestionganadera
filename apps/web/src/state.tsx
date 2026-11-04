@@ -1,4 +1,4 @@
-import type { Role, SessionDto } from "@ganaderia/contracts";
+import type { OnboardingRequest, RegisterRequest, Role, SessionDto } from "@ganaderia/contracts";
 import {
   type ReactNode,
   createContext,
@@ -52,6 +52,10 @@ interface AppState {
     email: string,
     password: string,
   ): Promise<{ ok: true; notice?: string } | { ok: false; message: string }>;
+  register(input: RegisterRequest): Promise<{ ok: true } | { ok: false; message: string }>;
+  completeOnboarding(
+    input: OnboardingRequest,
+  ): Promise<{ ok: true } | { ok: false; message: string }>;
   logout(): Promise<void>;
   syncNow(): Promise<SyncOutcome | null>;
   refresh(): Promise<void>;
@@ -224,6 +228,45 @@ export function AppProvider({ children }: { children: ReactNode }) {
     [enter],
   );
 
+  /** Crea la cuenta en el servidor y entra con ella, igual que un inicio de sesión. */
+  const register: AppState["register"] = useCallback(
+    async (input) => {
+      try {
+        const s = await api.register({ ...input, email: input.email.trim().toLowerCase() });
+        await enter(s, input.password);
+        setOnline(true);
+        return { ok: true as const };
+      } catch (err) {
+        if (err instanceof ApiError) return { ok: false as const, message: err.message };
+        if (err instanceof NetworkError)
+          return {
+            ok: false as const,
+            message: "Necesita conexión a internet para crear la cuenta.",
+          };
+        return {
+          ok: false as const,
+          message: err instanceof Error ? err.message : "Error inesperado.",
+        };
+      }
+    },
+    [enter],
+  );
+
+  const completeOnboarding: AppState["completeOnboarding"] = useCallback(async (input) => {
+    try {
+      const s = await api.onboarding(input);
+      saveSession(s);
+      setSession(s);
+      return { ok: true as const };
+    } catch (err) {
+      if (err instanceof ApiError) return { ok: false as const, message: err.message };
+      return {
+        ok: false as const,
+        message: "Sin conexión: termine la configuración cuando vuelva la señal.",
+      };
+    }
+  }, []);
+
   const logout = useCallback(async () => {
     await localdb.lock();
     api.logout().catch(() => undefined);
@@ -272,6 +315,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       counts,
       dataVersion,
       login,
+      register,
+      completeOnboarding,
       logout,
       syncNow,
       refresh,
@@ -291,6 +336,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       counts,
       dataVersion,
       login,
+      register,
+      completeOnboarding,
       logout,
       syncNow,
       refresh,

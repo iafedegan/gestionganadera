@@ -1,10 +1,18 @@
 import { existsSync } from "node:fs";
 import cookie from "@fastify/cookie";
 import fastifyStatic from "@fastify/static";
-import { FarmCreate, FarmUpdate, LoginRequest, PushRequest } from "@ganaderia/contracts";
+import {
+  ErrorCodes,
+  FarmCreate,
+  FarmUpdate,
+  LoginRequest,
+  OnboardingRequest,
+  PushRequest,
+  RegisterRequest,
+} from "@ganaderia/contracts";
 import Fastify, { type FastifyInstance, type FastifyReply, type FastifyRequest } from "fastify";
 import { z } from "zod";
-import { verifyAuditChain } from "./audit.js";
+import { appendAudit, verifyAuditChain } from "./audit.js";
 import {
   type AuthUser,
   LoginThrottle,
@@ -12,6 +20,7 @@ import {
   grants,
   login,
   logout,
+  register,
   resolveSession,
   toSessionDto,
 } from "./auth.js";
@@ -50,6 +59,7 @@ export async function buildApp(opts: AppOptions): Promise<FastifyInstance> {
     bodyLimit: 1_000_000,
   });
   const throttle = new LoginThrottle();
+  const registerThrottle = new LoginThrottle();
   await app.register(cookie);
 
   app.addHook("onSend", async (req, reply) => {
@@ -114,6 +124,94 @@ export async function buildApp(opts: AppOptions): Promise<FastifyInstance> {
       maxAge: 12 * 3600,
     });
     return toSessionDto(res.user, res.memberships);
+  });
+
+  // Registro público: limitado por IP para frenar altas masivas.
+  app.post("/v1/auth/register", async (req, reply) => {
+    const ipKey = `registro:${req.ip}`;
+    if (registerThrottle.isLocked(ipKey)) {
+      return reply.code(429).send({
+        error: "BLOQUEADO",
+        message: "Demasiados registros desde esta red. Intente más tarde.",
+      });
+    }
+    const body = RegisterRequest.safeParse(req.body);
+    if (!body.success) {
+      return reply.code(400).send({
+        error: "VALIDACION",
+        message: body.error.issues[0]?.message ?? "Datos inválidos.",
+      });
+    }
+    registerThrottle.fail(ipKey);
+    const res = await register(db, body.data, req.headers["user-agent"]);
+    if (!res.ok) {
+      return reply.code(409).send({
+        error: ErrorCodes.CORREO_EN_USO,
+        message: "Ya existe una cuenta con ese correo. Ingrese o use otro correo.",
+      });
+    }
+    reply.setCookie(COOKIE, res.token, {
+      httpOnly: true,
+      sameSite: "strict",
+      secure: opts.production ?? false,
+      path: "/",
+      maxAge: 12 * 3600,
+    });
+    return reply.code(201).send(toSessionDto(res.user, res.memberships));
+  });
+
+  app.post("/v1/onboarding", { preHandler: requireSession }, async (req, reply) => {
+    const a = req.auth as NonNullable<FastifyRequest["auth"]>;
+    const body = OnboardingRequest.safeParse(req.body);
+    if (!body.success) {
+      return reply.code(400).send({
+        error: "VALIDACION",
+        message: body.error.issues[0]?.message ?? "Datos inválidos.",
+      });
+    }
+    const b = body.data;
+    if (!grants(a.memberships, b.organizationId, "farm.write", null)) {
+      return reply.code(403).send({
+        error: "PERMISO_DENEGADO",
+        message: "Sin permiso para configurar esta organización.",
+      });
+    }
+    await db.admin(async (q) => {
+      await q(
+        `UPDATE app_user SET display_name = $2, phone = $3, job_role = $4, experience_years = $5,
+                onboarding_pending = false WHERE id = $1`,
+        [a.user.id, b.displayName, b.phone ?? null, b.jobRole, b.experienceYears ?? null],
+      );
+      await q(
+        `UPDATE organization SET kind = $2, tax_id = $3, department = $4, municipality = $5,
+                goals = $6, herd_estimate = $7 WHERE id = $1`,
+        [
+          b.organizationId,
+          b.orgKind,
+          b.taxId ?? null,
+          b.department ?? null,
+          b.municipality ?? null,
+          b.goals,
+          JSON.stringify(b.herdEstimate),
+        ],
+      );
+    });
+    await db.tenant(
+      b.organizationId,
+      (q) =>
+        appendAudit(q, b.organizationId, {
+          userId: a.user.id,
+          action: "onboarding.complete",
+          entity: "organization",
+          entityId: b.organizationId,
+          detail: { jobRole: b.jobRole, orgKind: b.orgKind, goals: b.goals },
+        }),
+      { write: true },
+    );
+    return toSessionDto(
+      { ...a.user, displayName: b.displayName, onboardingPending: false },
+      a.memberships,
+    );
   });
 
   app.post("/v1/auth/logout", async (req, reply) => {

@@ -952,3 +952,140 @@ describe("eventos del animal", () => {
     expect(await cost(await loginAs("tec-eventos@test.local"))).toBeNull();
   });
 });
+
+describe("registro de cuentas y asistente inicial", () => {
+  const reg = (extra: Record<string, unknown> = {}) =>
+    app.inject({
+      method: "POST",
+      url: "/v1/auth/register",
+      headers: H,
+      remoteAddress: `10.0.0.${Math.floor(Math.random() * 200) + 2}`,
+      payload: {
+        displayName: "Ana Ganadera",
+        email: `ana-${uuidv7()}@test.local`,
+        password: "ganado2026",
+        organizationName: "Hacienda Ana",
+        acceptTerms: true,
+        ...extra,
+      },
+    });
+
+  it("crea la cuenta con su organización, inicia sesión y queda pendiente del asistente", async () => {
+    const res = await reg();
+    expect(res.statusCode).toBe(201);
+    const s = res.json();
+    expect(s.onboardingPending).toBe(true);
+    expect(s.memberships[0]).toMatchObject({
+      role: "propietario",
+      organizationName: "Hacienda Ana",
+    });
+    const c = res.cookies.find((x) => x.name === "sid");
+    expect(c?.httpOnly).toBe(true);
+    // La sesión del registro sirve para seguir operando.
+    const me = await app.inject({
+      method: "GET",
+      url: "/v1/auth/me",
+      headers: { cookie: `sid=${c?.value}` },
+    });
+    expect(me.json().onboardingPending).toBe(true);
+  });
+
+  it("rechaza contraseñas cortas, comunes o sin números", async () => {
+    for (const password of ["abc12", "12345678", "soloLetras"]) {
+      const r = await reg({ password });
+      expect(r.statusCode).toBe(400);
+    }
+  });
+
+  it("exige aceptar las condiciones", async () => {
+    expect((await reg({ acceptTerms: false })).statusCode).toBe(400);
+  });
+
+  it("no permite dos cuentas con el mismo correo", async () => {
+    const email = `dup-${uuidv7()}@test.local`;
+    expect((await reg({ email })).statusCode).toBe(201);
+    const r = await reg({ email: email.toUpperCase() });
+    expect(r.statusCode).toBe(409);
+    expect(r.json().error).toBe("CORREO_EN_USO");
+  });
+
+  it("limita los registros por red", async () => {
+    let last = 0;
+    for (let i = 0; i < 7; i++) {
+      const r = await app.inject({
+        method: "POST",
+        url: "/v1/auth/register",
+        headers: H,
+        remoteAddress: "10.9.9.9",
+        payload: {
+          displayName: "Bot",
+          email: `bot-${uuidv7()}@test.local`,
+          password: "bot12345x",
+          organizationName: "Bot",
+          acceptTerms: true,
+        },
+      });
+      last = r.statusCode;
+    }
+    expect(last).toBe(429);
+  });
+
+  it("el asistente guarda perfil, empresa y hato, y quita la marca pendiente", async () => {
+    const res = await reg();
+    const cookie = `sid=${res.cookies.find((x) => x.name === "sid")?.value}`;
+    const orgId = res.json().memberships[0].organizationId as string;
+    const done = await app.inject({
+      method: "POST",
+      url: "/v1/onboarding",
+      headers: { ...H, cookie },
+      payload: {
+        organizationId: orgId,
+        displayName: "Ana María Ganadera",
+        phone: "310 555 0000",
+        jobRole: "propietario",
+        experienceYears: 12,
+        orgKind: "persona_natural",
+        department: "Córdoba",
+        municipality: "Montería",
+        goals: ["reproduccion", "leche"],
+        herdEstimate: { bovino: { vacas: 40, crias: 12 }, bufalino: { vacas: 10 } },
+      },
+    });
+    expect(done.statusCode).toBe(200);
+    expect(done.json().onboardingPending).toBeUndefined();
+    const me = await app.inject({ method: "GET", url: "/v1/auth/me", headers: { cookie } });
+    expect(me.json()).toMatchObject({ displayName: "Ana María Ganadera" });
+    expect(me.json().onboardingPending).toBeUndefined();
+    const org = await db.admin((q) =>
+      q<{ municipality: string; goals: string[]; herd_estimate: { bovino: { vacas: number } } }>(
+        "SELECT municipality, goals, herd_estimate FROM organization WHERE id = $1",
+        [orgId],
+      ),
+    );
+    expect(org[0]).toMatchObject({ municipality: "Montería", goals: ["reproduccion", "leche"] });
+    expect(org[0]?.herd_estimate.bovino.vacas).toBe(40);
+  });
+
+  it("no permite configurar una organización ajena", async () => {
+    const res = await reg();
+    const cookie = `sid=${res.cookies.find((x) => x.name === "sid")?.value}`;
+    const r = await app.inject({
+      method: "POST",
+      url: "/v1/onboarding",
+      headers: { ...H, cookie },
+      payload: {
+        organizationId: orgA,
+        displayName: "Intruso",
+        jobRole: "otro",
+        orgKind: "empresa",
+      },
+    });
+    expect(r.statusCode).toBe(403);
+  });
+
+  it("las cuentas existentes no quedan pendientes del asistente", async () => {
+    const cookie = await loginAs("dueno-a@test.local");
+    const me = await app.inject({ method: "GET", url: "/v1/auth/me", headers: { cookie } });
+    expect(me.json().onboardingPending).toBeUndefined();
+  });
+});

@@ -24,6 +24,7 @@ export interface AuthUser {
   id: string;
   email: string;
   displayName: string;
+  onboardingPending?: boolean;
 }
 
 export interface Membership extends MembershipDto {
@@ -80,6 +81,7 @@ export function toSessionDto(user: AuthUser, memberships: Membership[]): Session
     displayName: user.displayName,
     memberships: memberships.map(({ validUntil: _v, ...m }) => m),
     offlineLeaseUntil: new Date(Date.now() + OFFLINE_LEASE_HOURS * 3_600_000).toISOString(),
+    ...(user.onboardingPending ? { onboardingPending: true } : {}),
   };
 }
 
@@ -103,8 +105,9 @@ export async function login(
       display_name: string;
       password_hash: string;
       disabled_at: Date | null;
+      onboarding_pending: boolean;
     }>(
-      "SELECT id, email, display_name, password_hash, disabled_at FROM app_user WHERE email = $1",
+      "SELECT id, email, display_name, password_hash, disabled_at, onboarding_pending FROM app_user WHERE email = $1",
       [email],
     ),
   );
@@ -118,14 +121,7 @@ export async function login(
   }
   throttle.reset(email);
 
-  const token = randomBytes(32).toString("base64url");
-  const memberships = await db.admin(async (q) => {
-    await q(
-      "INSERT INTO session (token_hash, user_id, expires_at, user_agent) VALUES ($1,$2, now() + ($3 || ' hours')::interval, $4)",
-      [sha256(token), row.id, String(SESSION_HOURS), userAgent?.slice(0, 300) ?? null],
-    );
-    return loadMemberships(q, row.id);
-  });
+  const { token, memberships } = await openSession(db, row.id, userAgent);
   for (const m of memberships) {
     await db.tenant(
       m.organizationId,
@@ -136,7 +132,83 @@ export async function login(
   return {
     ok: true,
     token,
-    user: { id: row.id, email: row.email, displayName: row.display_name },
+    user: {
+      id: row.id,
+      email: row.email,
+      displayName: row.display_name,
+      onboardingPending: row.onboarding_pending,
+    },
+    memberships,
+  };
+}
+
+async function openSession(db: Db, userId: string, userAgent: string | undefined) {
+  const token = randomBytes(32).toString("base64url");
+  const memberships = await db.admin(async (q) => {
+    await q(
+      "INSERT INTO session (token_hash, user_id, expires_at, user_agent) VALUES ($1,$2, now() + ($3 || ' hours')::interval, $4)",
+      [sha256(token), userId, String(SESSION_HOURS), userAgent?.slice(0, 300) ?? null],
+    );
+    return loadMemberships(q, userId);
+  });
+  return { token, memberships };
+}
+
+export type RegisterResult =
+  | { ok: true; token: string; user: AuthUser; memberships: Membership[] }
+  | { ok: false; reason: "correo_en_uso" };
+
+/**
+ * Crea una cuenta nueva con su propia organización y la deja como propietaria.
+ * La cuenta queda pendiente del asistente inicial hasta que se configure el perfil.
+ */
+export async function register(
+  db: Db,
+  input: { displayName: string; email: string; password: string; organizationName: string },
+  userAgent: string | undefined,
+): Promise<RegisterResult> {
+  const passwordHash = await hashPassword(input.password);
+  const created = await db
+    .admin(async (q) => {
+      // El índice único de email también protege de dos registros simultáneos con el mismo correo.
+      const exists = await q("SELECT 1 FROM app_user WHERE email = $1", [input.email]);
+      if (exists.length > 0) return null;
+      const [u] = await q<{ id: string }>(
+        "INSERT INTO app_user (email, display_name, password_hash, onboarding_pending) VALUES ($1,$2,$3,true) RETURNING id",
+        [input.email, input.displayName, passwordHash],
+      );
+      const userId = u?.id as string;
+      const [o] = await q<{ id: string }>(
+        "INSERT INTO organization (name, created_by) VALUES ($1,$2) RETURNING id",
+        [input.organizationName, userId],
+      );
+      const orgId = o?.id as string;
+      await q(
+        "INSERT INTO membership (user_id, organization_id, role) VALUES ($1,$2,'propietario')",
+        [userId, orgId],
+      );
+      return { userId, orgId };
+    })
+    .catch((err: { code?: string }) => {
+      if (err?.code === "23505") return null;
+      throw err;
+    });
+  if (!created) return { ok: false, reason: "correo_en_uso" };
+  await db.tenant(
+    created.orgId,
+    (q) => appendAudit(q, created.orgId, { userId: created.userId, action: "auth.register" }),
+    { write: true },
+  );
+  const { token, memberships } = await openSession(db, created.userId, userAgent);
+  return {
+    ok: true,
+    token,
+    user: {
+      id: created.userId,
+      email: input.email,
+      displayName: input.displayName,
+      onboardingPending: true,
+    },
     memberships,
   };
 }
@@ -147,8 +219,13 @@ export async function resolveSession(
 ): Promise<{ user: AuthUser; memberships: Membership[] } | null> {
   if (!token) return null;
   return db.admin(async (q) => {
-    const rows = await q<{ id: string; email: string; display_name: string }>(
-      `SELECT u.id, u.email, u.display_name
+    const rows = await q<{
+      id: string;
+      email: string;
+      display_name: string;
+      onboarding_pending: boolean;
+    }>(
+      `SELECT u.id, u.email, u.display_name, u.onboarding_pending
          FROM session s JOIN app_user u ON u.id = s.user_id
         WHERE s.token_hash = $1 AND s.revoked_at IS NULL AND s.expires_at > now() AND u.disabled_at IS NULL`,
       [sha256(token)],
@@ -156,7 +233,12 @@ export async function resolveSession(
     const u = rows[0];
     if (!u) return null;
     return {
-      user: { id: u.id, email: u.email, displayName: u.display_name },
+      user: {
+        id: u.id,
+        email: u.email,
+        displayName: u.display_name,
+        onboardingPending: u.onboarding_pending,
+      },
       memberships: await loadMemberships(q, u.id),
     };
   });

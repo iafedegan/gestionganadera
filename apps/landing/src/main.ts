@@ -76,6 +76,8 @@ createIcons({
 // Enlaces a la aplicación y contacto: se configuran por variables de entorno, sin valores falsos.
 const appUrl = import.meta.env.VITE_APP_URL ?? "/app/";
 for (const a of document.querySelectorAll<HTMLAnchorElement>("[data-app-link]")) a.href = appUrl;
+for (const a of document.querySelectorAll<HTMLAnchorElement>("[data-signup-link]"))
+  a.href = `${appUrl}?registro`;
 
 const contact = import.meta.env.VITE_CONTACT_EMAIL as string | undefined;
 if (contact) {
