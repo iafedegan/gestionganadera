@@ -17,6 +17,7 @@ import { FORAGES } from "./herd";
 import { Badge, FormDialog, downloadCsv, num } from "./kit";
 import { api } from "./lib/api";
 import { type LocalFarm, type LocalFarmMap, localdb } from "./lib/localdb";
+import { dataScope, isDemoScope } from "./lib/scope";
 import { useApp } from "./state";
 
 /**
@@ -132,12 +133,16 @@ function demo(): MapData {
   return { lindero, potreros };
 }
 
+/** Copia local del mapa, separada por organización. Fuera de la cuenta demo empieza vacía. */
+const storageKey = () => `${KEY}.${dataScope.org}`;
+const empty = (): MapData => ({ lindero: null, potreros: [] });
 function load(): MapData {
+  const fallback = isDemoScope() ? demo() : empty();
   try {
-    const v = JSON.parse(localStorage.getItem(KEY) ?? "null") as MapData | null;
-    return v && Array.isArray(v.potreros) ? v : demo();
+    const v = JSON.parse(localStorage.getItem(storageKey()) ?? "null") as MapData | null;
+    return v && Array.isArray(v.potreros) ? v : fallback;
   } catch {
-    return demo();
+    return fallback;
   }
 }
 
@@ -848,22 +853,24 @@ export function FarmMap() {
             >
               Exportar CSV
             </button>
-            <button
-              type="button"
-              className="btn btn-ghost btn-sm"
-              onClick={() => {
-                if (
-                  window.confirm(
-                    "¿Restablecer el mapa de ejemplo? Se borrarán sus dibujos en este dispositivo.",
-                  )
-                ) {
-                  save(demo());
-                  setSel(null);
-                }
-              }}
-            >
-              Mapa de ejemplo
-            </button>
+            {isDemoScope() && (
+              <button
+                type="button"
+                className="btn btn-ghost btn-sm"
+                onClick={() => {
+                  if (
+                    window.confirm(
+                      "¿Restablecer el mapa de ejemplo? Se borrarán sus dibujos en este dispositivo.",
+                    )
+                  ) {
+                    save(demo());
+                    setSel(null);
+                  }
+                }}
+              >
+                Mapa de ejemplo
+              </button>
+            )}
           </div>
         </article>
         <article className="card">

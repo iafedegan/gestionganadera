@@ -247,7 +247,7 @@ export function VentasScreen() {
                 ...(sp !== "bufalino"
                   ? [
                       {
-                        name: "Lácteos del Valle (bovina)",
+                        name: "Leche bovina",
                         tone: "azul" as Tone,
                         values: byDay("bovino"),
                       },
@@ -256,7 +256,7 @@ export function VentasScreen() {
                 ...(sp !== "bovino"
                   ? [
                       {
-                        name: "Quesera La Esperanza (búfala)",
+                        name: "Leche de búfala",
                         tone: "violeta" as Tone,
                         values: byDay("bufalino"),
                       },

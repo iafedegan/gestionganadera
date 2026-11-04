@@ -1,4 +1,5 @@
 import { addDays, ago, daysBetween, daysFromNow, iso, today } from "./kit";
+import { demoOnly } from "./lib/scope";
 
 /**
  * Hato y reglas de dominio del prototipo. Los parámetros son valores de referencia
@@ -847,7 +848,7 @@ export const PADDOCKS: Paddock[] = [
 export const CONSUMO_MS = 0.025;
 export const UGG = 450;
 export const lotStats = (lot: string) => {
-  const an = HERD.filter((a) => a.lot === lot);
+  const an = demoOnly(HERD).filter((a) => a.lot === lot);
   const ugg = an.reduce((s, a) => s + a.weight / UGG, 0);
   return { n: an.length, ugg, demandaDia: ugg * UGG * CONSUMO_MS };
 };

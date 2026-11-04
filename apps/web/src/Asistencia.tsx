@@ -1,7 +1,7 @@
 import { ClipboardCheck, FileText, KeyRound, Users } from "lucide-react";
 import { useState } from "react";
 import { PageHead } from "./components";
-import { GRANTS, type Grant, RECOS, type Reco, VISITS, type Visit } from "./erpData";
+import { GRANTS as GRANTS_DEMO, type Grant, RECOS, type Reco, VISITS, type Visit } from "./erpData";
 import {
   type AlertItem,
   Alerts,
@@ -18,6 +18,7 @@ import {
   Timeline,
   type Tone,
   daysFromNow,
+  demoOnly,
   downloadCsv,
   fmtDate,
   iso,
@@ -49,6 +50,8 @@ const NEXT: Record<Reco["estado"], Reco["estado"]> = {
 };
 
 export function AsistenciaScreen() {
+  // Datos de ejemplo solo en la cuenta demo; las cuentas reales empiezan vacías.
+  const GRANTS = demoOnly(GRANTS_DEMO);
   const { notify } = useApp();
   const [visits, addVisit, resetV] = useStore<Visit>("visitas", VISITS);
   const [recosBase, addReco, resetR] = useStore<Reco>("recos", RECOS);

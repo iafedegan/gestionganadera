@@ -2,7 +2,15 @@ import { CloudRain, Leaf, Map as MapIcon, Sprout, Thermometer } from "lucide-rea
 import { useState } from "react";
 import { FarmMap } from "./FarmMap";
 import { PageHead } from "./components";
-import { CONSUMO_MS, PADDOCKS, type Paddock, RAIN, UGG, forageOf, lotStats } from "./herd";
+import {
+  CONSUMO_MS,
+  PADDOCKS as PADDOCKS_DEMO,
+  type Paddock,
+  RAIN,
+  UGG,
+  forageOf,
+  lotStats,
+} from "./herd";
 import {
   type AlertItem,
   Alerts,
@@ -17,7 +25,9 @@ import {
   Tabs,
   type Tone,
   addDays,
+  demoOnly,
   fmtDate,
+  isDemoScope,
   iso,
   money,
   num,
@@ -59,7 +69,7 @@ function status(p: Paddock): { label: string; tone: Tone; rest: number | null; r
   return { label: "En descanso", tone: "gris", rest, ready: false };
 }
 
-const RATIONS = [
+const RATIONS_DEMO = [
   { lote: "Ordeño", insumo: "Pasto en pastoreo rotacional", kg: 11, precio: 90 },
   { lote: "Ordeño", insumo: "Concentrado lechero 20 %", kg: 5, precio: 2400 },
   { lote: "Ordeño", insumo: "Sal mineralizada", kg: 0.12, precio: 3300 },
@@ -72,6 +82,9 @@ const RATIONS = [
 ];
 
 export function PasturasScreen() {
+  // Datos de ejemplo solo en la cuenta demo; las cuentas reales empiezan vacías.
+  const PADDOCKS = demoOnly(PADDOCKS_DEMO);
+  const RATIONS = demoOnly(RATIONS_DEMO);
   const { notify } = useApp();
   const [aforos, addAforo, resetAforo] = useStore<Aforo>(
     "aforos",
@@ -268,7 +281,7 @@ export function PasturasScreen() {
             <Stat
               tone="violeta"
               label="Carga animal"
-              value={`${num(ugg / area, 2)} UGG/ha`}
+              value={area > 0 ? `${num(ugg / area, 2)} UGG/ha` : "—"}
               meta={`${num(ugg, 0)} UGG en ${num(area)} ha`}
               goal="1,5–3 UGG/ha"
             />
@@ -620,17 +633,26 @@ export function PasturasScreen() {
               sub="Milímetros por mes frente al histórico"
               icon={<CloudRain size={20} />}
             >
-              <BarChart
-                labels={RAIN.labels}
-                series={[
-                  { name: "Este año", tone: "azul", values: RAIN.mm },
-                  { name: "Histórico", tone: "gris", values: RAIN.hist },
-                ]}
-                height={180}
-              />
-              <p className="hint">
-                Agosto cayó 30 % bajo el histórico: reflejó menos forraje en septiembre.
-              </p>
+              {isDemoScope() ? (
+                <>
+                  <BarChart
+                    labels={RAIN.labels}
+                    series={[
+                      { name: "Este año", tone: "azul", values: RAIN.mm },
+                      { name: "Histórico", tone: "gris", values: RAIN.hist },
+                    ]}
+                    height={180}
+                  />
+                  <p className="hint">
+                    Agosto cayó 30 % bajo el histórico: reflejó menos forraje en septiembre.
+                  </p>
+                </>
+              ) : (
+                <p className="hint">
+                  Aún no hay registros de lluvia. Cuando se conecte una estación o se anoten los
+                  milímetros, aparecerán aquí junto al histórico de la zona.
+                </p>
+              )}
             </Panel>
             <Panel
               title="Estrés calórico (ITH)"

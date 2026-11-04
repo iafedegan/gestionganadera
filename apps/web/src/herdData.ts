@@ -25,6 +25,7 @@ import { addDays, ago, daysBetween, iso, today } from "./kit";
 import { todayLocal } from "./labels";
 import { reviewAnimalEvent } from "./lib/animalHistory";
 import { type LocalAnimalEvent, type LocalHerdAnimal, localdb } from "./lib/localdb";
+import { isDemoScope } from "./lib/scope";
 import { useApp } from "./state";
 
 /**
@@ -139,7 +140,8 @@ export function useHerdData() {
     void localdb.listAnimalEvents(orgId).then(setEvents);
   }, [orgId, dataVersion]);
 
-  const real = herd.length > 0;
+  // Fuera de la cuenta demo siempre se usan los datos reales, aunque estén vacíos.
+  const real = herd.length > 0 || !isDemoScope();
   const animals = useMemo(() => herd.map((a) => toAnimal(a, events)), [herd, events]);
   const byTag = useMemo(() => new Map(animals.map((a) => [a.tag, a])), [animals]);
 

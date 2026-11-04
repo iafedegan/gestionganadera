@@ -2,6 +2,9 @@ import { Search } from "lucide-react";
 import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { VoiceAssistant } from "./VoiceAssistant";
 import { CardHead } from "./components";
+import { dataScope, demoOnly } from "./lib/scope";
+
+export { demoOnly, isDemoOrg, isDemoScope, setDataScope } from "./lib/scope";
 import type { VoiceField } from "./lib/voice";
 
 /* ───────────── Utilidades de fecha y número ───────────── */
@@ -42,9 +45,10 @@ export const COLOR: Record<Tone, string> = {
 /* ───────────── Almacenamiento del prototipo ───────────── */
 
 export function useStore<T>(key: string, seed: T[]): [T[], (r: T) => void, () => void] {
+  const storeKey = `gg.kit.${dataScope.org}.${key}`;
   const [extra, setExtra] = useState<T[]>(() => {
     try {
-      const v = JSON.parse(localStorage.getItem(`gg.kit.${key}`) ?? "[]") as T[];
+      const v = JSON.parse(localStorage.getItem(storeKey) ?? "[]") as T[];
       return Array.isArray(v) ? v : [];
     } catch {
       return [];
@@ -52,13 +56,13 @@ export function useStore<T>(key: string, seed: T[]): [T[], (r: T) => void, () =>
   });
   const persist = (v: T[]) => {
     try {
-      localStorage.setItem(`gg.kit.${key}`, JSON.stringify(v));
+      localStorage.setItem(storeKey, JSON.stringify(v));
     } catch {
       /* sin almacenamiento */
     }
   };
   return [
-    [...extra, ...seed],
+    [...extra, ...demoOnly(seed)],
     (r) =>
       setExtra((p) => {
         const n = [r, ...p];

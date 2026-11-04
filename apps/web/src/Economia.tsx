@@ -1,7 +1,7 @@
 import { Coins, PiggyBank, Receipt, TrendingUp } from "lucide-react";
 import { useMemo, useState } from "react";
 import { PageHead } from "./components";
-import { BUDGET, MOV_SEED, type Mov, milkHistory } from "./herd";
+import { BUDGET as BUDGET_DEMO, MOV_SEED, type Mov, milkHistory } from "./herd";
 import {
   type AlertItem,
   Alerts,
@@ -18,7 +18,9 @@ import {
   Tabs,
   type Tone,
   daysBetween,
+  demoOnly,
   fmtDate,
+  isDemoScope,
   iso,
   money,
   moneyM,
@@ -55,6 +57,8 @@ const TONES: Tone[] = [
 ];
 
 export function EconomiaScreen() {
+  // Datos de ejemplo solo en la cuenta demo; las cuentas reales empiezan vacías.
+  const BUDGET = demoOnly(BUDGET_DEMO);
   const { notify } = useApp();
   const [movs, add, reset] = useStore<Mov>("movs-eco", MOV_SEED);
   const [tab, setTab] = useState<Tab>("panel");
@@ -68,7 +72,7 @@ export function EconomiaScreen() {
   const egr30 = sum(movs.filter((m) => m.tipo === "Egreso" && in30(m)));
   const saldo30 = ing30 - egr30;
 
-  const hist = useMemo(milkHistory, []);
+  const hist = useMemo(() => (isDemoScope() ? milkHistory() : []), []);
   const litros21 = hist.reduce((s, d) => s + Object.values(d.litros).reduce((a, b) => a + b, 0), 0);
   const litros30 = (litros21 / 21) * 30;
   const costoLeche =

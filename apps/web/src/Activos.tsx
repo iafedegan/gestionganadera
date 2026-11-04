@@ -1,7 +1,14 @@
 import { Fuel, Tractor, Wrench } from "lucide-react";
 import { useState } from "react";
 import { PageHead } from "./components";
-import { ASSETS, type Asset, FUEL, MAINT_LOG, MAINT_PLAN, type MaintLog } from "./erpData";
+import {
+  ASSETS,
+  type Asset,
+  FUEL as FUEL_DEMO,
+  MAINT_LOG,
+  MAINT_PLAN as MAINT_PLAN_DEMO,
+  type MaintLog,
+} from "./erpData";
 import {
   type AlertItem,
   Alerts,
@@ -20,6 +27,7 @@ import {
   addDays,
   daysBetween,
   daysFromNow,
+  demoOnly,
   downloadCsv,
   fmtDate,
   iso,
@@ -52,6 +60,9 @@ export function depreciation(a: Asset) {
 }
 
 export function ActivosScreen() {
+  // Datos de ejemplo solo en la cuenta demo; las cuentas reales empiezan vacías.
+  const FUEL = demoOnly(FUEL_DEMO);
+  const MAINT_PLAN = demoOnly(MAINT_PLAN_DEMO);
   const { notify } = useApp();
   const [assets, addAsset, resetA] = useStore<Asset>("activos", ASSETS);
   const [log, addLog, resetL] = useStore<MaintLog>("mant-log", MAINT_LOG);

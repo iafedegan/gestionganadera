@@ -30,6 +30,7 @@ import {
   daysFromNow,
   downloadCsv,
   fmtDate,
+  isDemoScope,
   iso,
   money,
   moneyM,
@@ -90,7 +91,8 @@ export function PersonalScreen() {
     estado: Task["estado"];
   }>("tareas-estado", []);
   const [courses, addCourse, resetCo] = useStore<Course>("cursos", COURSES);
-  const [shifts, setShifts] = useState(SHIFTS);
+  const shiftsSeed = isDemoScope() ? SHIFTS : {};
+  const [shifts, setShifts] = useState<Record<string, string[]>>(shiftsSeed);
   const [tab, setTab] = useState<Tab>("panel");
   const [open, setOpen] = useState<"persona" | "tarea" | "curso" | null>(null);
   const [sel, setSel] = useState(PEOPLE[1]?.nombre ?? "");
@@ -231,7 +233,7 @@ export function PersonalScreen() {
             resetT();
             resetTC();
             resetCo();
-            setShifts(SHIFTS);
+            setShifts(shiftsSeed);
             notify("Datos de ejemplo restablecidos.", "info");
           }}
         >

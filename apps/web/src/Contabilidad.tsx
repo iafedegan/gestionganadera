@@ -1,7 +1,14 @@
 import { BookOpen, CalendarClock, FileCheck2, HandCoins, Landmark } from "lucide-react";
 import { useState } from "react";
 import { PageHead } from "./components";
-import { INVOICES, type Invoice, LEDGER, OBLIGATIONS, PAYABLES, type Payable } from "./erpData";
+import {
+  INVOICES,
+  type Invoice,
+  LEDGER as LEDGER_DEMO,
+  OBLIGATIONS as OBLIGATIONS_DEMO,
+  PAYABLES,
+  type Payable,
+} from "./erpData";
 import {
   type AlertItem,
   Alerts,
@@ -17,6 +24,7 @@ import {
   type Tone,
   addDays,
   daysFromNow,
+  demoOnly,
   downloadCsv,
   fmtDate,
   iso,
@@ -36,6 +44,9 @@ const DIAN_TONE: Record<Invoice["estado"], Tone> = {
 const total = (i: Invoice) => i.base + i.iva - i.retencion;
 
 export function ContabilidadScreen() {
+  // Datos de ejemplo solo en la cuenta demo; las cuentas reales empiezan vacías.
+  const LEDGER = demoOnly(LEDGER_DEMO);
+  const OBLIGATIONS = demoOnly(OBLIGATIONS_DEMO);
   const { notify } = useApp();
   const [invBase, addInv, resetI] = useStore<Invoice>("facturas", INVOICES);
   const [paidInv, addPaidInv, resetPI] = useStore<string>("facturas-pagadas", []);
