@@ -461,22 +461,32 @@ export function Shell(props: {
               {pendientes + revisar > 0 && <span className="dot">{pendientes + revisar}</span>}
             </button>
             <div className="user-wrap">
-              <button
-                type="button"
-                className="user"
-                aria-label="Cuenta y módulos"
-                aria-expanded={menuOpen}
-                onClick={() => (mobile ? setMore(true) : setMenuOpen((v) => !v))}
-              >
-                <span className="avatar" aria-hidden="true">
-                  {initials(name)}
+              {mobile ? (
+                // En el celular el avatar solo identifica la cuenta: módulos y salida están en «Más».
+                <span className="user" title={name}>
+                  <span className="avatar" aria-hidden="true">
+                    {initials(name)}
+                  </span>
+                  <span className="sr-only">{name}</span>
                 </span>
-                <span className="user-text">
-                  <strong>{name}</strong>
-                  {role && <small>{ROLE_LABEL[role]}</small>}
-                </span>
-                <ChevronDown size={18} className="hide-mobile" aria-hidden="true" />
-              </button>
+              ) : (
+                <button
+                  type="button"
+                  className="user"
+                  aria-label="Cuenta"
+                  aria-expanded={menuOpen}
+                  onClick={() => setMenuOpen((v) => !v)}
+                >
+                  <span className="avatar" aria-hidden="true">
+                    {initials(name)}
+                  </span>
+                  <span className="user-text">
+                    <strong>{name}</strong>
+                    {role && <small>{ROLE_LABEL[role]}</small>}
+                  </span>
+                  <ChevronDown size={18} aria-hidden="true" />
+                </button>
+              )}
               {menuOpen && !mobile && (
                 <>
                   <button
