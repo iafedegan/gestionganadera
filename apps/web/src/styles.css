@@ -1518,7 +1518,8 @@ fieldset {
     bottom: 0;
     z-index: 40;
     display: grid;
-    grid-template-columns: repeat(5, 1fr);
+    grid-auto-flow: column;
+    grid-auto-columns: minmax(0, 1fr);
     background: var(--verde-botella);
     padding: 6px 4px calc(6px + env(safe-area-inset-bottom));
     box-shadow: 0 -8px 24px rgb(5 16 11 / 0.2);
