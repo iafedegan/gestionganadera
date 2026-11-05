@@ -367,7 +367,7 @@ const ORG_KINDS: [OrgKind, string][] = [
   ["asociacion", "Asociación"],
   ["cooperativa", "Cooperativa"],
 ];
-const GOALS: [Goal, string][] = [
+export const GOALS: [Goal, string][] = [
   ["reproduccion", "Mejorar la reproducción"],
   ["leche", "Producir más leche"],
   ["peso", "Ganar más peso"],

@@ -20,6 +20,20 @@
       "port": 4173
     },
     {
+      "name": "app-perfil-prueba",
+      "runtimeExecutable": "/usr/bin/env",
+      "runtimeArgs": [
+        "ASSISTANT_FAKE=1",
+        "PORT=4175",
+        "PGLITE_DIR=.data/pglite-perfil",
+        "/Users/edgar/.local/bin/pnpm",
+        "--filter",
+        "@ganaderia/api",
+        "start"
+      ],
+      "port": 4175
+    },
+    {
       "name": "web-dev",
       "runtimeExecutable": "/Users/edgar/.local/bin/pnpm",
       "runtimeArgs": ["--filter", "@ganaderia/web", "dev"],

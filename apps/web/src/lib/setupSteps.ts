@@ -7,7 +7,7 @@ import type { LocalFarm } from "./localdb";
  * asistente parten de datos reales y no de tableros vacíos.
  */
 export interface SetupStep {
-  key: "finca" | "area" | "ubicacion" | "animales";
+  key: "perfil" | "finca" | "area" | "ubicacion" | "animales";
   done: boolean;
   title: string;
   text: string;
@@ -24,12 +24,27 @@ export interface SetupState {
 /** Módulos que se pueden abrir mientras la configuración está incompleta. */
 export const SETUP_MODULES: ModuleKey[] = ["inicio", "configuracion", "animales"];
 
-export function setupSteps(farms: LocalFarm[], animals: number): SetupStep[] {
+/**
+ * `profileDone`: el perfil ya se respondió. Si no se sabe (sin conexión y sin copia local) se
+ * cuenta como hecho para no dejar a nadie bloqueado en el campo.
+ */
+export function setupSteps(
+  farms: LocalFarm[],
+  animals: number,
+  profileDone: boolean | null = null,
+): SetupStep[] {
   const hasArea = farms.some((f) => (f.totalAreaHa ?? 0) > 0 && (f.livestockAreaHa ?? 0) > 0);
   const hasPlace = farms.some(
     (f) => (f.latitude != null && f.longitude != null) || Boolean(f.locationText?.trim()),
   );
   return [
+    {
+      key: "perfil",
+      done: profileDone !== false,
+      title: "Cuéntenos de su finca",
+      text: "Unas preguntas para un primer diagnóstico, de 2 a 5 minutos.",
+      module: "inicio",
+    },
     {
       key: "finca",
       done: farms.length > 0,

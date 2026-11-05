@@ -5,6 +5,7 @@ import {
   AssistantRequest,
   ErrorCodes,
   FarmCreate,
+  FarmProfile,
   FarmUpdate,
   InvitationCreate,
   LoginRequest,
@@ -389,6 +390,66 @@ export async function buildApp(opts: AppOptions): Promise<FastifyInstance> {
       { ...a.user, displayName: b.displayName, onboardingPending: false },
       a.memberships,
     );
+  });
+
+  // Perfil de la finca (cuestionario inicial). Lo ve todo el equipo; lo responde quien administra.
+  app.get("/v1/profile", { preHandler: requireSession }, async (req, reply) => {
+    const a = req.auth as NonNullable<FastifyRequest["auth"]>;
+    const q = orgQuery.safeParse(req.query);
+    if (!q.success)
+      return reply.code(400).send({ error: "VALIDACION", message: "Organización requerida." });
+    if (!grants(a.memberships, q.data.organizationId, "farm.read", null))
+      return reply.code(403).send({ error: "PERMISO_DENEGADO", message: "Sin acceso." });
+    const [row] = await db.admin((sql) =>
+      sql<{ profile: unknown; profile_updated_at: Date | string | null }>(
+        "SELECT profile, profile_updated_at FROM organization WHERE id = $1",
+        [q.data.organizationId],
+      ),
+    );
+    const parsed = row?.profile ? FarmProfile.safeParse(row.profile) : null;
+    return {
+      profile: parsed?.success ? parsed.data : null,
+      updatedAt: row?.profile_updated_at ? new Date(row.profile_updated_at).toISOString() : null,
+    };
+  });
+
+  app.put("/v1/profile", { preHandler: requireSession }, async (req, reply) => {
+    const a = req.auth as NonNullable<FastifyRequest["auth"]>;
+    const q = orgQuery.safeParse(req.query);
+    const body = FarmProfile.safeParse(req.body);
+    if (!q.success || !body.success)
+      return reply.code(400).send({
+        error: "VALIDACION",
+        message: body.success
+          ? "Organización requerida."
+          : (body.error.issues[0]?.message ?? "Datos inválidos."),
+      });
+    if (!grants(a.memberships, q.data.organizationId, "farm.write", null))
+      return reply
+        .code(403)
+        .send({ error: "PERMISO_DENEGADO", message: "Sin permiso para editar el perfil." });
+    const [row] = await db.admin((sql) =>
+      sql<{ profile_updated_at: Date | string }>(
+        "UPDATE organization SET profile = $2, profile_updated_at = now() WHERE id = $1 RETURNING profile_updated_at",
+        [q.data.organizationId, JSON.stringify(body.data)],
+      ),
+    );
+    await db.tenant(
+      q.data.organizationId,
+      (sql) =>
+        appendAudit(sql, q.data.organizationId, {
+          userId: a.user.id,
+          action: "profile.save",
+          entity: "organization",
+          entityId: q.data.organizationId,
+          detail: { level: body.data.level, goals: body.data.goals, heads: body.data.heads },
+        }),
+      { write: true },
+    );
+    return {
+      profile: body.data,
+      updatedAt: row ? new Date(row.profile_updated_at).toISOString() : new Date().toISOString(),
+    };
   });
 
   app.post("/v1/auth/logout", async (req, reply) => {

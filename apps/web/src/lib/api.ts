@@ -3,6 +3,8 @@ import type {
   AssistantRequest,
   FarmCreate,
   FarmDto,
+  FarmProfileDto,
+  FarmProfileInput,
   FarmUpdate,
   InvitationCreate,
   InvitationDto,
@@ -83,6 +85,10 @@ export const api = {
     request<InvitationPreview>("GET", `/v1/invitations/${encodeURIComponent(code)}`),
   acceptInvitation: (code: string) =>
     request<SessionDto>("POST", "/v1/invitations/accept", { code }),
+  profile: (organizationId: string) =>
+    request<FarmProfileDto>("GET", `/v1/profile?organizationId=${organizationId}`),
+  saveProfile: (organizationId: string, profile: FarmProfileInput) =>
+    request<FarmProfileDto>("PUT", `/v1/profile?organizationId=${organizationId}`, profile),
   assistantStatus: () =>
     request<{ enabled: boolean; dailyLimit: number }>("GET", "/v1/assistant/status"),
   // El asistente puede tardar: se le da más tiempo y se leen sus errores 5xx con mensaje.

@@ -523,6 +523,90 @@ export const OnboardingRequest = z.object({
 });
 export type OnboardingRequest = z.input<typeof OnboardingRequest>;
 
+/* ───────────── Perfil y diagnóstico inicial de la finca ───────────── */
+
+export const ProfileLevel = z.enum(["rapido", "completo"]);
+export const ProfileSystem = z.enum(["extensivo", "rotacional", "semiestabulado", "estabulado"]);
+export const ProfileRecords = z.enum(["ninguno", "cuaderno", "excel", "software"]);
+export const ProfileBreeding = z.enum(["monta", "ia", "mixta"]);
+export const ProfileFrequency = z.enum(["nunca", "a_veces", "regular"]);
+export const ProfileVet = z.enum(["no", "problemas", "periodico"]);
+export const ProfileKnows = z.enum(["si", "aprox", "no"]);
+export const ProfileSupplement = z.enum(["sal_mineral", "concentrado", "ensilaje", "ninguno"]);
+export const ProfileCert = z.enum(["bpg", "libre_brucelosis", "libre_tuberculosis"]);
+
+const heads = z.number().int().min(0).max(200_000);
+
+/**
+ * Respuestas del perfil de la finca. Los básicos son obligatorios para cualquier tamaño;
+ * el nivel «completo» agrega detalle para un diagnóstico más preciso.
+ */
+export const FarmProfile = z
+  .object({
+    version: z.literal(1).default(1),
+    level: ProfileLevel,
+    // Básicos
+    goals: z.array(Goal).min(1, "Elija al menos un objetivo.").max(3),
+    focus: z.enum(["leche", "carne", "doble_proposito"]),
+    heads: heads.min(1, "Indique cuántos animales tiene."),
+    cows: heads,
+    areaHa: z.number().positive("Indique el área en ganadería.").max(1_000_000),
+    system: ProfileSystem,
+    records: ProfileRecords,
+    breeding: ProfileBreeding,
+    pregCheck: ProfileFrequency,
+    vet: ProfileVet,
+    knowsCost: ProfileKnows,
+    milking: heads.optional(),
+    milkLitersDay: z.number().min(0).max(1_000_000).optional(),
+    // Completo
+    workers: z.number().int().min(0).max(5000).optional(),
+    calvingIntervalMonths: z.number().min(9).max(36).optional(),
+    supplements: z.array(ProfileSupplement).max(4).optional(),
+    paddocks: z.number().int().min(0).max(10_000).optional(),
+    restDays: z.number().int().min(0).max(365).optional(),
+    saleWeightKg: z.number().min(0).max(1500).optional(),
+    saleAgeMonths: z.number().min(0).max(120).optional(),
+    qualityPay: z.enum(["si", "no"]).optional(),
+    certifications: z.array(ProfileCert).max(3).optional(),
+    mainProblem: z.string().trim().max(300).optional(),
+  })
+  .superRefine((p, ctx) => {
+    if (p.cows > p.heads)
+      ctx.addIssue({
+        code: "custom",
+        path: ["cows"],
+        message: "Las vacas no pueden ser más que el total.",
+      });
+    if (p.focus !== "carne") {
+      if (p.milking === undefined)
+        ctx.addIssue({
+          code: "custom",
+          path: ["milking"],
+          message: "Indique cuántas vacas ordeña.",
+        });
+      if (p.milkLitersDay === undefined)
+        ctx.addIssue({
+          code: "custom",
+          path: ["milkLitersDay"],
+          message: "Indique los litros por día.",
+        });
+      if (p.milking !== undefined && p.milking > p.cows)
+        ctx.addIssue({
+          code: "custom",
+          path: ["milking"],
+          message: "No puede ordeñar más vacas de las que tiene.",
+        });
+    }
+  });
+export type FarmProfile = z.infer<typeof FarmProfile>;
+export type FarmProfileInput = z.input<typeof FarmProfile>;
+
+export interface FarmProfileDto {
+  profile: FarmProfile | null;
+  updatedAt: string | null;
+}
+
 export interface MembershipDto {
   organizationId: string;
   organizationName: string;

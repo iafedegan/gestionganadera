@@ -408,3 +408,4 @@ export function isDryOffDue(
   if (secado && secado >= parto) return false;
   return (Date.parse(today) - Date.parse(parto)) / 86_400_000 >= dryOffDays;
 }
+export * from "./diagnosis";

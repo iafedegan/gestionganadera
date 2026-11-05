@@ -1,6 +1,6 @@
 import Anthropic from "@anthropic-ai/sdk";
-import type { AssistantRequest } from "@ganaderia/contracts";
-import { can } from "@ganaderia/domain";
+import { type AssistantRequest, FarmProfile } from "@ganaderia/contracts";
+import { can, diagnose } from "@ganaderia/domain";
 import { type Membership, farmScope } from "./auth.js";
 import type { Db } from "./db.js";
 
@@ -115,6 +115,11 @@ export async function farmContext(
   const farmIds = scope === "ALL" ? null : scope;
   const role = memberships.find((m) => m.organizationId === orgId)?.role;
 
+  const [org] = await db.admin((q) =>
+    q<{ profile: unknown }>("SELECT profile FROM organization WHERE id = $1", [orgId]),
+  );
+  const declared = org?.profile ? FarmProfile.safeParse(org.profile) : null;
+
   return db.tenant(orgId, async (q) => {
     const farms = await q<FarmRow>(
       `SELECT id, name, location_text, production_focus, production_system, total_area_ha, livestock_area_ha
@@ -146,6 +151,17 @@ export async function farmContext(
         : [];
 
     const out: string[] = [`Fecha de hoy: ${new Date(now).toISOString().slice(0, 10)}.`];
+    if (declared?.success) {
+      const p = declared.data;
+      const d = diagnose(p);
+      out.push(
+        `Perfil declarado por el ganadero (estimado, no son registros): objetivos ${p.goals.join(", ")}; ${d.summary}`,
+      );
+      out.push(
+        `Diagnóstico inicial: ${d.areas.map((a) => `${a.title} ${a.level.replace("_", " ")}${a.figure ? ` (${a.figure})` : ""}`).join("; ")}.`,
+      );
+      if (p.mainProblem) out.push(`Problema principal según el ganadero: ${p.mainProblem}`);
+    }
 
     for (const f of farms) {
       const bits = [

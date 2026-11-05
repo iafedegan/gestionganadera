@@ -226,3 +226,78 @@ describe("asistente con IA", () => {
     expect(res.json().error).toBe("ASISTENTE_NO_CONFIGURADO");
   });
 });
+
+describe("perfil de la finca", () => {
+  const perfil = {
+    level: "rapido",
+    goals: ["leche", "costos"],
+    focus: "doble_proposito",
+    heads: 40,
+    cows: 20,
+    milking: 10,
+    milkLitersDay: 50,
+    areaHa: 30,
+    system: "extensivo",
+    records: "cuaderno",
+    breeding: "monta",
+    pregCheck: "nunca",
+    vet: "problemas",
+    knowsCost: "no",
+  };
+
+  it("el propietario lo guarda y el equipo lo lee", async () => {
+    const dueno = await login(app, "dueno@asis.local");
+    const empty = await app.inject({
+      method: "GET",
+      url: `/v1/profile?organizationId=${org}`,
+      headers: { cookie: dueno },
+    });
+    expect(empty.json()).toEqual({ profile: null, updatedAt: null });
+    const put = await app.inject({
+      method: "PUT",
+      url: `/v1/profile?organizationId=${org}`,
+      headers: { ...H, cookie: dueno },
+      payload: perfil,
+    });
+    expect(put.statusCode, put.body).toBe(200);
+    const vet = await login(app, "vet@asis.local");
+    const got = await app.inject({
+      method: "GET",
+      url: `/v1/profile?organizationId=${org}`,
+      headers: { cookie: vet },
+    });
+    expect(got.json().profile).toMatchObject({ heads: 40, focus: "doble_proposito" });
+    expect(got.json().updatedAt).toBeTruthy();
+  });
+
+  it("el veterinario no lo puede cambiar y se validan los básicos", async () => {
+    const vet = await login(app, "vet@asis.local");
+    const res = await app.inject({
+      method: "PUT",
+      url: `/v1/profile?organizationId=${org}`,
+      headers: { ...H, cookie: vet },
+      payload: perfil,
+    });
+    expect(res.statusCode).toBe(403);
+    const dueno = await login(app, "dueno@asis.local");
+    const bad = await app.inject({
+      method: "PUT",
+      url: `/v1/profile?organizationId=${org}`,
+      headers: { ...H, cookie: dueno },
+      payload: { ...perfil, milkLitersDay: undefined },
+    });
+    expect(bad.statusCode).toBe(400);
+  });
+
+  it("el asistente recibe el perfil y el diagnóstico", async () => {
+    await db.admin((q) =>
+      q("UPDATE assistant_usage SET questions = 0 WHERE organization_id = $1", [org]),
+    );
+    const dueno = await login(app, "dueno@asis.local");
+    const res = await ask(app, dueno, { organizationId: org, question: "¿Por dónde empiezo?" });
+    expect(res.statusCode).toBe(200);
+    const text = String(calls.at(-1)?.messages.at(-1)?.content);
+    expect(text).toContain("Perfil declarado por el ganadero");
+    expect(text).toContain("Diagnóstico inicial:");
+  });
+});

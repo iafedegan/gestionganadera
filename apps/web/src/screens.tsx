@@ -1,5 +1,5 @@
 import type { AnimalRegisterPayload, Species } from "@ganaderia/contracts";
-import { ROLE_LABEL, can, isDryOffDue, isWeaningDue } from "@ganaderia/domain";
+import { ROLE_LABEL, can, diagnose, isDryOffDue, isWeaningDue } from "@ganaderia/domain";
 import {
   AlertTriangle,
   ArrowLeft,
@@ -30,6 +30,7 @@ import {
   RefreshCw,
   Share,
   SquarePlus,
+  Stethoscope,
   Users,
   Wifi,
   WifiOff,
@@ -40,6 +41,7 @@ import { AssistantCard } from "./Assistant";
 import { FarmIntel } from "./FarmIntel";
 import { type PendingInvite, RegisterForm } from "./Onboarding";
 import { Pasture } from "./Pasture";
+import { DiagnosisView, ProfileWizard, useFarmProfile } from "./Profile";
 import { RegisterDialog, useFarms } from "./animals";
 import { art } from "./art";
 import { CardHead, CountUp, PageHead, Tile } from "./components";
@@ -764,6 +766,18 @@ export function Home({
   const [stock, setStock] = useState({ low: 0, soon: 0, expired: 0 });
   const [stats, setStats] = useState<HomeStats | null>(null);
   const [movs] = useStore<Mov>("movs-eco", MOV_SEED);
+  const farmProfile = useFarmProfile();
+  const [profileOpen, setProfileOpen] = useState<"edit" | "view" | null>(null);
+  const savedProfile = farmProfile.dto?.profile ?? null;
+  const canProfile = Boolean(role && can(role, "farm.write"));
+  const profileDialog = profileOpen && (
+    <ProfileWizard
+      initial={savedProfile}
+      showResult={profileOpen === "view"}
+      onClose={() => setProfileOpen(null)}
+      onModule={onModule}
+    />
+  );
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: dataVersion fuerza la relectura
   useEffect(() => {
@@ -997,7 +1011,9 @@ export function Home({
                     <button
                       type="button"
                       className={next ? "btn btn-primary btn-sm" : "btn btn-ghost btn-sm"}
-                      onClick={() => onModule(st.module)}
+                      onClick={() =>
+                        st.key === "perfil" ? setProfileOpen("edit") : onModule(st.module)
+                      }
                     >
                       {next ? "Empezar" : "Ir"} ›
                     </button>
@@ -1019,6 +1035,7 @@ export function Home({
             </p>
           </div>
         </article>
+        {profileDialog}
       </section>
     );
   }
@@ -1163,6 +1180,56 @@ export function Home({
           />
         )}
       </div>
+
+      {savedProfile ? (
+        <article className="card dx-card">
+          <CardHead
+            icon={<Stethoscope size={26} aria-hidden="true" />}
+            title="Diagnóstico de su finca"
+            sub="Según el perfil que respondió. Lo que más pide atención va primero."
+          />
+          <DiagnosisView d={diagnose(savedProfile)} compact />
+          <div className="dx-buttons">
+            <button
+              type="button"
+              className="btn btn-primary btn-sm"
+              onClick={() => setProfileOpen("view")}
+            >
+              Ver completo ›
+            </button>
+            {canProfile && (
+              <button
+                type="button"
+                className="btn btn-ghost btn-sm"
+                onClick={() => setProfileOpen("edit")}
+              >
+                Actualizar respuestas
+              </button>
+            )}
+          </div>
+        </article>
+      ) : (
+        canProfile &&
+        farmProfile.known && (
+          <article className="card dx-card">
+            <CardHead
+              icon={<Stethoscope size={26} aria-hidden="true" />}
+              title="Haga el diagnóstico de su finca"
+              sub="Unas preguntas de 2 a 5 minutos para saber por dónde empezar."
+            />
+            <div className="dx-buttons">
+              <button
+                type="button"
+                className="btn btn-primary btn-sm"
+                onClick={() => setProfileOpen("edit")}
+              >
+                Responder ahora ›
+              </button>
+            </div>
+          </article>
+        )
+      )}
+      {profileDialog}
 
       <AssistantCard />
 
