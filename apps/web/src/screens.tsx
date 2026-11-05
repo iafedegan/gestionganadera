@@ -35,15 +35,17 @@ import {
   X,
 } from "lucide-react";
 import { type FormEvent, type ReactNode, useEffect, useState } from "react";
-import { RegisterForm } from "./Onboarding";
+import { FarmIntel } from "./FarmIntel";
+import { type PendingInvite, RegisterForm } from "./Onboarding";
 import { Pasture } from "./Pasture";
 import { RegisterDialog, useFarms } from "./animals";
 import { art } from "./art";
 import { CardHead, CountUp, PageHead, Tile } from "./components";
 import { CODE_LABEL, KIND_LABEL, fecha, fechaHora, num, todayLocal } from "./labels";
+import { ApiError, api } from "./lib/api";
 import { type OutboxItem, localdb } from "./lib/localdb";
 import { lastEmail } from "./lib/session";
-import { MODULES, type ModuleDef, type ModuleKey, moduleByKey } from "./modules";
+import { type ModuleDef, type ModuleKey, canSeeModule, moduleByKey, modulesFor } from "./modules";
 import {
   haptic,
   isStandalone,
@@ -76,9 +78,34 @@ function ModIcon({ k, size = 20 }: { k: ModuleKey; size?: number }) {
 
 export function Login() {
   const { login } = useApp();
+  const inviteCode = new URLSearchParams(window.location.search).get("invitacion");
   const [mode, setMode] = useState<"ingreso" | "registro">(() =>
-    new URLSearchParams(window.location.search).get("registro") !== null ? "registro" : "ingreso",
+    new URLSearchParams(window.location.search).get("registro") !== null || inviteCode
+      ? "registro"
+      : "ingreso",
   );
+  const [invite, setInvite] = useState<PendingInvite | null>(null);
+  const [inviteError, setInviteError] = useState<string | null>(null);
+  // Enlace de invitación: se valida y se guarda para aceptarlo también si ya tiene cuenta.
+  useEffect(() => {
+    if (!inviteCode) return;
+    try {
+      sessionStorage.setItem("gg.invite", inviteCode);
+    } catch {
+      /* sin almacenamiento de sesión */
+    }
+    api
+      .previewInvitation(inviteCode)
+      .then((preview) => setInvite({ code: inviteCode, preview }))
+      .catch((e) => {
+        setInviteError(
+          e instanceof ApiError
+            ? e.message
+            : "No se pudo validar la invitación: revise su conexión.",
+        );
+        setMode("ingreso");
+      });
+  }, [inviteCode]);
   const [email, setEmail] = useState(lastEmail());
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -207,7 +234,7 @@ export function Login() {
         )}
 
         {mode === "registro" ? (
-          <RegisterForm onBack={() => setMode("ingreso")} />
+          <RegisterForm onBack={() => setMode("ingreso")} invite={invite} />
         ) : (
           <form
             className="login-card"
@@ -219,6 +246,16 @@ export function Login() {
               <p className="kicker">Sistema Integral de Gestión Ganadera</p>
               <h1 id="login-title">Ingrese a su finca</h1>
               <p className="lc-sub">Use el correo y la contraseña de su cuenta.</p>
+              {invite && (
+                <p className="lc-invite">
+                  Al ingresar se unirá a <b>{invite.preview.organizationName}</b>.
+                </p>
+              )}
+              {inviteError && (
+                <p role="alert" className="login-alert">
+                  {inviteError}
+                </p>
+              )}
             </header>
 
             <label className="field">
@@ -316,14 +353,16 @@ function NavList(props: {
   onPick(m: ModuleKey): void;
   variant?: "side" | "sheet";
 }) {
+  const { role } = useApp();
+  const list = modulesFor(role);
   return (
     <ul className={props.variant === "sheet" ? "nav-list nav-sheet" : "nav-list"}>
-      {MODULES.map((m, i) => (
+      {list.map((m, i) => (
         <li
           key={m.key}
-          className={m.group && MODULES[i - 1]?.group !== m.group ? "nav-first-erp" : undefined}
+          className={m.group && list[i - 1]?.group !== m.group ? "nav-first-erp" : undefined}
         >
-          {m.group && MODULES[i - 1]?.group !== m.group && (
+          {m.group && list[i - 1]?.group !== m.group && (
             <p className="nav-group">Gestión empresarial · ERP</p>
           )}
           <button
@@ -858,9 +897,15 @@ export function Home({
       />
 
       <div className="quick-actions">
-        <button type="button" className="btn btn-primary" onClick={() => onModule("animales")}>
-          <PlusCircle size={18} aria-hidden="true" /> Registrar animal
-        </button>
+        {role && can(role, "animal.write") ? (
+          <button type="button" className="btn btn-primary" onClick={() => onModule("animales")}>
+            <PlusCircle size={18} aria-hidden="true" /> Registrar animal
+          </button>
+        ) : (
+          <button type="button" className="btn btn-primary" onClick={() => onModule("animales")}>
+            <Users size={18} aria-hidden="true" /> Ver el hato
+          </button>
+        )}
         <button
           type="button"
           className="btn btn-ghost"
@@ -913,16 +958,20 @@ export function Home({
           meta={demo ? "gestaciones confirmadas · ejemplo" : "Servicios, diagnósticos y partos"}
           soon={demo ? "Ejemplo" : "Semana 7"}
         />
-        <Tile
-          tone="violeta"
-          art={art("tile-coins")}
-          label="Costos y márgenes"
-          icon={<ModIcon k="economia" />}
-          value={demo ? "$ 2,4 M" : "—"}
-          meta={demo ? "saldo del mes · ejemplo" : "Saldo de movimientos registrados"}
-          soon={demo ? "Ejemplo" : "Semana 11"}
-        />
+        {canSeeModule("economia", role) && (
+          <Tile
+            tone="violeta"
+            art={art("tile-coins")}
+            label="Costos y márgenes"
+            icon={<ModIcon k="economia" />}
+            value={demo ? "$ 2,4 M" : "—"}
+            meta={demo ? "saldo del mes · ejemplo" : "Saldo de movimientos registrados"}
+            soon={demo ? "Ejemplo" : "Semana 11"}
+          />
+        )}
       </div>
+
+      <FarmIntel />
 
       <div className="two">
         <article className="card">

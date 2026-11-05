@@ -6606,3 +6606,256 @@ fieldset.voice-field {
     font-size: 0.98rem;
   }
 }
+
+/* ═════════ Su finca hoy: clima y suelo ═════════ */
+.intel {
+  margin-bottom: 16px;
+  display: grid;
+  gap: 14px;
+}
+.intel-tabs {
+  justify-self: start;
+}
+.intel-now {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 16px 28px;
+}
+.in-temp strong {
+  display: block;
+  font-size: 3rem;
+  font-weight: 800;
+  line-height: 1;
+  letter-spacing: -0.03em;
+}
+.in-temp small {
+  color: var(--texto-suave);
+}
+.in-facts {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, auto));
+  gap: 8px 20px;
+  font-size: 0.9rem;
+}
+.in-facts li {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.intel-days {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(7, minmax(64px, 1fr));
+  gap: 6px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.intel-days li {
+  display: grid;
+  justify-items: center;
+  gap: 2px;
+  padding: 10px 4px;
+  border-radius: 14px;
+  background: #f4f6f2;
+  font-size: 0.82rem;
+}
+.intel-days small {
+  text-transform: capitalize;
+  color: var(--texto-suave);
+  font-weight: 600;
+}
+.intel-days b {
+  font-size: 1.15rem;
+}
+.in-min,
+.in-rain {
+  color: var(--texto-suave);
+}
+.in-rain {
+  color: #0f6bc4;
+}
+.in-thi {
+  margin-top: 4px;
+  padding: 2px 6px;
+  border-radius: 99px;
+  font-size: 0.68rem;
+  font-weight: 700;
+  background: #e8f4ec;
+  color: #14563a;
+  white-space: nowrap;
+}
+.intel-days li.thi-warn .in-thi,
+.in-facts .thi-warn {
+  background: #fdf4e3;
+  color: #7a5208;
+}
+.intel-days li.thi-bad .in-thi,
+.in-facts .thi-bad {
+  background: #fdeee9;
+  color: #8a2a1e;
+}
+.in-facts .thi-ok,
+.in-facts .thi-warn,
+.in-facts .thi-bad {
+  padding: 2px 8px;
+  border-radius: 99px;
+  font-weight: 700;
+}
+.intel-soil {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 140px), 1fr));
+  gap: 10px;
+}
+.intel-soil > div {
+  display: grid;
+  gap: 2px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: #f4f6f2;
+}
+.intel-soil small {
+  color: var(--texto-suave);
+  font-size: 0.78rem;
+}
+.intel-soil strong {
+  font-size: 1.05rem;
+}
+.intel-src {
+  margin: 0;
+  font-size: 0.76rem;
+}
+@media (max-width: 640px) {
+  .intel-days {
+    margin: 0 -16px;
+    padding: 0 16px;
+    grid-template-columns: repeat(7, 68px);
+  }
+  .in-facts {
+    grid-template-columns: 1fr 1fr;
+    gap: 6px 12px;
+    font-size: 0.84rem;
+  }
+}
+
+/* ═════════ Equipo y accesos ═════════ */
+.team {
+  margin-bottom: 16px;
+}
+.team-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 2px;
+}
+.team-list li {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--borde);
+}
+.team-list li:last-child {
+  border-bottom: 0;
+}
+.tm-text {
+  display: grid;
+  flex: 1;
+  min-width: 0;
+}
+.tm-text small {
+  color: var(--texto-suave);
+}
+.avatar.sm {
+  width: 40px;
+  height: 40px;
+  flex-shrink: 0;
+  font-size: 0.85rem;
+}
+.avatar.ghost {
+  background: rgb(15 61 46 / 0.07);
+  color: var(--verde-botella);
+  display: grid;
+  place-items: center;
+}
+.team-sub {
+  margin: 18px 0 4px;
+  font-size: 0.92rem;
+}
+.inv-who {
+  display: grid;
+  gap: 10px;
+}
+.inv-card {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  width: 100%;
+  padding: 14px;
+  border-radius: 16px;
+  border: 1px solid rgb(0 0 0 / 0.12);
+  background: #fbfbf8;
+  font: inherit;
+  text-align: left;
+  color: var(--texto);
+  cursor: pointer;
+}
+.inv-card span:nth-child(2) {
+  display: grid;
+  gap: 2px;
+  padding-right: 22px;
+}
+.inv-card small {
+  color: var(--texto-suave);
+  line-height: 1.4;
+}
+.inv-card.on {
+  border-color: var(--verde-botella);
+  background: #eef6f0;
+  box-shadow: inset 0 0 0 1px var(--verde-botella);
+}
+.inv-icon {
+  width: 42px;
+  height: 42px;
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--verde-botella) 12%, white);
+  color: var(--verde-botella);
+}
+.inv-check {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  color: var(--verde-botella);
+}
+.inv-done {
+  text-align: center;
+  justify-items: center;
+}
+.inv-code {
+  font-family: var(--mono, ui-monospace, monospace);
+  font-size: 2rem;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  padding: 14px 20px;
+  border-radius: 16px;
+  background: #f4f6f2;
+  border: 2px dashed rgb(15 61 46 / 0.3);
+  user-select: all;
+}
+.lc-invite {
+  margin: 0;
+  padding: 10px 14px;
+  border-radius: 12px;
+  background: #eef6f0;
+  color: #14563a;
+}

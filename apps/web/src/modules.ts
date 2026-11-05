@@ -30,6 +30,9 @@ import {
   Wheat,
 } from "lucide-react";
 
+import type { Role } from "@ganaderia/contracts";
+import { type Permission, can } from "@ganaderia/domain";
+
 export type ModuleKey =
   | "inicio"
   | "animales"
@@ -444,5 +447,26 @@ export const MODULES: ModuleDef[] = [
 ];
 
 export const moduleByKey = (k: ModuleKey) => MODULES.find((m) => m.key === k) as ModuleDef;
+
+/**
+ * Módulos que exigen un permiso para verse. Un veterinario o un empleado no ve costos,
+ * contabilidad ni la gestión de la empresa; el servidor igual rechaza esos datos.
+ */
+const REQUIRES: Partial<Record<ModuleKey, Permission>> = {
+  economia: "economy.read",
+  contabilidad: "economy.read",
+  ventas: "economy.read",
+  compras: "supply.write",
+  personal: "team.manage",
+  activos: "farm.write",
+};
+
+export const canSeeModule = (k: ModuleKey, role: Role | null): boolean => {
+  const need = REQUIRES[k];
+  return !need || (role !== null && can(role, need));
+};
+
+export const modulesFor = (role: Role | null): ModuleDef[] =>
+  MODULES.filter((m) => canSeeModule(m.key, role));
 
 export { Leaf };

@@ -1,4 +1,10 @@
-import type { OnboardingRequest, RegisterRequest, Role, SessionDto } from "@ganaderia/contracts";
+import type {
+  OnboardingRequest,
+  RegisterInvitedRequest,
+  RegisterRequest,
+  Role,
+  SessionDto,
+} from "@ganaderia/contracts";
 import {
   type ReactNode,
   createContext,
@@ -57,6 +63,10 @@ interface AppState {
   completeOnboarding(
     input: OnboardingRequest,
   ): Promise<{ ok: true } | { ok: false; message: string }>;
+  registerInvited(
+    input: RegisterInvitedRequest,
+  ): Promise<{ ok: true } | { ok: false; message: string }>;
+  acceptInvitation(code: string): Promise<{ ok: true } | { ok: false; message: string }>;
   logout(): Promise<void>;
   syncNow(): Promise<SyncOutcome | null>;
   refresh(): Promise<void>;
@@ -255,6 +265,39 @@ export function AppProvider({ children }: { children: ReactNode }) {
     [enter],
   );
 
+  const registerInvited: AppState["registerInvited"] = useCallback(
+    async (input) => {
+      try {
+        const s = await api.registerInvited({ ...input, email: input.email.trim().toLowerCase() });
+        await enter(s, input.password);
+        setOnline(true);
+        return { ok: true as const };
+      } catch (err) {
+        if (err instanceof ApiError) return { ok: false as const, message: err.message };
+        return {
+          ok: false as const,
+          message: "Necesita conexión a internet para aceptar la invitación.",
+        };
+      }
+    },
+    [enter],
+  );
+
+  const acceptInvitation: AppState["acceptInvitation"] = useCallback(async (code) => {
+    try {
+      const s = await api.acceptInvitation(code);
+      saveSession(s);
+      setSession(s);
+      return { ok: true as const };
+    } catch (err) {
+      if (err instanceof ApiError) return { ok: false as const, message: err.message };
+      return {
+        ok: false as const,
+        message: "Necesita conexión a internet para aceptar la invitación.",
+      };
+    }
+  }, []);
+
   const completeOnboarding: AppState["completeOnboarding"] = useCallback(async (input) => {
     try {
       const s = await api.onboarding(input);
@@ -320,6 +363,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       login,
       register,
       completeOnboarding,
+      registerInvited,
+      acceptInvitation,
       logout,
       syncNow,
       refresh,
@@ -341,6 +386,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       login,
       register,
       completeOnboarding,
+      registerInvited,
+      acceptInvitation,
       logout,
       syncNow,
       refresh,

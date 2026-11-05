@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import { type ReactNode, useEffect, useRef, useState } from "react";
 import { FarmsCard } from "./FarmForm";
+import { TeamPanel } from "./TeamPanel";
 import { CardHead, PageHead } from "./components";
 import {
   type TagRead,
@@ -152,6 +153,8 @@ export function SettingsScreen() {
         title="Configuración"
         lead="Sus fincas y los dispositivos de identificación: lea la chapeta o el chip del animal para abrir su hoja de vida o registrarlo sin escribir."
       />
+
+      <TeamPanel />
 
       <FarmsCard />
 

@@ -1089,3 +1089,208 @@ describe("registro de cuentas y asistente inicial", () => {
     expect(me.json().onboardingPending).toBeUndefined();
   });
 });
+
+describe("equipo: invitaciones, veterinario con vigencia y permisos", () => {
+  const invite = (cookie: string, payload: Record<string, unknown>) =>
+    app.inject({
+      method: "POST",
+      url: "/v1/team/invitations",
+      headers: { ...H, cookie },
+      payload: { organizationId: orgA, ...payload },
+    });
+
+  it("el propietario invita a un empleado; se registra con el código y entra a la finca", async () => {
+    const owner = await loginAs("dueno-a@test.local");
+    const inv = await invite(owner, { role: "operario", label: "Pedro vaquero" });
+    expect(inv.statusCode).toBe(201);
+    const { code } = inv.json() as { code: string };
+    expect(code).toMatch(/^[A-Z2-9]{5}-[A-Z2-9]{5}$/);
+
+    const prev = await app.inject({ method: "GET", url: `/v1/invitations/${code.toLowerCase()}` });
+    expect(prev.json()).toMatchObject({ role: "operario", label: "Pedro vaquero" });
+
+    const reg = await app.inject({
+      method: "POST",
+      url: "/v1/auth/register-invited",
+      headers: H,
+      payload: {
+        displayName: "Pedro",
+        email: `pedro-${uuidv7()}@test.local`,
+        password: "vaquero2026",
+        invitationCode: code,
+        acceptTerms: true,
+      },
+    });
+    expect(reg.statusCode).toBe(201);
+    const s = reg.json();
+    expect(s.memberships).toHaveLength(1);
+    expect(s.memberships[0]).toMatchObject({ organizationId: orgA, role: "operario" });
+    expect(s.onboardingPending).toBeUndefined();
+
+    // El código sirve una sola vez.
+    const again = await app.inject({ method: "GET", url: `/v1/invitations/${code}` });
+    expect(again.statusCode).toBe(404);
+  });
+
+  it("el veterinario recibe acceso con vigencia y aparece en el equipo", async () => {
+    const owner = await loginAs("dueno-a@test.local");
+    const { code } = (
+      await invite(owner, { role: "tecnico", label: "Dra. Ruiz", accessDays: 30 })
+    ).json() as { code: string };
+    const vetEmail = `vet-${uuidv7()}@test.local`;
+    const reg = await app.inject({
+      method: "POST",
+      url: "/v1/auth/register-invited",
+      headers: H,
+      payload: {
+        displayName: "Dra. Ruiz",
+        email: vetEmail,
+        password: "vacunas2026",
+        invitationCode: code,
+        acceptTerms: true,
+      },
+    });
+    expect(reg.statusCode).toBe(201);
+    const team = await app.inject({
+      method: "GET",
+      url: `/v1/team?organizationId=${orgA}`,
+      headers: { cookie: owner },
+    });
+    const vet = team.json().members.find((m: { email: string }) => m.email === vetEmail);
+    expect(vet.role).toBe("tecnico");
+    const days = (new Date(vet.validUntil).getTime() - Date.now()) / 864e5;
+    expect(days).toBeGreaterThan(29);
+    expect(days).toBeLessThan(31);
+  });
+
+  it("un código inválido no crea ninguna cuenta", async () => {
+    const email = `nadie-${uuidv7()}@test.local`;
+    const r = await app.inject({
+      method: "POST",
+      url: "/v1/auth/register-invited",
+      headers: H,
+      remoteAddress: "10.7.7.7",
+      payload: {
+        displayName: "Nadie",
+        email,
+        password: "nadie2026x",
+        invitationCode: "AAAAA-BBBBB",
+        acceptTerms: true,
+      },
+    });
+    expect(r.statusCode).toBe(404);
+    const u = await db.admin((q) => q("SELECT 1 FROM app_user WHERE email = $1", [email]));
+    expect(u).toHaveLength(0);
+  });
+
+  it("el operario no puede invitar ni ver el equipo", async () => {
+    const op = await loginAs("operario-a@test.local");
+    expect((await invite(op, { role: "operario", label: "Otro" })).statusCode).toBe(403);
+    expect(
+      (
+        await app.inject({
+          method: "GET",
+          url: `/v1/team?organizationId=${orgA}`,
+          headers: { cookie: op },
+        })
+      ).statusCode,
+    ).toBe(403);
+  });
+
+  it("no se puede invitar a una organización ajena", async () => {
+    const owner = await loginAs("dueno-a@test.local");
+    const r = await app.inject({
+      method: "POST",
+      url: "/v1/team/invitations",
+      headers: { ...H, cookie: owner },
+      payload: { organizationId: orgB, role: "operario", label: "Intruso" },
+    });
+    expect(r.statusCode).toBe(403);
+  });
+
+  it("revocar una invitación la invalida; quitar a alguien le retira el acceso", async () => {
+    const owner = await loginAs("dueno-a@test.local");
+    const created = (await invite(owner, { role: "operario", label: "Temporal" })).json() as {
+      code: string;
+      invitation: { id: string };
+    };
+    const del = await app.inject({
+      method: "DELETE",
+      url: `/v1/team/invitations/${created.invitation.id}?organizationId=${orgA}`,
+      headers: { ...H, cookie: owner },
+    });
+    expect(del.statusCode).toBe(200);
+    expect(
+      (await app.inject({ method: "GET", url: `/v1/invitations/${created.code}` })).statusCode,
+    ).toBe(404);
+
+    // Una persona invitada y luego retirada pierde el acceso.
+    const { code } = (await invite(owner, { role: "operario", label: "Juan" })).json() as {
+      code: string;
+    };
+    const reg = await app.inject({
+      method: "POST",
+      url: "/v1/auth/register-invited",
+      headers: H,
+      payload: {
+        displayName: "Juan",
+        email: `juan-${uuidv7()}@test.local`,
+        password: "juan2026xx",
+        invitationCode: code,
+        acceptTerms: true,
+      },
+    });
+    const juan = `sid=${reg.cookies.find((c) => c.name === "sid")?.value}`;
+    const team = await app.inject({
+      method: "GET",
+      url: `/v1/team?organizationId=${orgA}`,
+      headers: { cookie: owner },
+    });
+    const m = team.json().members.find((x: { displayName: string }) => x.displayName === "Juan");
+    const rm = await app.inject({
+      method: "DELETE",
+      url: `/v1/team/members/${m.membershipId}?organizationId=${orgA}`,
+      headers: { ...H, cookie: owner },
+    });
+    expect(rm.statusCode).toBe(200);
+    const pulled = await app.inject({
+      method: "GET",
+      url: `/v1/sync/pull?organizationId=${orgA}&since=0`,
+      headers: { cookie: juan },
+    });
+    expect(pulled.statusCode).toBe(403);
+  });
+
+  it("el propietario no se puede quitar a sí mismo", async () => {
+    const owner = await loginAs("dueno-a@test.local");
+    const team = await app.inject({
+      method: "GET",
+      url: `/v1/team?organizationId=${orgA}`,
+      headers: { cookie: owner },
+    });
+    const me = team.json().members.find((x: { isMe: boolean }) => x.isMe);
+    const rm = await app.inject({
+      method: "DELETE",
+      url: `/v1/team/members/${me.membershipId}?organizationId=${orgA}`,
+      headers: { ...H, cookie: owner },
+    });
+    expect(rm.statusCode).toBe(400);
+  });
+
+  it("alguien con cuenta acepta una invitación y suma la organización", async () => {
+    const owner = await loginAs("dueno-a@test.local");
+    const { code } = (await invite(owner, { role: "tecnico", label: "Asesor B" })).json() as {
+      code: string;
+    };
+    const other = await loginAs("dueno-b@test.local");
+    const r = await app.inject({
+      method: "POST",
+      url: "/v1/invitations/accept",
+      headers: { ...H, cookie: other },
+      payload: { code },
+    });
+    expect(r.statusCode).toBe(200);
+    const orgs = r.json().memberships.map((m: { organizationId: string }) => m.organizationId);
+    expect(orgs).toEqual(expect.arrayContaining([orgA, orgB]));
+  });
+});

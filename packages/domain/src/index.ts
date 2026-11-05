@@ -143,7 +143,8 @@ export type Permission =
   | "economy.read"
   | "supply.write"
   | "stock.write"
-  | "audit.read";
+  | "audit.read"
+  | "team.manage";
 
 const MATRIX: Record<Role, readonly Permission[]> = {
   admin_entidad: [
@@ -155,6 +156,7 @@ const MATRIX: Record<Role, readonly Permission[]> = {
     "supply.write",
     "stock.write",
     "audit.read",
+    "team.manage",
   ],
   propietario: [
     "farm.read",
@@ -166,6 +168,7 @@ const MATRIX: Record<Role, readonly Permission[]> = {
     "supply.write",
     "stock.write",
     "audit.read",
+    "team.manage",
   ],
   // TDR: operario con consulta mínima y captura de eventos autorizados; sin administración.
   // Puede recibir y consumir insumos en bodega, pero no crear el catálogo ni ver costos.

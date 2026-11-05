@@ -4,6 +4,7 @@ import { type Permission, can } from "@ganaderia/domain";
 import { type Algorithm, hash, verify } from "@node-rs/argon2";
 import { appendAudit } from "./audit.js";
 import type { Db, Q } from "./db.js";
+import { consumeInvitation } from "./team.js";
 
 const SESSION_HOURS = 12;
 export const OFFLINE_LEASE_HOURS = 72;
@@ -284,3 +285,62 @@ export function farmScope(memberships: Membership[], orgId: string): "ALL" | str
 
 export const scopeHash = (scope: "ALL" | string[]) =>
   sha256(scope === "ALL" ? "ALL" : scope.join(",")).slice(0, 16);
+
+export type RegisterInvitedResult =
+  | { ok: true; token: string; user: AuthUser; memberships: Membership[]; orgId: string }
+  | { ok: false; reason: "correo_en_uso" | "invitacion" };
+
+/** Alta de una persona invitada: queda dentro de la organización que la invitó, ya configurada. */
+export async function registerInvited(
+  db: Db,
+  input: { displayName: string; email: string; password: string; invitationCode: string },
+  userAgent: string | undefined,
+): Promise<RegisterInvitedResult> {
+  const passwordHash = await hashPassword(input.password);
+  class Rollback extends Error {}
+  let reason: "correo_en_uso" | "invitacion" = "invitacion";
+  const created = await db
+    .admin(async (q) => {
+      if ((await q("SELECT 1 FROM app_user WHERE email = $1", [input.email])).length > 0) {
+        reason = "correo_en_uso";
+        throw new Rollback();
+      }
+      const [u] = await q<{ id: string }>(
+        "INSERT INTO app_user (email, display_name, password_hash) VALUES ($1,$2,$3) RETURNING id",
+        [input.email, input.displayName, passwordHash],
+      );
+      const userId = u?.id as string;
+      const orgId = await consumeInvitation(q, input.invitationCode, userId);
+      // Sin invitación válida se deshace todo: no quedan cuentas sueltas.
+      if (!orgId) throw new Rollback();
+      return { userId, orgId };
+    })
+    .catch((err: { code?: string }) => {
+      if (err instanceof Rollback) return null;
+      if (err?.code === "23505") {
+        reason = "correo_en_uso";
+        return null;
+      }
+      throw err;
+    });
+  if (!created) return { ok: false, reason };
+  await db.tenant(
+    created.orgId,
+    (q) =>
+      appendAudit(q, created.orgId, {
+        userId: created.userId,
+        action: "team.join",
+        entity: "user",
+        entityId: created.userId,
+      }),
+    { write: true },
+  );
+  const { token, memberships } = await openSession(db, created.userId, userAgent);
+  return {
+    ok: true,
+    token,
+    user: { id: created.userId, email: input.email, displayName: input.displayName },
+    memberships,
+    orgId: created.orgId,
+  };
+}

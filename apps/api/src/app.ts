@@ -5,9 +5,11 @@ import {
   ErrorCodes,
   FarmCreate,
   FarmUpdate,
+  InvitationCreate,
   LoginRequest,
   OnboardingRequest,
   PushRequest,
+  RegisterInvitedRequest,
   RegisterRequest,
 } from "@ganaderia/contracts";
 import Fastify, { type FastifyInstance, type FastifyReply, type FastifyRequest } from "fastify";
@@ -21,11 +23,20 @@ import {
   login,
   logout,
   register,
+  registerInvited,
   resolveSession,
   toSessionDto,
 } from "./auth.js";
 import type { Db } from "./db.js";
 import { createFarm, listFarms, pull, push, updateFarm } from "./sync.js";
+import {
+  acceptInvitation,
+  createInvitation,
+  getTeam,
+  previewInvitation,
+  removeMember,
+  revokeInvitation,
+} from "./team.js";
 
 const COOKIE = "sid";
 
@@ -60,6 +71,7 @@ export async function buildApp(opts: AppOptions): Promise<FastifyInstance> {
   });
   const throttle = new LoginThrottle();
   const registerThrottle = new LoginThrottle();
+  const inviteThrottle = new LoginThrottle();
   await app.register(cookie);
 
   app.addHook("onSend", async (req, reply) => {
@@ -158,6 +170,157 @@ export async function buildApp(opts: AppOptions): Promise<FastifyInstance> {
       maxAge: 12 * 3600,
     });
     return reply.code(201).send(toSessionDto(res.user, res.memberships));
+  });
+
+  const setSession = (reply: FastifyReply, token: string) =>
+    reply.setCookie(COOKIE, token, {
+      httpOnly: true,
+      sameSite: "strict",
+      secure: opts.production ?? false,
+      path: "/",
+      maxAge: 12 * 3600,
+    });
+  const badCode = (reply: FastifyReply) =>
+    reply.code(404).send({
+      error: ErrorCodes.INVITACION_INVALIDA,
+      message: "La invitación no existe, ya se usó o venció. Pida una nueva.",
+    });
+
+  // Vista previa pública de una invitación: a qué finca y con qué papel. Limitada por IP.
+  app.get("/v1/invitations/:code", async (req, reply) => {
+    const key = `invitacion:${req.ip}`;
+    if (inviteThrottle.isLocked(key))
+      return reply
+        .code(429)
+        .send({ error: "BLOQUEADO", message: "Demasiados intentos. Espere 15 minutos." });
+    const { code } = req.params as { code: string };
+    const p = await previewInvitation(db, code);
+    if (!p) {
+      inviteThrottle.fail(key);
+      return badCode(reply);
+    }
+    return p;
+  });
+
+  app.post("/v1/auth/register-invited", async (req, reply) => {
+    const key = `invitacion:${req.ip}`;
+    if (inviteThrottle.isLocked(key))
+      return reply
+        .code(429)
+        .send({ error: "BLOQUEADO", message: "Demasiados intentos. Espere 15 minutos." });
+    const body = RegisterInvitedRequest.safeParse(req.body);
+    if (!body.success)
+      return reply.code(400).send({
+        error: "VALIDACION",
+        message: body.error.issues[0]?.message ?? "Datos inválidos.",
+      });
+    const res = await registerInvited(db, body.data, req.headers["user-agent"]);
+    if (!res.ok) {
+      if (res.reason === "correo_en_uso")
+        return reply.code(409).send({
+          error: ErrorCodes.CORREO_EN_USO,
+          message: "Ya existe una cuenta con ese correo: ingrese con ella y use la invitación.",
+        });
+      inviteThrottle.fail(key);
+      return badCode(reply);
+    }
+    setSession(reply, res.token);
+    return reply.code(201).send(toSessionDto(res.user, res.memberships));
+  });
+
+  app.post("/v1/invitations/accept", { preHandler: requireSession }, async (req, reply) => {
+    const a = req.auth as NonNullable<FastifyRequest["auth"]>;
+    const key = `invitacion:${a.user.id}`;
+    if (inviteThrottle.isLocked(key))
+      return reply
+        .code(429)
+        .send({ error: "BLOQUEADO", message: "Demasiados intentos. Espere 15 minutos." });
+    const code = String((req.body as { code?: unknown } | null)?.code ?? "");
+    const orgId = await acceptInvitation(db, a.user, code);
+    if (!orgId) {
+      inviteThrottle.fail(key);
+      return badCode(reply);
+    }
+    const fresh = await resolveSession(db, req.cookies[COOKIE]);
+    return toSessionDto(fresh?.user ?? a.user, fresh?.memberships ?? a.memberships);
+  });
+
+  const teamGuard = (req: FastifyRequest, reply: FastifyReply, orgId: string) => {
+    const a = req.auth as NonNullable<FastifyRequest["auth"]>;
+    if (!grants(a.memberships, orgId, "team.manage", null)) {
+      void reply.code(403).send({
+        error: "PERMISO_DENEGADO",
+        message: "Solo el propietario o el administrador gestionan el equipo.",
+      });
+      return null;
+    }
+    return a;
+  };
+
+  app.get("/v1/team", { preHandler: requireSession }, async (req, reply) => {
+    const q = orgQuery.safeParse(req.query);
+    if (!q.success)
+      return reply.code(400).send({ error: "VALIDACION", message: "Organización requerida." });
+    const a = teamGuard(req, reply, q.data.organizationId);
+    if (!a) return reply;
+    return getTeam(db, q.data.organizationId, a.user.id);
+  });
+
+  app.post("/v1/team/invitations", { preHandler: requireSession }, async (req, reply) => {
+    const body = InvitationCreate.safeParse(req.body);
+    if (!body.success)
+      return reply.code(400).send({
+        error: "VALIDACION",
+        message: body.error.issues[0]?.message ?? "Datos inválidos.",
+      });
+    const a = teamGuard(req, reply, body.data.organizationId);
+    if (!a) return reply;
+    const res = await createInvitation(db, a.user, body.data);
+    if (!res.ok)
+      return reply
+        .code(400)
+        .send({ error: "FINCA_NO_AUTORIZADA", message: "La finca no es de esta organización." });
+    return reply.code(201).send({ code: res.code, invitation: res.invitation });
+  });
+
+  app.delete("/v1/team/invitations/:id", { preHandler: requireSession }, async (req, reply) => {
+    const q = orgQuery.safeParse(req.query);
+    if (!q.success)
+      return reply.code(400).send({ error: "VALIDACION", message: "Organización requerida." });
+    const a = teamGuard(req, reply, q.data.organizationId);
+    if (!a) return reply;
+    const ok = await revokeInvitation(
+      db,
+      a.user,
+      q.data.organizationId,
+      (req.params as { id: string }).id,
+    );
+    return ok
+      ? { ok: true }
+      : reply.code(404).send({ error: "NO_EXISTE", message: "La invitación no existe." });
+  });
+
+  app.delete("/v1/team/members/:id", { preHandler: requireSession }, async (req, reply) => {
+    const q = orgQuery.safeParse(req.query);
+    if (!q.success)
+      return reply.code(400).send({ error: "VALIDACION", message: "Organización requerida." });
+    const a = teamGuard(req, reply, q.data.organizationId);
+    if (!a) return reply;
+    const r = await removeMember(
+      db,
+      a.user,
+      q.data.organizationId,
+      (req.params as { id: string }).id,
+    );
+    if (r.ok) return { ok: true };
+    const msg = {
+      no_existe: "La persona no está en el equipo.",
+      propietario: "El propietario no se puede retirar.",
+      yo: "No puede quitarse su propio acceso.",
+    }[r.reason];
+    return reply
+      .code(r.reason === "no_existe" ? 404 : 400)
+      .send({ error: "NO_PERMITIDO", message: msg });
   });
 
   app.post("/v1/onboarding", { preHandler: requireSession }, async (req, reply) => {

@@ -408,6 +408,65 @@ export const RegisterRequest = z.object({
 });
 export type RegisterRequest = z.infer<typeof RegisterRequest>;
 
+/** Registro de alguien invitado: entra a la organización que lo invitó, sin crear una propia. */
+export const RegisterInvitedRequest = z.object({
+  displayName: RegisterRequest.shape.displayName,
+  email: RegisterRequest.shape.email,
+  password: RegisterRequest.shape.password,
+  invitationCode: z.string().trim().min(6).max(20),
+  acceptTerms: z.literal(true),
+});
+export type RegisterInvitedRequest = z.infer<typeof RegisterInvitedRequest>;
+
+/** Quién puede ser invitado. El propietario no se invita: es quien crea la cuenta. */
+export const InviteRole = z.enum(["operario", "tecnico", "admin_entidad"]);
+export type InviteRole = z.infer<typeof InviteRole>;
+
+export const InvitationCreate = z.object({
+  organizationId: z.string().uuid(),
+  role: InviteRole,
+  label: z.string().trim().min(2).max(120),
+  farmId: z.string().uuid().optional(),
+  /** Días de acceso (veterinarios y asesores). Sin valor, el acceso no vence. */
+  accessDays: z.number().int().min(1).max(730).optional(),
+});
+export type InvitationCreate = z.infer<typeof InvitationCreate>;
+
+export interface InvitationDto {
+  id: string;
+  role: InviteRole;
+  label: string;
+  farmId: string | null;
+  accessUntil: string | null;
+  expiresAt: string;
+  createdAt: string;
+  acceptedAt: string | null;
+  acceptedBy: string | null;
+}
+
+export interface TeamMemberDto {
+  membershipId: string;
+  userId: string;
+  displayName: string;
+  email: string;
+  role: Role;
+  farmId: string | null;
+  validUntil: string | null;
+  isMe: boolean;
+}
+
+export interface TeamDto {
+  members: TeamMemberDto[];
+  invitations: InvitationDto[];
+}
+
+export interface InvitationPreview {
+  organizationName: string;
+  role: InviteRole;
+  label: string;
+  accessUntil: string | null;
+}
+
 export const JobRole = z.enum([
   "propietario",
   "administrador",
@@ -577,6 +636,7 @@ export const ErrorCodes = {
   INSUMO_DUPLICADO: "INSUMO_DUPLICADO",
   MAPA_DESACTUALIZADO: "MAPA_DESACTUALIZADO",
   CORREO_EN_USO: "CORREO_EN_USO",
+  INVITACION_INVALIDA: "INVITACION_INVALIDA",
   ANIMAL_NO_EXISTE: "ANIMAL_NO_EXISTE",
   ANIMAL_INACTIVO: "ANIMAL_INACTIVO",
   EVENTO_NO_APLICA: "EVENTO_NO_APLICA",

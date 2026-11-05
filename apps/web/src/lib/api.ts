@@ -2,11 +2,16 @@ import type {
   FarmCreate,
   FarmDto,
   FarmUpdate,
+  InvitationCreate,
+  InvitationDto,
+  InvitationPreview,
   OnboardingRequest,
   PullResponse,
   PushResponse,
+  RegisterInvitedRequest,
   RegisterRequest,
   SessionDto,
+  TeamDto,
 } from "@ganaderia/contracts";
 
 /** Sin respuesta del servidor: no hay red o el servidor no está disponible. */
@@ -64,6 +69,23 @@ export const api = {
     request<SessionDto>("POST", "/v1/auth/login", { email, password }),
   register: (input: RegisterRequest) => request<SessionDto>("POST", "/v1/auth/register", input),
   onboarding: (input: OnboardingRequest) => request<SessionDto>("POST", "/v1/onboarding", input),
+  registerInvited: (input: RegisterInvitedRequest) =>
+    request<SessionDto>("POST", "/v1/auth/register-invited", input),
+  previewInvitation: (code: string) =>
+    request<InvitationPreview>("GET", `/v1/invitations/${encodeURIComponent(code)}`),
+  acceptInvitation: (code: string) =>
+    request<SessionDto>("POST", "/v1/invitations/accept", { code }),
+  team: (organizationId: string) =>
+    request<TeamDto>("GET", `/v1/team?organizationId=${organizationId}`),
+  invite: (input: InvitationCreate) =>
+    request<{ code: string; invitation: InvitationDto }>("POST", "/v1/team/invitations", input),
+  revokeInvitation: (organizationId: string, id: string) =>
+    request<{ ok: true }>("DELETE", `/v1/team/invitations/${id}?organizationId=${organizationId}`),
+  removeMember: (organizationId: string, membershipId: string) =>
+    request<{ ok: true }>(
+      "DELETE",
+      `/v1/team/members/${membershipId}?organizationId=${organizationId}`,
+    ),
   logout: () => request<{ ok: true }>("POST", "/v1/auth/logout"),
   me: () => request<SessionDto>("GET", "/v1/auth/me"),
   approxLocation: () => request<{ lat: number; lng: number }>("GET", "/v1/geo/approx"),

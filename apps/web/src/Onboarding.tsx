@@ -1,4 +1,4 @@
-import type { Goal, HerdEstimate, JobRole, OrgKind } from "@ganaderia/contracts";
+import type { Goal, HerdEstimate, InvitationPreview, JobRole, OrgKind } from "@ganaderia/contracts";
 import {
   ArrowLeft,
   ArrowRight,
@@ -37,8 +37,22 @@ const STRENGTH = ["Muy débil", "Débil", "Aceptable", "Buena", "Excelente"];
  * Registro en tres pantallas cortas, pensado para el celular: una pregunta a la vez,
  * el teclado adecuado en cada campo y el botón siempre visible encima del teclado.
  */
-export function RegisterForm({ onBack }: { onBack(): void }) {
-  const { register } = useApp();
+export interface PendingInvite {
+  code: string;
+  preview: InvitationPreview;
+}
+
+const INVITE_ROLE: Record<InvitationPreview["role"], string> = {
+  operario: "empleado",
+  tecnico: "veterinario o asesor",
+  admin_entidad: "administrador",
+};
+
+export function RegisterForm({
+  onBack,
+  invite,
+}: { onBack(): void; invite?: PendingInvite | null }) {
+  const { register, registerInvited } = useApp();
   const [step, setStep] = useState(0);
   const [displayName, setDisplayName] = useState("");
   const [organizationName, setOrganizationName] = useState("");
@@ -66,7 +80,7 @@ export function RegisterForm({ onBack }: { onBack(): void }) {
   ];
   const pwOk = pwRules.every((r) => r.ok);
   const ready = [
-    displayName.trim().length >= 2 && organizationName.trim().length >= 2,
+    displayName.trim().length >= 2 && (Boolean(invite) || organizationName.trim().length >= 2),
     emailOk,
     pwOk && accept,
   ][step];
@@ -98,13 +112,21 @@ export function RegisterForm({ onBack }: { onBack(): void }) {
       return;
     }
     setBusy(true);
-    const res = await register({
-      displayName: displayName.trim(),
-      email: email.trim(),
-      password,
-      organizationName: organizationName.trim(),
-      acceptTerms: true,
-    });
+    const res = invite
+      ? await registerInvited({
+          displayName: displayName.trim(),
+          email: email.trim(),
+          password,
+          invitationCode: invite.code,
+          acceptTerms: true,
+        })
+      : await register({
+          displayName: displayName.trim(),
+          email: email.trim(),
+          password,
+          organizationName: organizationName.trim(),
+          acceptTerms: true,
+        });
     if (!res.ok) {
       setError(res.message);
       // Si el correo ya existe, se vuelve a la pantalla del correo.
@@ -145,9 +167,17 @@ export function RegisterForm({ onBack }: { onBack(): void }) {
       <div className="reg-body" key={step}>
         {step === 0 && (
           <>
-            <p className="kicker">Cree su cuenta gratis</p>
+            <p className="kicker">
+              {invite
+                ? `Invitación de ${invite.preview.organizationName}`
+                : "Cree su cuenta gratis"}
+            </p>
             <h1 id="reg-title">¿Cómo se llama?</h1>
-            <p className="lc-sub">Y díganos el nombre de su ganadería o empresa.</p>
+            <p className="lc-sub">
+              {invite
+                ? `Lo invitaron como ${INVITE_ROLE[invite.preview.role]}${invite.preview.accessUntil ? `, con acceso hasta el ${new Date(invite.preview.accessUntil).toLocaleDateString("es-CO", { day: "numeric", month: "long" })}` : ""}.`
+                : "Y díganos el nombre de su ganadería o empresa."}
+            </p>
             <label className="field">
               <span className="field-label">Su nombre</span>
               <span className="field-box">
@@ -170,21 +200,23 @@ export function RegisterForm({ onBack }: { onBack(): void }) {
                 />
               </span>
             </label>
-            <label className="field">
-              <span className="field-label">Ganadería o empresa</span>
-              <span className="field-box">
-                <Building2 size={20} aria-hidden="true" />
-                <input
-                  ref={org}
-                  autoComplete="organization"
-                  autoCapitalize="words"
-                  enterKeyHint="next"
-                  value={organizationName}
-                  onChange={(e) => setOrganizationName(e.target.value)}
-                  placeholder="Ej. Hacienda La Esperanza"
-                />
-              </span>
-            </label>
+            {!invite && (
+              <label className="field">
+                <span className="field-label">Ganadería o empresa</span>
+                <span className="field-box">
+                  <Building2 size={20} aria-hidden="true" />
+                  <input
+                    ref={org}
+                    autoComplete="organization"
+                    autoCapitalize="words"
+                    enterKeyHint="next"
+                    value={organizationName}
+                    onChange={(e) => setOrganizationName(e.target.value)}
+                    placeholder="Ej. Hacienda La Esperanza"
+                  />
+                </span>
+              </label>
+            )}
           </>
         )}
 
