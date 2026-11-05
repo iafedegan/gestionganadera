@@ -17,11 +17,11 @@ export default defineConfig({
         short_name: "Gestión Ganadera",
         description: "Gestión de fincas, animales y registros de campo, también sin conexión.",
         lang: "es-CO",
-        start_url: "/app/",
+        start_url: "/app/?source=pwa",
         scope: "/app/",
         display: "standalone",
         orientation: "portrait",
-        background_color: "#F2F2F7",
+        background_color: "#0f3d2e",
         theme_color: "#F2F2F7",
         icons: [
           { src: "icon-192.png", sizes: "192x192", type: "image/png", purpose: "any" },

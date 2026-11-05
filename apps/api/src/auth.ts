@@ -7,6 +7,8 @@ import type { Db, Q } from "./db.js";
 import { consumeInvitation } from "./team.js";
 
 const SESSION_HOURS = 12;
+/** Sesión recordada en la app instalada del celular. */
+export const REMEMBER_HOURS = 24 * 30;
 export const OFFLINE_LEASE_HOURS = 72;
 const MAX_FAILS = 5;
 const LOCK_MS = 15 * 60 * 1000;
@@ -96,6 +98,7 @@ export async function login(
   email: string,
   password: string,
   userAgent: string | undefined,
+  remember = false,
 ): Promise<LoginResult> {
   if (throttle.isLocked(email)) return { ok: false, reason: "bloqueado" };
 
@@ -122,7 +125,12 @@ export async function login(
   }
   throttle.reset(email);
 
-  const { token, memberships } = await openSession(db, row.id, userAgent);
+  const { token, memberships } = await openSession(
+    db,
+    row.id,
+    userAgent,
+    remember ? REMEMBER_HOURS : SESSION_HOURS,
+  );
   for (const m of memberships) {
     await db.tenant(
       m.organizationId,
@@ -143,12 +151,17 @@ export async function login(
   };
 }
 
-async function openSession(db: Db, userId: string, userAgent: string | undefined) {
+async function openSession(
+  db: Db,
+  userId: string,
+  userAgent: string | undefined,
+  hours = SESSION_HOURS,
+) {
   const token = randomBytes(32).toString("base64url");
   const memberships = await db.admin(async (q) => {
     await q(
       "INSERT INTO session (token_hash, user_id, expires_at, user_agent) VALUES ($1,$2, now() + ($3 || ' hours')::interval, $4)",
-      [sha256(token), userId, String(SESSION_HOURS), userAgent?.slice(0, 300) ?? null],
+      [sha256(token), userId, String(hours), userAgent?.slice(0, 300) ?? null],
     );
     return loadMemberships(q, userId);
   });

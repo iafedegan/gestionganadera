@@ -374,6 +374,8 @@ export interface PullResponse {
 export const LoginRequest = z.object({
   email: z.string().trim().toLowerCase().email().max(200),
   password: z.string().min(1).max(200),
+  /** App instalada en el celular: la sesión dura 30 días en vez de 12 horas. */
+  remember: z.boolean().optional(),
 });
 export type LoginRequest = z.infer<typeof LoginRequest>;
 

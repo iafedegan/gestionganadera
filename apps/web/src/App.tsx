@@ -9,6 +9,7 @@ import { PersonalScreen } from "./Personal";
 import { ProduccionScreen } from "./Produccion";
 import { ReproduccionScreen } from "./Reproduccion";
 import { SanidadScreen } from "./Sanidad";
+import { Splash } from "./Splash";
 import { VentasScreen } from "./Ventas";
 import { AnimalsScreen } from "./animals";
 import { isDemoOrg } from "./lib/scope";
@@ -37,7 +38,7 @@ const SCREENS: Partial<Record<ModuleKey, () => ReactNode>> = {
 };
 
 export function App() {
-  const { session, role, acceptInvitation, notify, syncNow } = useApp();
+  const { session, role, acceptInvitation, notify, syncNow, booting } = useApp();
   const [module, setModule] = useState<ModuleKey>("inicio");
   const [syncOpen, setSyncOpen] = useState(false);
   const setup = useSetup();
@@ -66,6 +67,7 @@ export function App() {
     });
   }, [session?.userId]);
 
+  if (booting) return <Splash />;
   if (!session) return <Login />;
   if (session.onboardingPending) return <OnboardingWizard />;
 

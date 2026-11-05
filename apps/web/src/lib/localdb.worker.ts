@@ -277,6 +277,46 @@ function migrate(d: Database): void {
   if (version < 5) d.exec("PRAGMA user_version = 5");
 }
 
+/* App instalada: la clave de datos se guarda envuelta con una clave del dispositivo que el
+   navegador marca como no exportable. Así se reabre sin pedir la contraseña; cerrar sesión
+   la borra. */
+const IDB = "gg-recordar";
+function idb(): Promise<IDBDatabase> {
+  return new Promise((ok, fail) => {
+    const r = indexedDB.open(IDB, 1);
+    r.onupgradeneeded = () => r.result.createObjectStore("k");
+    r.onsuccess = () => ok(r.result);
+    r.onerror = () => fail(r.error);
+  });
+}
+async function idbDo<T>(mode: IDBTransactionMode, fn: (s: IDBObjectStore) => IDBRequest<T>) {
+  const d = await idb();
+  try {
+    return await new Promise<T>((ok, fail) => {
+      const req = fn(d.transaction("k", mode).objectStore("k"));
+      req.onsuccess = () => ok(req.result);
+      req.onerror = () => fail(req.error);
+    });
+  } finally {
+    d.close();
+  }
+}
+interface Remembered {
+  deviceKey: CryptoKey;
+  iv: Uint8Array<ArrayBuffer>;
+  wrapped: ArrayBuffer;
+}
+async function rememberKey(userId: string, raw: BufferSource): Promise<void> {
+  const deviceKey = await crypto.subtle.generateKey({ name: "AES-GCM", length: 256 }, false, [
+    "encrypt",
+    "decrypt",
+  ]);
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const wrapped = await crypto.subtle.encrypt({ name: "AES-GCM", iv }, deviceKey, raw);
+  const rec: Remembered = { deviceKey, iv, wrapped };
+  await idbDo("readwrite", (st) => st.put(rec, userId));
+}
+
 async function openDb(userId: string): Promise<void> {
   if (db && currentUser === userId) return;
   db?.close();
@@ -293,10 +333,13 @@ const api = {
     userId: string;
     password: string;
     keystore: Keystore | null;
+    /** App instalada: recordar la clave en este dispositivo. */
+    remember?: boolean;
   }): Promise<{ keystore: Keystore; created: boolean }> {
     key = undefined;
     let store = args.keystore;
     let created = false;
+    let rawKey: BufferSource | undefined;
     if (store) {
       try {
         const wrapKey = await kek(args.password, unb64(store.salt), store.iterations);
@@ -306,6 +349,7 @@ const api = {
           unb64(store.wrapped),
         );
         key = await crypto.subtle.importKey("raw", raw, "AES-GCM", false, ["encrypt", "decrypt"]);
+        rawKey = raw;
       } catch {
         throw new Error("CLAVE_INCORRECTA");
       }
@@ -324,6 +368,7 @@ const api = {
         iterations: PBKDF2_ITERATIONS,
       };
       key = await crypto.subtle.importKey("raw", raw, "AES-GCM", false, ["encrypt", "decrypt"]);
+      rawKey = raw;
       created = true;
     }
     try {
@@ -332,7 +377,32 @@ const api = {
       key = undefined;
       throw new Error(`ALMACENAMIENTO: ${err instanceof Error ? err.message : String(err)}`);
     }
+    if (args.remember && rawKey) await rememberKey(args.userId, rawKey).catch(() => undefined);
     return { keystore: store, created };
+  },
+
+  /** Reabre la copia local con la clave recordada (app instalada). false si no hay. */
+  async resume(userId: string): Promise<boolean> {
+    try {
+      const rec = await idbDo<Remembered | undefined>("readonly", (st) => st.get(userId));
+      if (!rec) return false;
+      const raw = await crypto.subtle.decrypt(
+        { name: "AES-GCM", iv: rec.iv },
+        rec.deviceKey,
+        rec.wrapped,
+      );
+      key = await crypto.subtle.importKey("raw", raw, "AES-GCM", false, ["encrypt", "decrypt"]);
+      await openDb(userId);
+      return true;
+    } catch {
+      key = undefined;
+      return false;
+    }
+  },
+
+  /** Olvida la clave recordada en este dispositivo (cerrar sesión). */
+  async forget(userId: string): Promise<void> {
+    await idbDo("readwrite", (st) => st.delete(userId)).catch(() => undefined);
   },
 
   /** Olvida la clave en memoria. Los datos quedan cifrados en el dispositivo. */

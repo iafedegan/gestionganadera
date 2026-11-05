@@ -75,8 +75,8 @@ async function request<T>(
 }
 
 export const api = {
-  login: (email: string, password: string) =>
-    request<SessionDto>("POST", "/v1/auth/login", { email, password }),
+  login: (email: string, password: string, remember = false) =>
+    request<SessionDto>("POST", "/v1/auth/login", { email, password, remember }),
   register: (input: RegisterRequest) => request<SessionDto>("POST", "/v1/auth/register", input),
   onboarding: (input: OnboardingRequest) => request<SessionDto>("POST", "/v1/onboarding", input),
   registerInvited: (input: RegisterInvitedRequest) =>

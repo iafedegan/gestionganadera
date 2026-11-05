@@ -20,12 +20,14 @@ import { localdb } from "./lib/localdb";
 import { isDemoOrg, setDataScope } from "./lib/scope";
 import {
   clearKeystore,
+  lastEmail,
   leaseActive,
   loadKeystore,
   loadSession,
   saveKeystore,
   saveSession,
 } from "./lib/session";
+import { isStandalone } from "./lib/standalone";
 import { type SyncOutcome, runSync } from "./lib/sync";
 
 export interface Counts {
@@ -41,6 +43,8 @@ export interface Toast {
 }
 
 interface AppState {
+  /** Abriendo la app instalada: se intenta reanudar la sesión recordada (se muestra el splash). */
+  booting: boolean;
   toasts: Toast[];
   notify(message: string, tone?: Toast["tone"]): void;
   dismissToast(id: number): void;
@@ -83,6 +87,7 @@ const ZERO: Counts = { pendiente: 0, rechazado: 0, conflicto: 0 };
 
 export function AppProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<SessionDto | null>(null);
+  const [booting, setBooting] = useState(isStandalone);
   const [online, setOnline] = useState(true);
   const [syncing, setSyncing] = useState(false);
   const [lastSync, setLastSync] = useState<string | null>(null);
@@ -161,13 +166,23 @@ export function AppProvider({ children }: { children: ReactNode }) {
       let notice: string | undefined;
       let store = loadKeystore(s.userId);
       try {
-        const res = await localdb.unlock({ userId: s.userId, password, keystore: store });
+        const res = await localdb.unlock({
+          userId: s.userId,
+          password,
+          keystore: store,
+          remember: isStandalone(),
+        });
         store = res.keystore;
       } catch (err) {
         if (!(err instanceof Error) || err.message !== "CLAVE_INCORRECTA") throw err;
         // La contraseña cambió en el servidor: la clave local ya no se puede abrir.
         clearKeystore(s.userId);
-        const res = await localdb.unlock({ userId: s.userId, password, keystore: null });
+        const res = await localdb.unlock({
+          userId: s.userId,
+          password,
+          keystore: null,
+          remember: isStandalone(),
+        });
         store = res.keystore;
         await localdb.wipe();
         notice = "La contraseña cambió: se reinició la copia local de este dispositivo.";
@@ -185,7 +200,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     async (rawEmail, password) => {
       const email = rawEmail.trim().toLowerCase();
       try {
-        const s = await api.login(email, password);
+        const s = await api.login(email, password, isStandalone());
         const notice = await enter(s, password);
         setOnline(true);
         return notice ? { ok: true as const, notice } : { ok: true as const };
@@ -314,12 +329,43 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const logout = useCallback(async () => {
+    if (session) await localdb.forget(session.userId);
     await localdb.lock();
     api.logout().catch(() => undefined);
     setSession(null);
     setCounts(ZERO);
     setLastSync(null);
     setSyncNotice(null);
+  }, [session]);
+
+  // App instalada: al abrir, se reanuda la sesión recordada sin pedir la contraseña.
+  // Con conexión se confirma con el servidor; sin ella vale el permiso de 72 h.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: solo al arrancar
+  useEffect(() => {
+    if (!booting) return;
+    const started = Date.now();
+    const done = () =>
+      window.setTimeout(() => setBooting(false), Math.max(0, 1400 - (Date.now() - started)));
+    void (async () => {
+      const stored = loadSession(lastEmail());
+      if (!stored || !(await localdb.resume(stored.userId))) return done();
+      try {
+        const fresh = await api.me();
+        saveSession(fresh);
+        setSession(fresh);
+        setOnline(true);
+      } catch (err) {
+        if (err instanceof NetworkError && leaseActive(stored)) {
+          setSession(stored);
+          setOnline(false);
+        } else {
+          // Sesión vencida o cerrada en el servidor: se vuelve a pedir la contraseña.
+          await localdb.forget(stored.userId);
+          await localdb.lock();
+        }
+      }
+      done();
+    })();
   }, []);
 
   // Sincroniza al entrar y cuando el navegador recupera la red.
@@ -347,6 +393,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const value = useMemo<AppState>(
     () => ({
+      booting,
       toasts,
       notify,
       dismissToast,
@@ -370,6 +417,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       refresh,
     }),
     [
+      booting,
       toasts,
       notify,
       dismissToast,

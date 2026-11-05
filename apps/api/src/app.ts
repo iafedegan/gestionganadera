@@ -32,6 +32,7 @@ import {
   type AuthUser,
   LoginThrottle,
   type Membership,
+  REMEMBER_HOURS,
   grants,
   login,
   logout,
@@ -133,6 +134,7 @@ export async function buildApp(opts: AppOptions): Promise<FastifyInstance> {
       body.data.email,
       body.data.password,
       req.headers["user-agent"],
+      body.data.remember === true,
     );
     if (!res.ok) {
       return reply.code(res.reason === "bloqueado" ? 429 : 401).send({
@@ -148,7 +150,7 @@ export async function buildApp(opts: AppOptions): Promise<FastifyInstance> {
       sameSite: "strict",
       secure: opts.production ?? false,
       path: "/",
-      maxAge: 12 * 3600,
+      maxAge: (body.data.remember ? REMEMBER_HOURS : 12) * 3600,
     });
     return toSessionDto(res.user, res.memberships);
   });

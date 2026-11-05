@@ -6,6 +6,7 @@ import { registerSW } from "virtual:pwa-register";
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { App } from "./App";
+import { isStandalone } from "./lib/standalone";
 import { AppProvider } from "./state";
 import "./styles.css";
 import "./ios.css";
@@ -13,10 +14,7 @@ import "./ios.css";
 registerSW({ immediate: true });
 
 // Clases de entorno: permiten estilos distintos cuando se abre como app instalada.
-const standalone =
-  window.matchMedia("(display-mode: standalone)").matches ||
-  (navigator as unknown as { standalone?: boolean }).standalone === true;
-document.documentElement.classList.toggle("standalone", standalone);
+document.documentElement.classList.toggle("standalone", isStandalone());
 
 const root = document.getElementById("root");
 if (root) {
