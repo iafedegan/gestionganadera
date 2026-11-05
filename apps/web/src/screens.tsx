@@ -61,6 +61,7 @@ import {
   useSwipeDismiss,
 } from "./native";
 import { PROTO } from "./protoData";
+import { SETUP_MODULES, type SetupState } from "./setup";
 import { useApp } from "./state";
 import { statusOf } from "./supplies";
 
@@ -357,9 +358,10 @@ function NavList(props: {
   active: ModuleKey;
   onPick(m: ModuleKey): void;
   variant?: "side" | "sheet";
+  locked?: boolean;
 }) {
   const { role } = useApp();
-  const list = modulesFor(role);
+  const list = modulesFor(role).filter((m) => !props.locked || SETUP_MODULES.includes(m.key));
   return (
     <ul className={props.variant === "sheet" ? "nav-list nav-sheet" : "nav-list"}>
       {list.map((m, i) => (
@@ -393,6 +395,8 @@ export function Shell(props: {
   onModule(m: ModuleKey): void;
   syncOpen: boolean;
   onSyncOpen(open: boolean): void;
+  /** Configuración mínima incompleta: solo se muestran los módulos para completarla. */
+  locked?: boolean;
   children: ReactNode;
 }) {
   const {
@@ -455,7 +459,7 @@ export function Shell(props: {
           <img className="sidebar-art" src={art("sidebar-top")} alt="" width={267} height={140} />
         </div>
         <nav aria-label="Módulos">
-          <NavList active={props.module} onPick={pick} />
+          <NavList active={props.module} onPick={pick} locked={props.locked ?? false} />
         </nav>
         <div className="sidebar-foot">
           <button type="button" className="sync-mini" onClick={() => props.onSyncOpen(true)}>
@@ -613,7 +617,7 @@ export function Shell(props: {
       </div>
 
       <nav className="bottom-nav" aria-label="Módulos">
-        {BOTTOM.map((k) => (
+        {BOTTOM.filter((k) => !props.locked || SETUP_MODULES.includes(k)).map((k) => (
           <button
             key={k}
             type="button"
@@ -670,7 +674,12 @@ export function Shell(props: {
                 {role && <small>{ROLE_LABEL[role]}</small>}
               </span>
             </div>
-            <NavList active={props.module} onPick={pick} variant="sheet" />
+            <NavList
+              active={props.module}
+              onPick={pick}
+              variant="sheet"
+              locked={props.locked ?? false}
+            />
             <div className="sheet-actions">
               {install.canInstall && (
                 <button
@@ -739,9 +748,12 @@ const longDate = new Intl.DateTimeFormat("es-CO", {
 export function Home({
   onOpenSync,
   onModule,
+  setup,
 }: {
   onOpenSync(): void;
   onModule(m: ModuleKey): void;
+  /** Configuración mínima pendiente: Inicio muestra solo los pasos para completarla. */
+  setup: SetupState | null;
 }) {
   const { orgId, counts, dataVersion, lastSync, online, role, session, syncNow, syncing } =
     useApp();
@@ -932,27 +944,84 @@ export function Home({
     { key: "sanidad", label: "Sanidad", show: canEvents && canSeeModule("sanidad", role) },
   ];
 
-  const steps = [
-    {
-      done: farms.length > 0,
-      title: "Registre su finca",
-      text: "Nombre, ubicación y áreas.",
-      go: () => onModule("configuracion"),
-    },
-    {
-      done: (inv?.total ?? 0) > 0,
-      title: "Cargue sus animales",
-      text: "Con el número de chapeta, especie y categoría.",
-      go: () => onModule("animales"),
-    },
-    {
-      done: (stats?.milk7 ?? 0) > 0 || Boolean(stats?.hasRepro),
-      title: "Registre el primer ordeño o servicio",
-      text: "Así el sistema empieza a calcular y avisar.",
-      go: () => onModule("produccion"),
-    },
-  ];
-  const stepsDone = steps.filter((x) => x.done).length;
+  if (setup) {
+    const done = setup.steps.filter((x) => x.done).length;
+    const total = setup.steps.length;
+    const canDo = (m: ModuleKey) =>
+      Boolean(role && can(role, m === "animales" ? "animal.write" : "farm.write"));
+    const nextKey = setup.steps.find((x) => !x.done)?.key;
+    return (
+      <section className="page page-home">
+        <PageHead
+          kicker={first ? `${greeting()}, ${first}` : greeting()}
+          title={
+            canDo("configuracion")
+              ? "Configuremos su ganadería"
+              : "Su ganadería se está configurando"
+          }
+          lead={
+            canDo("configuracion")
+              ? "Complete estos pasos y se activan todos los módulos con sus datos reales."
+              : "Cuando el propietario registre la finca y los animales, aquí verá todo el resumen."
+          }
+        />
+        <article className="card first-steps">
+          <div className="fs-head">
+            <div>
+              <h2>Primeros pasos</h2>
+              <p>
+                {done} de {total} listos
+                {done < total ? ` · falta${total - done === 1 ? "" : "n"} ${total - done}` : ""}
+              </p>
+            </div>
+            <span
+              className="fs-ring"
+              style={{ "--p": `${(done / total) * 100}%` } as CSSProperties}
+            >
+              {done}/{total}
+            </span>
+          </div>
+          <ol className="fs-list">
+            {setup.steps.map((st) => {
+              const next = st.key === nextKey;
+              return (
+                <li key={st.key} className={st.done ? "done" : next ? "next" : ""}>
+                  <span className="fs-mark" aria-hidden="true">
+                    {st.done ? <CheckCircle2 size={22} /> : <Circle size={22} />}
+                  </span>
+                  <span className="fs-text">
+                    <strong>{st.title}</strong>
+                    <small>{st.done ? "Listo" : st.text}</small>
+                  </span>
+                  {!st.done && canDo(st.module) && (
+                    <button
+                      type="button"
+                      className={next ? "btn btn-primary btn-sm" : "btn btn-ghost btn-sm"}
+                      onClick={() => onModule(st.module)}
+                    >
+                      {next ? "Empezar" : "Ir"} ›
+                    </button>
+                  )}
+                </li>
+              );
+            })}
+          </ol>
+        </article>
+        <article className="card fs-locked">
+          <span className="fs-lock-icon" aria-hidden="true">
+            <Lock size={22} />
+          </span>
+          <div>
+            <strong>Se activan al terminar</strong>
+            <p>
+              Producción, reproducción, sanidad, pasturas, costos, el clima y suelo de su finca y el
+              asistente con IA.
+            </p>
+          </div>
+        </article>
+      </section>
+    );
+  }
 
   return (
     <section className="page page-home">
@@ -999,146 +1068,101 @@ export function Home({
         </button>
       </nav>
 
-      {emptyHerd && canAnimals ? (
-        <article className="card first-steps">
-          <div className="fs-head">
-            <div>
-              <h2>Primeros pasos</h2>
-              <p>
-                {stepsDone} de {steps.length} listos · en pocos minutos verá aquí el resumen de su
-                hato.
-              </p>
-            </div>
-            <span
-              className="fs-ring"
-              style={{ "--p": `${(stepsDone / steps.length) * 100}%` } as CSSProperties}
+      <div className="tiles">
+        <Tile
+          tone="verde"
+          art={art("tile-herd")}
+          label="Inventario del hato"
+          icon={<Users size={20} aria-hidden="true" />}
+          value={inv ? <CountUp value={inv.total} /> : "—"}
+          meta={
+            inv
+              ? `animales activos · ${num(inv.bovino)} bovinos, ${num(inv.bufalino)} bufalinos`
+              : undefined
+          }
+          onGo={() => onModule("animales")}
+        >
+          {inv && inv.total > 0 && (
+            <div
+              className="bar"
+              role="img"
+              aria-label={`${pctBov} % bovinos, ${100 - pctBov} % bufalinos`}
             >
-              {stepsDone}/{steps.length}
-            </span>
-          </div>
-          <ol className="fs-list">
-            {steps.map((st, i) => {
-              const next = !st.done && steps.slice(0, i).every((x) => x.done);
-              return (
-                <li key={st.title} className={st.done ? "done" : next ? "next" : ""}>
-                  <span className="fs-mark" aria-hidden="true">
-                    {st.done ? <CheckCircle2 size={22} /> : <Circle size={22} />}
-                  </span>
-                  <span className="fs-text">
-                    <strong>{st.title}</strong>
-                    <small>{st.done ? "Listo" : st.text}</small>
-                  </span>
-                  {!st.done && (
-                    <button
-                      type="button"
-                      className={next ? "btn btn-primary btn-sm" : "btn btn-ghost btn-sm"}
-                      onClick={st.go}
-                    >
-                      {next ? "Empezar" : "Ir"} ›
-                    </button>
-                  )}
-                </li>
-              );
-            })}
-          </ol>
-        </article>
-      ) : (
-        <div className="tiles">
-          <Tile
-            tone="verde"
-            art={art("tile-herd")}
-            label="Inventario del hato"
-            icon={<Users size={20} aria-hidden="true" />}
-            value={inv ? <CountUp value={inv.total} /> : "—"}
-            meta={
-              inv
-                ? `animales activos · ${num(inv.bovino)} bovinos, ${num(inv.bufalino)} bufalinos`
-                : undefined
-            }
-            onGo={() => onModule("animales")}
-          >
-            {inv && inv.total > 0 && (
-              <div
-                className="bar"
-                role="img"
-                aria-label={`${pctBov} % bovinos, ${100 - pctBov} % bufalinos`}
-              >
-                <span style={{ width: `${pctBov}%` }} />
-              </div>
-            )}
-          </Tile>
-          <Tile
-            tone="azul"
-            art={art("tile-milk")}
-            label="Leche de la semana"
-            icon={<ModIcon k="produccion" />}
-            value={stats && stats.milk7 > 0 ? `${num(Math.round(stats.milk7))} L` : "0 L"}
-            meta={
-              stats && stats.milk7 > 0
-                ? `≈ ${num(Math.round(stats.milk7 / 7))} L por día`
-                : "Aún sin ordeños esta semana"
-            }
-            trend={
-              stats?.milkTrend != null
-                ? {
-                    text: `${stats.milkTrend > 0 ? "+" : ""}${stats.milkTrend} % vs. semana anterior`,
-                    dir: stats.milkTrend > 2 ? "up" : stats.milkTrend < -2 ? "down" : "flat",
-                  }
-                : null
-            }
-            points={stats?.milkDaily}
-            cta={
-              stats && stats.milk7 === 0 && canEvents
-                ? { label: "Registrar ordeño", onClick: () => onModule("produccion") }
-                : null
-            }
-            onGo={() => onModule("produccion")}
-          />
-          <Tile
-            tone="ambar"
-            art={art("tile-calf")}
-            label="Estado reproductivo"
-            icon={<ModIcon k="reproduccion" />}
-            value={stats?.hasRepro ? <CountUp value={stats.pregnant} /> : "0"}
-            meta={
-              stats?.hasRepro
-                ? `preñadas de ${num(stats.females)} hembras`
-                : "Sin servicios registrados"
-            }
-            trend={
-              stats && stats.toPalpate > 0
-                ? { text: `${stats.toPalpate} por palpar`, dir: "flat" }
-                : null
-            }
-            cta={
-              stats && !stats.hasRepro && canEvents
-                ? { label: "Registrar servicio", onClick: () => onModule("reproduccion") }
-                : null
-            }
-            onGo={() => onModule("reproduccion")}
-          />
-          {canSeeModule("economia", role) && (
-            <Tile
-              tone="violeta"
-              art={art("tile-coins")}
-              label="Saldo del mes"
-              icon={<ModIcon k="economia" />}
-              value={monthMovs.length ? moneyM(balance) : "$ 0"}
-              meta={
-                monthMovs.length
-                  ? `${monthMovs.length} movimiento(s) este mes`
-                  : "Sin ingresos ni gastos este mes"
-              }
-              cta={
-                monthMovs.length === 0
-                  ? { label: "Registrar gasto o ingreso", onClick: () => onModule("economia") }
-                  : null
-              }
-              onGo={() => onModule("economia")}
-            />
+              <span style={{ width: `${pctBov}%` }} />
+            </div>
           )}
-        </div>
-      )}
+        </Tile>
+        <Tile
+          tone="azul"
+          art={art("tile-milk")}
+          label="Leche de la semana"
+          icon={<ModIcon k="produccion" />}
+          value={stats && stats.milk7 > 0 ? `${num(Math.round(stats.milk7))} L` : "0 L"}
+          meta={
+            stats && stats.milk7 > 0
+              ? `≈ ${num(Math.round(stats.milk7 / 7))} L por día`
+              : "Aún sin ordeños esta semana"
+          }
+          trend={
+            stats?.milkTrend != null
+              ? {
+                  text: `${stats.milkTrend > 0 ? "+" : ""}${stats.milkTrend} % vs. semana anterior`,
+                  dir: stats.milkTrend > 2 ? "up" : stats.milkTrend < -2 ? "down" : "flat",
+                }
+              : null
+          }
+          points={stats?.milkDaily}
+          cta={
+            stats && stats.milk7 === 0 && canEvents
+              ? { label: "Registrar ordeño", onClick: () => onModule("produccion") }
+              : null
+          }
+          onGo={() => onModule("produccion")}
+        />
+        <Tile
+          tone="ambar"
+          art={art("tile-calf")}
+          label="Estado reproductivo"
+          icon={<ModIcon k="reproduccion" />}
+          value={stats?.hasRepro ? <CountUp value={stats.pregnant} /> : "0"}
+          meta={
+            stats?.hasRepro
+              ? `preñadas de ${num(stats.females)} hembras`
+              : "Sin servicios registrados"
+          }
+          trend={
+            stats && stats.toPalpate > 0
+              ? { text: `${stats.toPalpate} por palpar`, dir: "flat" }
+              : null
+          }
+          cta={
+            stats && !stats.hasRepro && canEvents
+              ? { label: "Registrar servicio", onClick: () => onModule("reproduccion") }
+              : null
+          }
+          onGo={() => onModule("reproduccion")}
+        />
+        {canSeeModule("economia", role) && (
+          <Tile
+            tone="violeta"
+            art={art("tile-coins")}
+            label="Saldo del mes"
+            icon={<ModIcon k="economia" />}
+            value={monthMovs.length ? moneyM(balance) : "$ 0"}
+            meta={
+              monthMovs.length
+                ? `${monthMovs.length} movimiento(s) este mes`
+                : "Sin ingresos ni gastos este mes"
+            }
+            cta={
+              monthMovs.length === 0
+                ? { label: "Registrar gasto o ingreso", onClick: () => onModule("economia") }
+                : null
+            }
+            onGo={() => onModule("economia")}
+          />
+        )}
+      </div>
 
       <AssistantCard />
 

@@ -154,9 +154,9 @@ export function SettingsScreen() {
         lead="Sus fincas y los dispositivos de identificación: lea la chapeta o el chip del animal para abrir su hoja de vida o registrarlo sin escribir."
       />
 
-      <TeamPanel />
-
       <FarmsCard />
+
+      <TeamPanel />
 
       <div className="settings-grid">
         <article className="card">

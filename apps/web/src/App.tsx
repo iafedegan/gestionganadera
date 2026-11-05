@@ -11,10 +11,12 @@ import { ReproduccionScreen } from "./Reproduccion";
 import { SanidadScreen } from "./Sanidad";
 import { VentasScreen } from "./Ventas";
 import { AnimalsScreen } from "./animals";
+import { isDemoOrg } from "./lib/scope";
 import { canSeeModule } from "./modules";
 import { ModuleProto } from "./proto";
 import { Home, Login, type ModuleKey, Shell } from "./screens";
 import { SettingsScreen } from "./settings";
+import { SETUP_MODULES, useSetup } from "./setup";
 import { useApp } from "./state";
 import { SuppliesScreen } from "./supplies";
 
@@ -38,6 +40,7 @@ export function App() {
   const { session, role, acceptInvitation, notify, syncNow } = useApp();
   const [module, setModule] = useState<ModuleKey>("inicio");
   const [syncOpen, setSyncOpen] = useState(false);
+  const setup = useSetup();
 
   // Invitación pendiente de alguien que ya tenía cuenta: se acepta apenas inicia sesión.
   // biome-ignore lint/correctness/useExhaustiveDependencies: solo al cambiar de usuario
@@ -66,13 +69,28 @@ export function App() {
   if (!session) return <Login />;
   if (session.onboardingPending) return <OnboardingWizard />;
 
+  // Mientras falte la configuración mínima (finca, área, ubicación y animales) solo se abren
+  // Inicio y los módulos que sirven para completarla. La cuenta demostrativa no se bloquea.
+  const locked =
+    !setup.loading && !setup.ready && !isDemoOrg(session.memberships[0]?.organizationName);
   // Si el rol no permite el módulo (p. ej. un veterinario y Economía), se muestra Inicio.
-  const shown: ModuleKey = canSeeModule(module, role) ? module : "inicio";
+  const shown: ModuleKey =
+    canSeeModule(module, role) && (!locked || SETUP_MODULES.includes(module)) ? module : "inicio";
 
   return (
-    <Shell module={shown} onModule={setModule} syncOpen={syncOpen} onSyncOpen={setSyncOpen}>
+    <Shell
+      module={shown}
+      onModule={setModule}
+      syncOpen={syncOpen}
+      onSyncOpen={setSyncOpen}
+      locked={locked}
+    >
       {shown === "inicio" ? (
-        <Home onOpenSync={() => setSyncOpen(true)} onModule={setModule} />
+        <Home
+          onOpenSync={() => setSyncOpen(true)}
+          onModule={setModule}
+          setup={locked ? setup : null}
+        />
       ) : (
         (SCREENS[shown] ?? (() => <ModuleProto module={shown} />))()
       )}
