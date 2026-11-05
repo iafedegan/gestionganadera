@@ -35,6 +35,7 @@ import {
   X,
 } from "lucide-react";
 import { type FormEvent, type ReactNode, useEffect, useState } from "react";
+import { AssistantCard } from "./Assistant";
 import { FarmIntel } from "./FarmIntel";
 import { type PendingInvite, RegisterForm } from "./Onboarding";
 import { Pasture } from "./Pasture";
@@ -970,6 +971,8 @@ export function Home({
           />
         )}
       </div>
+
+      <AssistantCard />
 
       <FarmIntel />
 

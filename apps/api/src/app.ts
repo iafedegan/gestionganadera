@@ -2,6 +2,7 @@ import { existsSync } from "node:fs";
 import cookie from "@fastify/cookie";
 import fastifyStatic from "@fastify/static";
 import {
+  AssistantRequest,
   ErrorCodes,
   FarmCreate,
   FarmUpdate,
@@ -12,8 +13,19 @@ import {
   RegisterInvitedRequest,
   RegisterRequest,
 } from "@ganaderia/contracts";
+import { can } from "@ganaderia/domain";
 import Fastify, { type FastifyInstance, type FastifyReply, type FastifyRequest } from "fastify";
 import { z } from "zod";
+import {
+  type AskFn,
+  DAILY_LIMIT,
+  SYSTEM_PROMPT,
+  buildMessages,
+  claudeAsk,
+  farmContext,
+  recordTokens,
+  takeQuota,
+} from "./assistant.js";
 import { appendAudit, verifyAuditChain } from "./audit.js";
 import {
   type AuthUser,
@@ -55,6 +67,8 @@ export interface AppOptions {
   landingDir?: string;
   /** Carpeta compilada de la PWA; se sirve en «/app/». */
   appDir?: string;
+  /** Llamada al modelo del asistente. Por defecto usa ANTHROPIC_API_KEY; en pruebas se inyecta. */
+  ask?: AskFn | null;
 }
 
 /** Caché de estáticos: los archivos con huella son inmutables; el resto siempre se revalida. */
@@ -381,6 +395,64 @@ export async function buildApp(opts: AppOptions): Promise<FastifyInstance> {
     await logout(db, req.cookies[COOKIE]);
     reply.clearCookie(COOKIE, { path: "/" });
     return { ok: true };
+  });
+
+  const ask =
+    opts.ask !== undefined
+      ? opts.ask
+      : process.env.ANTHROPIC_API_KEY
+        ? claudeAsk(process.env.ANTHROPIC_API_KEY)
+        : null;
+
+  app.get("/v1/assistant/status", { preHandler: requireSession }, async () => ({
+    enabled: ask !== null,
+    dailyLimit: DAILY_LIMIT,
+  }));
+
+  app.post("/v1/assistant", { preHandler: requireSession }, async (req, reply) => {
+    const a = req.auth as NonNullable<FastifyRequest["auth"]>;
+    const body = AssistantRequest.safeParse(req.body);
+    if (!body.success)
+      return reply
+        .code(400)
+        .send({ error: ErrorCodes.VALIDACION, message: "Escriba una pregunta más corta." });
+    const orgId = body.data.organizationId;
+    if (!a.memberships.some((m) => m.organizationId === orgId && can(m.role, "farm.read")))
+      return reply
+        .code(403)
+        .send({ error: ErrorCodes.PERMISO_DENEGADO, message: "Sin acceso a la organización." });
+    if (!ask)
+      return reply.code(503).send({
+        error: ErrorCodes.ASISTENTE_NO_CONFIGURADO,
+        message: "El asistente todavía no está activado en este servidor.",
+      });
+    if (!(await takeQuota(db, orgId)))
+      return reply.code(429).send({
+        error: ErrorCodes.LIMITE_DIARIO,
+        message: `Su ganadería ya hizo las ${DAILY_LIMIT} preguntas de hoy. Mañana puede seguir.`,
+      });
+    const context = await farmContext(db, orgId, a.memberships, body.data);
+    try {
+      const r = await ask({ system: SYSTEM_PROMPT, messages: buildMessages(body.data, context) });
+      await recordTokens(db, orgId, r.inputTokens, r.outputTokens);
+      const [u] = await db.admin((q) =>
+        q<{ questions: number }>(
+          "SELECT questions FROM assistant_usage WHERE organization_id = $1 AND day = CURRENT_DATE",
+          [orgId],
+        ),
+      );
+      const answer =
+        r.refused || !r.text
+          ? "No puedo ayudar con esa pregunta. Si se trata de la salud de un animal, consulte a su veterinario."
+          : r.text;
+      return { answer, remaining: Math.max(0, DAILY_LIMIT - (u?.questions ?? 0)) };
+    } catch (err) {
+      req.log.error(err, "asistente");
+      return reply.code(502).send({
+        error: ErrorCodes.ASISTENTE_ERROR,
+        message: "El asistente no respondió. Intente de nuevo en un momento.",
+      });
+    }
   });
 
   app.get("/v1/auth/me", { preHandler: requireSession }, async (req) => {

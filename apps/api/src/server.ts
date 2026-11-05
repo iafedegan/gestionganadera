@@ -1,5 +1,6 @@
 import { fileURLToPath } from "node:url";
 import { buildApp } from "./app.js";
+import type { AskFn } from "./assistant.js";
 import { createPgDb, createPgliteDb } from "./db.js";
 
 const production = process.env.NODE_ENV === "production";
@@ -14,9 +15,25 @@ const allowedOrigins = process.env.ALLOWED_ORIGINS?.split(",").map((s) => s.trim
 const landingDir =
   process.env.LANDING_DIR ?? fileURLToPath(new URL("../../landing/dist", import.meta.url));
 const appDir = process.env.APP_DIR ?? fileURLToPath(new URL("../../web/dist", import.meta.url));
+// Solo desarrollo: ASSISTANT_FAKE=1 responde sin llamar a la IA y muestra los datos que recibiría.
+const fakeAsk: AskFn = async ({ messages }) => {
+  const last = String(messages.at(-1)?.content ?? "");
+  const data = last.match(/<datos_finca>\n([\s\S]*?)\n<\/datos_finca>/)?.[1] ?? "";
+  return {
+    text: `**Modo de prueba** (sin IA). Estos son los datos que recibiría el asistente:\n${data
+      .split("\n")
+      .map((l) => `- ${l}`)
+      .join("\n")}\n\nPara hoy: configure ANTHROPIC_API_KEY para respuestas reales.`,
+    inputTokens: 0,
+    outputTokens: 0,
+    refused: false,
+  };
+};
+
 const app = await buildApp({
   db,
   production,
+  ...(!production && process.env.ASSISTANT_FAKE === "1" ? { ask: fakeAsk } : {}),
   landingDir,
   appDir,
   ...(allowedOrigins ? { allowedOrigins } : {}),

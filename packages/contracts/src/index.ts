@@ -640,5 +640,44 @@ export const ErrorCodes = {
   ANIMAL_NO_EXISTE: "ANIMAL_NO_EXISTE",
   ANIMAL_INACTIVO: "ANIMAL_INACTIVO",
   EVENTO_NO_APLICA: "EVENTO_NO_APLICA",
+  ASISTENTE_NO_CONFIGURADO: "ASISTENTE_NO_CONFIGURADO",
+  LIMITE_DIARIO: "LIMITE_DIARIO",
+  ASISTENTE_ERROR: "ASISTENTE_ERROR",
 } as const;
 export type ErrorCode = (typeof ErrorCodes)[keyof typeof ErrorCodes];
+
+/* ───────────── Asistente con IA ───────────── */
+
+export const AssistantRequest = z.object({
+  organizationId: uuid,
+  question: z.string().trim().min(2).max(1500),
+  /** Últimos turnos de la conversación, solo texto. */
+  history: z
+    .array(z.object({ role: z.enum(["user", "assistant"]), text: z.string().max(6000) }))
+    .max(20)
+    .default([]),
+  /** Resumen del clima que la app ya consultó (Open-Meteo). */
+  weather: z
+    .object({
+      tempC: z.number().min(-30).max(60),
+      maxC: z.number().min(-30).max(60),
+      thi: z.number().min(0).max(130),
+      heatDays: z.number().int().min(0).max(16),
+      rain7d: z.number().min(0).max(3000),
+    })
+    .optional(),
+  soil: z
+    .object({
+      texture: z.string().trim().max(40),
+      ph: z.number().min(0).max(14).nullable(),
+      socGkg: z.number().min(0).max(1000).nullable(),
+    })
+    .optional(),
+});
+export type AssistantRequest = z.infer<typeof AssistantRequest>;
+
+export interface AssistantReply {
+  answer: string;
+  /** Preguntas que le quedan hoy a la ganadería. */
+  remaining: number;
+}

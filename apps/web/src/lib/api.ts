@@ -1,4 +1,6 @@
 import type {
+  AssistantReply,
+  AssistantRequest,
   FarmCreate,
   FarmDto,
   FarmUpdate,
@@ -33,7 +35,12 @@ export class ApiError extends Error {
 
 const TIMEOUT_MS = 15_000;
 
-async function request<T>(method: string, path: string, body?: unknown): Promise<T> {
+async function request<T>(
+  method: string,
+  path: string,
+  body?: unknown,
+  opts: { timeoutMs?: number; keep5xx?: boolean } = {},
+): Promise<T> {
   let res: Response;
   try {
     res = await fetch(path, {
@@ -44,14 +51,15 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
         ...(body === undefined ? {} : { "content-type": "application/json" }),
       },
       body: body === undefined ? null : JSON.stringify(body),
-      signal: AbortSignal.timeout(TIMEOUT_MS),
+      signal: AbortSignal.timeout(opts.timeoutMs ?? TIMEOUT_MS),
     });
   } catch {
     throw new NetworkError();
   }
   // Un 5xx significa servidor no disponible (el proxy de estáticos responde 500/502 sin API):
   // se trata como falta de conexión; los datos locales siguen seguros y se reintenta después.
-  if (res.status >= 500) throw new NetworkError();
+  if (res.status >= 500 && !(opts.keep5xx && res.headers.get("content-type")?.includes("json")))
+    throw new NetworkError();
   const text = await res.text();
   const json = text ? (JSON.parse(text) as Record<string, unknown>) : {};
   if (!res.ok) {
@@ -75,6 +83,11 @@ export const api = {
     request<InvitationPreview>("GET", `/v1/invitations/${encodeURIComponent(code)}`),
   acceptInvitation: (code: string) =>
     request<SessionDto>("POST", "/v1/invitations/accept", { code }),
+  assistantStatus: () =>
+    request<{ enabled: boolean; dailyLimit: number }>("GET", "/v1/assistant/status"),
+  // El asistente puede tardar: se le da más tiempo y se leen sus errores 5xx con mensaje.
+  ask: (input: AssistantRequest) =>
+    request<AssistantReply>("POST", "/v1/assistant", input, { timeoutMs: 120_000, keep5xx: true }),
   team: (organizationId: string) =>
     request<TeamDto>("GET", `/v1/team?organizationId=${organizationId}`),
   invite: (input: InvitationCreate) =>

@@ -6859,3 +6859,269 @@ fieldset.voice-field {
   background: #eef6f0;
   color: #14563a;
 }
+
+/* ───────────── Asistente de la finca (IA) ───────────── */
+.asis-card {
+  display: grid;
+  gap: 14px;
+  background: radial-gradient(
+      120% 140% at 100% 0%,
+      color-mix(in srgb, var(--azul) 10%, transparent),
+      transparent 60%
+    ), var(--superficie, #fff);
+}
+.asis-card-head {
+  display: flex;
+  gap: 14px;
+  align-items: flex-start;
+}
+.asis-card-head h2 {
+  font-size: 1.2rem;
+  margin: 0 0 4px;
+}
+.asis-card-head p {
+  margin: 0;
+  color: var(--texto-suave);
+  font-size: 0.93rem;
+  line-height: 1.4;
+}
+.asis-badge {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 14px;
+  color: #fff;
+  background: linear-gradient(135deg, #0f6bc4, #0c4a30);
+  box-shadow: 0 6px 16px -8px rgb(15 107 196 / 0.6);
+}
+.asis-badge.big {
+  width: 60px;
+  height: 60px;
+  border-radius: 20px;
+}
+.asis-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.asis-chip {
+  border: 1px solid var(--azul-borde, #9cc3ec);
+  background: var(--azul-claro, #eaf3fc);
+  color: var(--azul-h, #0b58a5);
+  border-radius: 999px;
+  padding: 9px 14px;
+  font: inherit;
+  font-size: 0.9rem;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+  min-height: 40px;
+  transition: background 140ms ease, transform 140ms ease;
+}
+.asis-chip:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--azul-claro, #eaf3fc) 70%, var(--azul, #0f6bc4) 12%);
+}
+.asis-chip:active:not(:disabled) {
+  transform: scale(0.98);
+}
+.asis-chip:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.asis-open {
+  justify-self: start;
+}
+
+.asis-dialog {
+  width: min(680px, 96vw);
+  height: min(86dvh, 820px);
+}
+.asis {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto auto;
+  height: 100%;
+  max-height: inherit;
+}
+.asis-list {
+  overflow-y: auto;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  overscroll-behavior: contain;
+}
+.asis-note {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: var(--verde-t);
+  color: var(--verde-i);
+  font-size: 0.86rem;
+  line-height: 1.35;
+}
+.asis-note svg {
+  flex: none;
+  margin-top: 2px;
+}
+.asis-empty {
+  display: grid;
+  justify-items: center;
+  gap: 12px;
+  text-align: center;
+  padding: 18px 4px 8px;
+}
+.asis-empty p {
+  margin: 0;
+  font-weight: 600;
+  font-size: 1.05rem;
+}
+.asis-empty .asis-chips {
+  justify-content: center;
+}
+.asis-msg {
+  max-width: 88%;
+  padding: 11px 14px;
+  border-radius: 18px;
+  line-height: 1.45;
+  font-size: 0.97rem;
+  overflow-wrap: anywhere;
+}
+.asis-msg p {
+  margin: 0 0 6px;
+}
+.asis-msg p:last-child,
+.asis-msg ul:last-child {
+  margin-bottom: 0;
+}
+.asis-msg ul {
+  margin: 0 0 6px;
+  padding-left: 1.15em;
+}
+.asis-msg li {
+  margin: 2px 0;
+}
+.asis-msg .asis-h {
+  font-weight: 700;
+}
+.asis-msg.me {
+  align-self: flex-end;
+  background: var(--azul, #0f6bc4);
+  color: #fff;
+  border-bottom-right-radius: 6px;
+}
+.asis-msg.ai {
+  align-self: flex-start;
+  background: color-mix(in srgb, var(--texto, #1b2a22) 6%, transparent);
+  color: var(--texto, #1b2a22);
+  border-bottom-left-radius: 6px;
+}
+.asis-typing {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+.asis-typing span {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--texto-suave, #5b6b63);
+  animation: asis-dot 1.2s infinite ease-in-out;
+}
+.asis-typing span:nth-child(2) {
+  animation-delay: 0.15s;
+}
+.asis-typing span:nth-child(3) {
+  animation-delay: 0.3s;
+}
+.asis-typing small {
+  margin-left: 6px;
+  color: var(--texto-suave, #5b6b63);
+}
+@keyframes asis-dot {
+  0%,
+  80%,
+  100% {
+    opacity: 0.3;
+    transform: translateY(0);
+  }
+  40% {
+    opacity: 1;
+    transform: translateY(-3px);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .asis-typing span {
+    animation: none;
+  }
+}
+.asis-input {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  padding: 10px 12px calc(10px + env(safe-area-inset-bottom));
+  border-top: 1px solid var(--borde);
+  background: var(--superficie, #fff);
+}
+.asis-input textarea {
+  flex: 1;
+  resize: none;
+  min-height: 46px;
+  max-height: 140px;
+  field-sizing: content;
+  padding: 12px 14px;
+  border-radius: 22px;
+  border: 1px solid var(--borde);
+  font: inherit;
+  font-size: 16px;
+  background: color-mix(in srgb, var(--texto, #1b2a22) 4%, transparent);
+}
+.asis-send {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 46px;
+  height: 46px;
+  border-radius: 50%;
+  border: 0;
+  color: #fff;
+  background: var(--azul, #0f6bc4);
+  cursor: pointer;
+}
+.asis-send:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+.asis-quota {
+  margin: 0;
+  padding: 0 16px 8px;
+  font-size: 0.8rem;
+  color: var(--texto-suave, #5b6b63);
+  text-align: center;
+}
+@media (max-width: 900px) {
+  .asis-dialog {
+    width: 100vw;
+    max-width: 100vw;
+    height: 100dvh;
+    max-height: 100dvh;
+  }
+  .asis-msg {
+    max-width: 92%;
+  }
+}
+/* El formulario del chat no es un formulario de registro: anula la rejilla de .dialog-form. */
+.dialog-form form.asis-input {
+  display: flex;
+  height: auto;
+  max-height: none;
+  grid-template-rows: none;
+}
+.asis-input textarea {
+  width: auto;
+  min-width: 0;
+}
