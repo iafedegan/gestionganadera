@@ -1,4 +1,5 @@
 import { type ReactNode, useEffect, useState } from "react";
+import { sparkPath } from "./lib/homeStats";
 
 export function PageHead(props: {
   /** Solo se muestra en celular, como etiqueta sobre el título. */
@@ -60,30 +61,62 @@ export function Tile(props: {
   meta?: string | undefined;
   /** Módulo aún sin datos: se muestra una curva fantasma y la etiqueta «Pronto». */
   soon?: string;
+  /** Serie real para la curva pequeña (se dibuja solo si tiene datos). */
+  points?: number[] | undefined;
+  /** Cambio frente al periodo anterior, p. ej. «+8 % vs. semana anterior». */
+  trend?: { text: string; dir: "up" | "down" | "flat" } | null;
+  /** Sin datos todavía: botón para registrar el primero. */
+  cta?: { label: string; onClick(): void } | null;
   onGo?: () => void;
   children?: ReactNode;
 }) {
+  const path = props.points ? sparkPath(props.points) : "";
+  const empty = Boolean(props.cta);
   return (
-    <article className={`tile tile-${props.tone}`}>
+    <article className={`tile tile-${props.tone}${empty ? " tile-empty" : ""}`}>
       <img className="tile-art" src={props.art} alt="" />
       <div className="tile-body">
         <p className="tile-label">{props.label}</p>
         <div className="tile-row">
           <span className="tile-icon">{props.icon}</span>
-          <strong className={props.soon ? "tile-value muted" : "tile-value"}>{props.value}</strong>
+          <strong className={props.soon || empty ? "tile-value muted" : "tile-value"}>
+            {props.value}
+          </strong>
         </div>
         {props.meta && <p className="tile-meta">{props.meta}</p>}
+        {props.trend && (
+          <p className={`tile-trend tr-${props.trend.dir}`}>
+            {props.trend.dir === "up" ? "▲" : props.trend.dir === "down" ? "▼" : "●"}{" "}
+            {props.trend.text}
+          </p>
+        )}
         {props.children}
+        {path && (
+          <svg
+            className="spark spark-real"
+            viewBox="0 0 140 40"
+            aria-hidden="true"
+            focusable="false"
+          >
+            <path d={path} />
+          </svg>
+        )}
         {props.soon && (
           <svg className="spark" viewBox="0 0 140 40" aria-hidden="true" focusable="false">
             <path d={SPARK[props.tone]} />
           </svg>
         )}
+        {props.cta && (
+          <button type="button" className="tile-cta" onClick={props.cta.onClick}>
+            {props.cta.label} ›
+          </button>
+        )}
       </div>
       {props.soon ? (
         <span className="chip chip-soon tile-chip">{props.soon}</span>
       ) : (
-        props.onGo && (
+        props.onGo &&
+        !empty && (
           <button
             type="button"
             className="tile-go"

@@ -7125,3 +7125,237 @@ fieldset.voice-field {
   width: auto;
   min-width: 0;
 }
+
+/* ═════════ Inicio: accesos rápidos, primeros pasos y mosaicos con datos reales ═════════ */
+.shortcuts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(118px, 1fr));
+  gap: 10px;
+  margin-bottom: 18px;
+}
+.shortcut {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 82px;
+  padding: 12px 8px;
+  border: 1px solid var(--borde);
+  border-radius: 14px;
+  background: var(--superficie, #fff);
+  color: var(--titulo);
+  font: inherit;
+  font-size: 0.86rem;
+  font-weight: 600;
+  line-height: 1.15;
+  text-align: center;
+  cursor: pointer;
+  transition: transform 120ms ease, border-color 160ms ease, box-shadow 160ms ease;
+}
+.shortcut:hover {
+  border-color: var(--azul-borde);
+  box-shadow: var(--sombra);
+}
+.shortcut:active {
+  transform: scale(0.97);
+}
+.shortcut:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+.shortcut:focus-visible {
+  outline: 2px solid var(--azul);
+  outline-offset: 2px;
+}
+.sc-icon {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  background: var(--azul-claro);
+  color: var(--azul);
+}
+.sc-main {
+  border-color: transparent;
+  background: var(--azul);
+  color: #fff;
+}
+.sc-main:hover {
+  background: var(--azul-h);
+  border-color: transparent;
+}
+.sc-main .sc-icon {
+  background: rgb(255 255 255 / 0.18);
+  color: #fff;
+}
+.sc-badge {
+  position: absolute;
+  top: -5px;
+  right: -7px;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 9px;
+  background: #d9480f;
+  color: #fff;
+  font-size: 0.68rem;
+  line-height: 18px;
+}
+
+.first-steps {
+  margin-bottom: 18px;
+}
+.fs-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+.fs-head h2 {
+  margin: 0;
+  font-size: 1.15rem;
+  color: var(--titulo);
+}
+.fs-head p {
+  margin: 4px 0 0;
+  color: var(--texto-suave);
+  font-size: 0.9rem;
+}
+.fs-ring {
+  --p: 0%;
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: radial-gradient(closest-side, var(--superficie, #fff) 76%, transparent 78%),
+    conic-gradient(#2e9d5b var(--p), #e3e9e4 0);
+  color: var(--titulo);
+  font-weight: 800;
+  font-size: 0.9rem;
+}
+.fs-list {
+  list-style: none;
+  margin: 14px 0 0;
+  padding: 0;
+}
+.fs-list li {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 4px;
+  border-top: 1px solid var(--borde);
+}
+.fs-mark {
+  display: grid;
+  color: #b7c3bb;
+}
+.fs-list li.done .fs-mark {
+  color: #2e9d5b;
+}
+.fs-list li.next .fs-mark {
+  color: var(--azul);
+}
+.fs-text {
+  flex: 1;
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+.fs-text strong {
+  color: var(--texto);
+}
+.fs-list li.done .fs-text strong {
+  color: var(--texto-suave);
+  text-decoration: line-through;
+  text-decoration-color: rgb(0 0 0 / 0.25);
+}
+.fs-text small {
+  color: var(--texto-suave);
+}
+
+.tile-trend {
+  margin-top: 6px;
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--texto-suave);
+}
+.tile-trend.tr-up {
+  color: #1f7a45;
+}
+.tile-trend.tr-down {
+  color: #b4441b;
+}
+.tile-trend.tr-flat {
+  color: var(--tc);
+}
+.spark-real path {
+  stroke-dasharray: none;
+  opacity: 0.9;
+}
+.tile-cta {
+  display: inline-flex;
+  margin-top: 10px;
+  padding: 7px 12px;
+  border: 1px solid var(--tb);
+  border-radius: 999px;
+  background: #fff;
+  color: var(--tc);
+  font: inherit;
+  font-size: 0.8rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+.tile-cta:hover {
+  border-color: var(--tc);
+}
+.tile-empty .tile-value {
+  font-size: 1.5rem;
+}
+
+@media (max-width: 900px) {
+  .shortcuts {
+    grid-template-columns: repeat(auto-fit, minmax(72px, 1fr));
+    gap: 8px;
+  }
+  .shortcut {
+    min-height: 74px;
+    padding: 10px 4px;
+    font-size: 0.74rem;
+  }
+  /* Con cuatro mosaicos, el último ocupa todo el ancho para no quedar solo a la izquierda. */
+  .tiles > :nth-child(4):last-child {
+    grid-column: 1 / -1;
+  }
+  .tile-cta {
+    padding: 6px 10px;
+    font-size: 0.74rem;
+  }
+}
+.page-home .page-head .kicker {
+  display: block;
+  margin-bottom: 2px;
+  color: var(--verde-i, #2a7a4f);
+  font-weight: 700;
+}
+.page-home .page-head .lead {
+  display: block;
+}
+@media (max-width: 900px) {
+  .shortcuts {
+    grid-template-columns: repeat(auto-fit, minmax(0, 1fr));
+    grid-auto-flow: column;
+  }
+  /* En el celular la sincronización ya está en la barra superior; aquí solo aparece si hay pendientes. */
+  .shortcut.sc-idle {
+    display: none;
+  }
+  .page-home .page-head h1 {
+    font-size: 1.7rem;
+    line-height: 1.15;
+  }
+}

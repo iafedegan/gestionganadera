@@ -10,6 +10,7 @@ import {
   CalendarDays,
   CheckCircle2,
   ChevronDown,
+  Circle,
   ClipboardCheck,
   Clock,
   CloudOff,
@@ -34,7 +35,7 @@ import {
   WifiOff,
   X,
 } from "lucide-react";
-import { type FormEvent, type ReactNode, useEffect, useState } from "react";
+import { type CSSProperties, type FormEvent, type ReactNode, useEffect, useState } from "react";
 import { AssistantCard } from "./Assistant";
 import { FarmIntel } from "./FarmIntel";
 import { type PendingInvite, RegisterForm } from "./Onboarding";
@@ -42,8 +43,11 @@ import { Pasture } from "./Pasture";
 import { RegisterDialog, useFarms } from "./animals";
 import { art } from "./art";
 import { CardHead, CountUp, PageHead, Tile } from "./components";
+import { MOV_SEED, type Mov } from "./herd";
+import { moneyM, useStore } from "./kit";
 import { CODE_LABEL, KIND_LABEL, fecha, fechaHora, num, todayLocal } from "./labels";
 import { ApiError, api } from "./lib/api";
+import { type HomeStats, homeStats } from "./lib/homeStats";
 import { type OutboxItem, localdb } from "./lib/localdb";
 import { lastEmail } from "./lib/session";
 import { type ModuleDef, type ModuleKey, canSeeModule, moduleByKey, modulesFor } from "./modules";
@@ -746,6 +750,8 @@ export function Home({
   const [dryOff, setDryOff] = useState(0);
   const [inv, setInv] = useState<{ total: number; bovino: number; bufalino: number } | null>(null);
   const [stock, setStock] = useState({ low: 0, soon: 0, expired: 0 });
+  const [stats, setStats] = useState<HomeStats | null>(null);
+  const [movs] = useStore<Mov>("movs-eco", MOV_SEED);
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: dataVersion fuerza la relectura
   useEffect(() => {
@@ -763,6 +769,7 @@ export function Home({
     void Promise.all([localdb.herdAnimals(orgId), localdb.listAnimalEvents(orgId)]).then(
       ([herd, events]) => {
         const today = todayLocal();
+        setStats(homeStats(herd, events, today));
         setDryOff(
           herd.filter((a) => {
             const days = farms.find((f) => f.id === a.farmId)?.speciesSettings[a.species as Species]
@@ -889,88 +896,249 @@ export function Home({
     });
   }
 
+  const first = (session?.displayName ?? "").trim().split(/\s+/)[0] ?? "";
+  const dateText = longDate.format(new Date());
+  const farmText =
+    farms.length === 1
+      ? ` · ${farms[0]?.name}`
+      : farms.length > 1
+        ? ` · ${farms.length} fincas`
+        : "";
+  const canEvents = Boolean(role && can(role, "event.write"));
+  const canAnimals = Boolean(role && can(role, "animal.write"));
+  const month = todayLocal().slice(0, 7);
+  const monthMovs = movs.filter((m) => m.fecha.startsWith(month));
+  const balance = monthMovs.reduce((t, m) => t + (m.tipo === "Ingreso" ? m.valor : -m.valor), 0);
+  const emptyHerd = inv !== null && inv.total === 0;
+  const urgent = alerts.filter((a) => a.tone !== "info").length;
+
+  const shortcuts: { key: ModuleKey; label: string; show: boolean; icon?: ReactNode }[] = [
+    {
+      key: "animales",
+      label: canAnimals ? "Nuevo animal" : "Ver el hato",
+      show: true,
+      icon: canAnimals ? <PlusCircle size={22} aria-hidden="true" /> : undefined,
+    },
+    {
+      key: "produccion",
+      label: "Ordeño y peso",
+      show: canEvents && canSeeModule("produccion", role),
+    },
+    {
+      key: "reproduccion",
+      label: "Reproducción",
+      show: canEvents && canSeeModule("reproduccion", role),
+    },
+    { key: "sanidad", label: "Sanidad", show: canEvents && canSeeModule("sanidad", role) },
+  ];
+
+  const steps = [
+    {
+      done: farms.length > 0,
+      title: "Registre su finca",
+      text: "Nombre, ubicación y áreas.",
+      go: () => onModule("configuracion"),
+    },
+    {
+      done: (inv?.total ?? 0) > 0,
+      title: "Cargue sus animales",
+      text: "Con el número de chapeta, especie y categoría.",
+      go: () => onModule("animales"),
+    },
+    {
+      done: (stats?.milk7 ?? 0) > 0 || Boolean(stats?.hasRepro),
+      title: "Registre el primer ordeño o servicio",
+      text: "Así el sistema empieza a calcular y avisar.",
+      go: () => onModule("produccion"),
+    },
+  ];
+  const stepsDone = steps.filter((x) => x.done).length;
+
   return (
-    <section className="page">
+    <section className="page page-home">
       <PageHead
-        kicker="Inicio"
-        title="¿Qué requiere atención hoy?"
-        lead="Un vistazo general para priorizar las actividades de la finca."
+        kicker={first ? `${greeting()}, ${first}` : greeting()}
+        title={
+          emptyHerd
+            ? "Empecemos con su finca"
+            : urgent > 0
+              ? `Hoy hay ${urgent} ${urgent === 1 ? "asunto" : "asuntos"} por atender`
+              : "¿Qué requiere atención hoy?"
+        }
+        lead={`${dateText.charAt(0).toUpperCase()}${dateText.slice(1)}${farmText}`}
       />
 
-      <div className="quick-actions">
-        {role && can(role, "animal.write") ? (
-          <button type="button" className="btn btn-primary" onClick={() => onModule("animales")}>
-            <PlusCircle size={18} aria-hidden="true" /> Registrar animal
-          </button>
-        ) : (
-          <button type="button" className="btn btn-primary" onClick={() => onModule("animales")}>
-            <Users size={18} aria-hidden="true" /> Ver el hato
-          </button>
-        )}
+      <nav className="shortcuts" aria-label="Accesos rápidos">
+        {shortcuts
+          .filter((x) => x.show)
+          .map((x, i) => (
+            <button
+              key={x.key}
+              type="button"
+              className={i === 0 ? "shortcut sc-main" : "shortcut"}
+              onClick={() => onModule(x.key)}
+            >
+              <span className="sc-icon">{x.icon ?? <ModIcon k={x.key} size={22} />}</span>
+              <span>{x.label}</span>
+            </button>
+          ))}
         <button
           type="button"
-          className="btn btn-ghost"
+          className={counts.pendiente > 0 ? "shortcut sc-sync" : "shortcut sc-sync sc-idle"}
           onClick={() => void syncNow()}
           disabled={syncing}
-        >
-          <RefreshCw size={18} aria-hidden="true" className={syncing ? "spin" : ""} /> Sincronizar
-        </button>
-      </div>
-
-      <div className="tiles">
-        <Tile
-          tone="verde"
-          art={art("tile-herd")}
-          label="Inventario del hato"
-          icon={<Users size={20} aria-hidden="true" />}
-          value={inv ? <CountUp value={inv.total} /> : "—"}
-          meta={
-            inv
-              ? `animales activos · ${num(inv.bovino)} bovinos, ${num(inv.bufalino)} bufalinos`
-              : undefined
+          aria-label={
+            counts.pendiente > 0 ? `Sincronizar (${counts.pendiente} pendientes)` : "Sincronizar"
           }
-          onGo={() => onModule("animales")}
         >
-          {inv && inv.total > 0 && (
-            <div
-              className="bar"
-              role="img"
-              aria-label={`${pctBov} % bovinos, ${100 - pctBov} % bufalinos`}
-            >
-              <span style={{ width: `${pctBov}%` }} />
+          <span className="sc-icon">
+            <RefreshCw size={22} aria-hidden="true" className={syncing ? "spin" : ""} />
+            {counts.pendiente > 0 && <b className="sc-badge">{counts.pendiente}</b>}
+          </span>
+          <span>{syncing ? "Enviando…" : "Sincronizar"}</span>
+        </button>
+      </nav>
+
+      {emptyHerd && canAnimals ? (
+        <article className="card first-steps">
+          <div className="fs-head">
+            <div>
+              <h2>Primeros pasos</h2>
+              <p>
+                {stepsDone} de {steps.length} listos · en pocos minutos verá aquí el resumen de su
+                hato.
+              </p>
             </div>
-          )}
-        </Tile>
-        <Tile
-          tone="azul"
-          art={art("tile-milk")}
-          label="Producción y crecimiento"
-          icon={<ModIcon k="produccion" />}
-          value={demo ? "186 L" : "—"}
-          meta={demo ? "ordeño de hoy · ejemplo" : "Leche (L) y pesajes (kg)"}
-          soon={demo ? "Ejemplo" : "Semana 6"}
-        />
-        <Tile
-          tone="ambar"
-          art={art("tile-calf")}
-          label="Estado reproductivo"
-          icon={<ModIcon k="reproduccion" />}
-          value={demo ? "4" : "—"}
-          meta={demo ? "gestaciones confirmadas · ejemplo" : "Servicios, diagnósticos y partos"}
-          soon={demo ? "Ejemplo" : "Semana 7"}
-        />
-        {canSeeModule("economia", role) && (
+            <span
+              className="fs-ring"
+              style={{ "--p": `${(stepsDone / steps.length) * 100}%` } as CSSProperties}
+            >
+              {stepsDone}/{steps.length}
+            </span>
+          </div>
+          <ol className="fs-list">
+            {steps.map((st, i) => {
+              const next = !st.done && steps.slice(0, i).every((x) => x.done);
+              return (
+                <li key={st.title} className={st.done ? "done" : next ? "next" : ""}>
+                  <span className="fs-mark" aria-hidden="true">
+                    {st.done ? <CheckCircle2 size={22} /> : <Circle size={22} />}
+                  </span>
+                  <span className="fs-text">
+                    <strong>{st.title}</strong>
+                    <small>{st.done ? "Listo" : st.text}</small>
+                  </span>
+                  {!st.done && (
+                    <button
+                      type="button"
+                      className={next ? "btn btn-primary btn-sm" : "btn btn-ghost btn-sm"}
+                      onClick={st.go}
+                    >
+                      {next ? "Empezar" : "Ir"} ›
+                    </button>
+                  )}
+                </li>
+              );
+            })}
+          </ol>
+        </article>
+      ) : (
+        <div className="tiles">
           <Tile
-            tone="violeta"
-            art={art("tile-coins")}
-            label="Costos y márgenes"
-            icon={<ModIcon k="economia" />}
-            value={demo ? "$ 2,4 M" : "—"}
-            meta={demo ? "saldo del mes · ejemplo" : "Saldo de movimientos registrados"}
-            soon={demo ? "Ejemplo" : "Semana 11"}
+            tone="verde"
+            art={art("tile-herd")}
+            label="Inventario del hato"
+            icon={<Users size={20} aria-hidden="true" />}
+            value={inv ? <CountUp value={inv.total} /> : "—"}
+            meta={
+              inv
+                ? `animales activos · ${num(inv.bovino)} bovinos, ${num(inv.bufalino)} bufalinos`
+                : undefined
+            }
+            onGo={() => onModule("animales")}
+          >
+            {inv && inv.total > 0 && (
+              <div
+                className="bar"
+                role="img"
+                aria-label={`${pctBov} % bovinos, ${100 - pctBov} % bufalinos`}
+              >
+                <span style={{ width: `${pctBov}%` }} />
+              </div>
+            )}
+          </Tile>
+          <Tile
+            tone="azul"
+            art={art("tile-milk")}
+            label="Leche de la semana"
+            icon={<ModIcon k="produccion" />}
+            value={stats && stats.milk7 > 0 ? `${num(Math.round(stats.milk7))} L` : "0 L"}
+            meta={
+              stats && stats.milk7 > 0
+                ? `≈ ${num(Math.round(stats.milk7 / 7))} L por día`
+                : "Aún sin ordeños esta semana"
+            }
+            trend={
+              stats?.milkTrend != null
+                ? {
+                    text: `${stats.milkTrend > 0 ? "+" : ""}${stats.milkTrend} % vs. semana anterior`,
+                    dir: stats.milkTrend > 2 ? "up" : stats.milkTrend < -2 ? "down" : "flat",
+                  }
+                : null
+            }
+            points={stats?.milkDaily}
+            cta={
+              stats && stats.milk7 === 0 && canEvents
+                ? { label: "Registrar ordeño", onClick: () => onModule("produccion") }
+                : null
+            }
+            onGo={() => onModule("produccion")}
           />
-        )}
-      </div>
+          <Tile
+            tone="ambar"
+            art={art("tile-calf")}
+            label="Estado reproductivo"
+            icon={<ModIcon k="reproduccion" />}
+            value={stats?.hasRepro ? <CountUp value={stats.pregnant} /> : "0"}
+            meta={
+              stats?.hasRepro
+                ? `preñadas de ${num(stats.females)} hembras`
+                : "Sin servicios registrados"
+            }
+            trend={
+              stats && stats.toPalpate > 0
+                ? { text: `${stats.toPalpate} por palpar`, dir: "flat" }
+                : null
+            }
+            cta={
+              stats && !stats.hasRepro && canEvents
+                ? { label: "Registrar servicio", onClick: () => onModule("reproduccion") }
+                : null
+            }
+            onGo={() => onModule("reproduccion")}
+          />
+          {canSeeModule("economia", role) && (
+            <Tile
+              tone="violeta"
+              art={art("tile-coins")}
+              label="Saldo del mes"
+              icon={<ModIcon k="economia" />}
+              value={monthMovs.length ? moneyM(balance) : "$ 0"}
+              meta={
+                monthMovs.length
+                  ? `${monthMovs.length} movimiento(s) este mes`
+                  : "Sin ingresos ni gastos este mes"
+              }
+              cta={
+                monthMovs.length === 0
+                  ? { label: "Registrar gasto o ingreso", onClick: () => onModule("economia") }
+                  : null
+              }
+              onGo={() => onModule("economia")}
+            />
+          )}
+        </div>
+      )}
 
       <AssistantCard />
 
