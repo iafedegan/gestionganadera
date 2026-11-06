@@ -996,31 +996,33 @@ export function Home({
             </span>
           </div>
           <ol className="fs-list">
-            {setup.steps.map((st) => {
-              const next = st.key === nextKey;
-              return (
-                <li key={st.key} className={st.done ? "done" : next ? "next" : ""}>
-                  <span className="fs-mark" aria-hidden="true">
-                    {st.done ? <CheckCircle2 size={22} /> : <Circle size={22} />}
-                  </span>
-                  <span className="fs-text">
-                    <strong>{st.title}</strong>
-                    <small>{st.done ? "Listo" : st.text}</small>
-                  </span>
-                  {!st.done && canDo(st.module) && (
-                    <button
-                      type="button"
-                      className={next ? "btn btn-primary btn-sm" : "btn btn-ghost btn-sm"}
-                      onClick={() =>
-                        st.key === "perfil" ? setProfileOpen("edit") : onModule(st.module)
-                      }
-                    >
-                      {next ? "Empezar" : "Ir"} ›
-                    </button>
-                  )}
-                </li>
-              );
-            })}
+            {[...setup.steps.filter((x) => x.done), ...setup.steps.filter((x) => !x.done)].map(
+              (st) => {
+                const next = st.key === nextKey;
+                return (
+                  <li key={st.key} className={st.done ? "done" : next ? "next" : ""}>
+                    <span className="fs-mark" aria-hidden="true">
+                      {st.done ? <CheckCircle2 size={22} /> : <Circle size={22} />}
+                    </span>
+                    <span className="fs-text">
+                      <strong>{st.title}</strong>
+                      <small>{st.done ? "Listo" : st.text}</small>
+                    </span>
+                    {!st.done && canDo(st.module) && (
+                      <button
+                        type="button"
+                        className={next ? "btn btn-primary btn-sm" : "btn btn-ghost btn-sm"}
+                        onClick={() =>
+                          st.key === "perfil" ? setProfileOpen("edit") : onModule(st.module)
+                        }
+                      >
+                        {next ? "Empezar" : "Ir"} ›
+                      </button>
+                    )}
+                  </li>
+                );
+              },
+            )}
           </ol>
         </article>
         <article className="card fs-locked">
