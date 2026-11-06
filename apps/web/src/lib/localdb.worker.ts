@@ -15,7 +15,10 @@ import type {
   StockReceiveCommand,
   SupplyCreateCommand,
 } from "@ganaderia/contracts";
-import sqlite3InitModule, { type Database } from "@sqlite.org/sqlite-wasm";
+import sqlite3InitModule, {
+  type Database,
+  type Sqlite3Static as Sqlite3,
+} from "@sqlite.org/sqlite-wasm";
 
 /**
  * Base local cifrada. Las columnas de búsqueda (arete, especie, finca, estado) quedan en claro;
@@ -317,11 +320,24 @@ async function rememberKey(userId: string, raw: BufferSource): Promise<void> {
   await idbDo("readwrite", (st) => st.put(rec, userId));
 }
 
+let poolPromise: Promise<Awaited<ReturnType<Sqlite3["installOpfsSAHPoolVfs"]>>> | null = null;
+
 async function openDb(userId: string): Promise<void> {
   if (db && currentUser === userId) return;
   db?.close();
-  const sqlite3 = await sqlite3InitModule();
-  const pool = await sqlite3.installOpfsSAHPoolVfs({ name: "ganaderia-pool", clearOnInit: false });
+  // El VFS se instala una sola vez por worker: volver a instalarlo al cambiar de cuenta choca con
+  // los accesos a archivos que el anterior sigue teniendo abiertos (NoModificationAllowedError).
+  if (!poolPromise) {
+    poolPromise = sqlite3InitModule()
+      .then((sqlite3) =>
+        sqlite3.installOpfsSAHPoolVfs({ name: "ganaderia-pool", clearOnInit: false }),
+      )
+      .catch((err) => {
+        poolPromise = null;
+        throw err;
+      });
+  }
+  const pool = await poolPromise;
   db = new pool.OpfsSAHPoolDb(`/ganaderia-${userId}.db`);
   migrate(db);
   currentUser = userId;
