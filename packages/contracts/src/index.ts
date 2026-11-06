@@ -492,6 +492,7 @@ export const Goal = z.enum([
   "trazabilidad",
   "pasturas",
   "personal",
+  "exportar",
 ]);
 export type Goal = z.infer<typeof Goal>;
 
@@ -543,6 +544,17 @@ const heads = z.number().int().min(0).max(200_000);
  * Respuestas del perfil de la finca. Los básicos son obligatorios para cualquier tamaño;
  * el nivel «completo» agrega detalle para un diagnóstico más preciso.
  */
+export const ExportProduct = z.enum(["ganado_pie", "carne", "genetica"]);
+export type ExportProduct = z.infer<typeof ExportProduct>;
+
+/** Plan de exportación: qué, a qué país y cuáles documentos ya tiene. */
+export const ExportAnswers = z.object({
+  products: z.array(ExportProduct).min(1, "Elija qué quiere exportar.").max(3),
+  country: z.string().trim().min(2, "Indique el país de destino.").max(80),
+  docs: z.record(z.string().max(60), z.enum(["si", "tramite", "no"])),
+});
+export type ExportAnswers = z.infer<typeof ExportAnswers>;
+
 export const FarmProfile = z
   .object({
     version: z.literal(1).default(1),
@@ -572,8 +584,15 @@ export const FarmProfile = z
     qualityPay: z.enum(["si", "no"]).optional(),
     certifications: z.array(ProfileCert).max(3).optional(),
     mainProblem: z.string().trim().max(300).optional(),
+    exportPlan: ExportAnswers.optional(),
   })
   .superRefine((p, ctx) => {
+    if (p.goals.includes("exportar") && !p.exportPlan)
+      ctx.addIssue({
+        code: "custom",
+        path: ["exportPlan"],
+        message: "Cuéntenos qué quiere exportar y a qué país.",
+      });
     if (p.cows > p.heads)
       ctx.addIssue({
         code: "custom",

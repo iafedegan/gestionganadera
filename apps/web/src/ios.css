@@ -1060,3 +1060,60 @@ h1 {
   min-height: 56px;
   order: 3;
 }
+
+/* ───── Exportación ───── */
+.pf-export-note {
+  margin: 8px 0 0;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: var(--ios-azul-suave);
+  color: var(--ios-texto);
+  font-size: 0.88rem;
+}
+.pf-docs {
+  display: grid;
+  gap: 14px;
+  margin-top: 14px;
+}
+.pf-doc {
+  display: grid;
+  gap: 6px;
+  padding: 12px;
+  border-radius: 12px;
+  background: var(--ios-fondo);
+}
+.pf-doc small {
+  color: var(--ios-texto-2);
+}
+.dx-export {
+  display: grid;
+  gap: 12px;
+  margin-top: 18px;
+}
+.dx-exp-line {
+  display: grid;
+  gap: 6px;
+  padding: 12px;
+  border-radius: 12px;
+  background: var(--ios-fondo);
+}
+.dx-exp-line ul,
+.dx-exp-line ol {
+  margin: 0;
+  padding-left: 18px;
+}
+.dx-exp-line small {
+  color: var(--ios-texto-2);
+}
+.dx-exp-h {
+  margin: 6px 0 0;
+  font-weight: 600;
+  font-size: 0.86rem;
+}
+.dx-exp-warn {
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: #fff4e0;
+  color: #6b3d00;
+  font-size: 0.86rem;
+}

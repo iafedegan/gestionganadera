@@ -409,3 +409,4 @@ export function isDryOffDue(
   return (Date.parse(today) - Date.parse(parto)) / 86_400_000 >= dryOffDays;
 }
 export * from "./diagnosis";
+export * from "./exportDocs";

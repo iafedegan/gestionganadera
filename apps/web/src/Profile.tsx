@@ -1,16 +1,30 @@
 import {
+  type ExportProduct,
   FarmProfile,
   type FarmProfileDto,
   type FarmProfileInput,
   type Goal,
 } from "@ganaderia/contracts";
-import { type DiagLevel, type Diagnosis, diagnose, suggestedLevel } from "@ganaderia/domain";
+import {
+  ACCESS_LABEL,
+  type DiagLevel,
+  type Diagnosis,
+  EXPORT_PRODUCT_LABEL,
+  type ExportDocStatus,
+  countriesFor,
+  diagnose,
+  docId,
+  docsFor,
+  exportAnswered,
+  suggestedLevel,
+} from "@ganaderia/domain";
 import {
   ArrowLeft,
   ArrowRight,
   Check,
   ClipboardList,
   Gauge,
+  Globe,
   Ruler,
   Sparkles,
   Target,
@@ -110,7 +124,14 @@ type Draft = {
   qualityPay: "si" | "no" | null;
   certifications: NonNullable<FarmProfile["certifications"]>;
   mainProblem: string;
+  exportProducts: ExportProduct[];
+  /** Nombre del país, o OTHER_COUNTRY si lo escribe la persona. */
+  exportCountry: string | null;
+  exportOther: string;
+  exportDocs: Record<string, ExportDocStatus>;
 };
+
+const OTHER_COUNTRY = "__otro";
 
 const str = (n: number | undefined) => (n === undefined ? "" : String(n));
 const fromProfile = (p: FarmProfile | null): Draft => ({
@@ -138,6 +159,18 @@ const fromProfile = (p: FarmProfile | null): Draft => ({
   qualityPay: p?.qualityPay ?? null,
   certifications: p?.certifications ?? [],
   mainProblem: p?.mainProblem ?? "",
+  exportProducts: p?.exportPlan?.products ?? [],
+  exportCountry: p?.exportPlan
+    ? countriesFor(p.exportPlan.products).some((c) => c.name === p.exportPlan?.country)
+      ? p.exportPlan.country
+      : OTHER_COUNTRY
+    : null,
+  exportOther:
+    p?.exportPlan &&
+    !countriesFor(p.exportPlan.products).some((c) => c.name === p.exportPlan?.country)
+      ? p.exportPlan.country
+      : "",
+  exportDocs: p?.exportPlan?.docs ?? {},
 });
 
 const num = (s: string) => (s.trim() === "" ? undefined : Number(s.replace(",", ".")));
@@ -176,6 +209,10 @@ function toInput(d: Draft): FarmProfileInput {
     out.mainProblem = d.mainProblem.trim() || undefined;
   }
   for (const k of Object.keys(out)) if (out[k] === undefined) delete out[k];
+  if (d.goals.includes("exportar")) {
+    const country = d.exportCountry === OTHER_COUNTRY ? d.exportOther.trim() : d.exportCountry;
+    out.exportPlan = { products: d.exportProducts, country: country ?? "", docs: d.exportDocs };
+  }
   return out as FarmProfileInput;
 }
 
@@ -321,21 +358,29 @@ export function ProfileWizard(props: {
     { label: "Tamaño", icon: Ruler },
     { label: "Manejo", icon: ClipboardList },
     ...(d.level === "completo" ? [{ label: "Detalle", icon: Gauge }] : []),
+    ...(d.goals.includes("exportar") ? [{ label: "Exportación", icon: Globe }] : []),
   ];
   const last = steps.length - 1;
+  const key = steps[step]?.label;
+  const exportCountry =
+    d.exportCountry === OTHER_COUNTRY ? d.exportOther.trim() : (d.exportCountry ?? "");
 
-  const okBasic = [
-    d.goals.length > 0 && d.focus !== null,
-    heads > 0 &&
+  const okBasic: Record<string, boolean | undefined> = {
+    Objetivo: d.goals.length > 0 && d.focus !== null,
+    Tamaño:
+      heads > 0 &&
       (num(d.areaHa) ?? 0) > 0 &&
       d.cows.trim() !== "" &&
       d.system !== null &&
       d.level !== null &&
       (!milk || (d.milking.trim() !== "" && d.milkLitersDay.trim() !== "")),
-    d.records && d.breeding && d.pregCheck && d.vet && d.knowsCost,
-    true,
-  ];
-  const canNext = Boolean(okBasic[step]);
+    Manejo: Boolean(d.records && d.breeding && d.pregCheck && d.vet && d.knowsCost),
+    Detalle: true,
+    Exportación:
+      exportCountry.length >= 2 &&
+      exportAnswered({ products: d.exportProducts, docs: d.exportDocs }),
+  };
+  const canNext = Boolean(key && okBasic[key]);
 
   async function finish() {
     const parsed = FarmProfile.safeParse(toInput(d));
@@ -367,7 +412,7 @@ export function ProfileWizard(props: {
         <DiagnosisView d={result} onModule={props.onModule ? go : undefined} />
       </section>
     );
-  } else if (step === 0) {
+  } else if (key === "Objetivo") {
     body = (
       <section className="fsec">
         <h2 className="ob-q">¿Qué busca con esta aplicación?</h2>
@@ -381,7 +426,7 @@ export function ProfileWizard(props: {
         <Chips options={FOCUS} value={d.focus} onPick={(v) => set("focus", v)} />
       </section>
     );
-  } else if (step === 1) {
+  } else if (key === "Tamaño") {
     const sug = heads > 0 ? suggestedLevel(heads) : null;
     body = (
       <section className="fsec">
@@ -452,7 +497,7 @@ export function ProfileWizard(props: {
         </div>
       </section>
     );
-  } else if (step === 2) {
+  } else if (key === "Manejo") {
     body = (
       <section className="fsec">
         <h2 className="ob-q">¿Cómo maneja hoy la finca?</h2>
@@ -471,7 +516,96 @@ export function ProfileWizard(props: {
         <Chips options={KNOWS} value={d.knowsCost} onPick={(v) => set("knowsCost", v)} />
       </section>
     );
-  } else {
+  } else if (key === "Exportación") {
+    const products = d.exportProducts;
+    const countries = countriesFor(products);
+    const picked = countries.find((c) => c.name === d.exportCountry);
+    const setDoc = (id: string, v: ExportDocStatus) =>
+      setD((x) => ({ ...x, exportDocs: { ...x.exportDocs, [id]: v } }));
+    body = (
+      <section className="fsec">
+        <h2 className="ob-q">¿Qué quiere exportar?</h2>
+        <p className="ob-label">Puede elegir más de una opción</p>
+        <Chips
+          options={Object.entries(EXPORT_PRODUCT_LABEL) as [ExportProduct, string][]}
+          value={products}
+          onPick={(v) => {
+            const next = toggle(products, v);
+            setD((x) => ({
+              ...x,
+              exportProducts: next,
+              exportCountry: countriesFor(next).some((c) => c.name === x.exportCountry)
+                ? x.exportCountry
+                : x.exportCountry === OTHER_COUNTRY
+                  ? OTHER_COUNTRY
+                  : null,
+            }));
+          }}
+        />
+        {products.length > 0 && (
+          <>
+            <p className="ob-label">¿A qué país?</p>
+            <Chips
+              options={[
+                ...countries.map((c): [string, string] => [c.name, c.name]),
+                [OTHER_COUNTRY, "Otro país"],
+              ]}
+              value={d.exportCountry}
+              onPick={(v) => set("exportCountry", v)}
+            />
+            {d.exportCountry === OTHER_COUNTRY && (
+              <label htmlFor="pf-country" className="pf-num">
+                <span>¿Cuál país?</span>
+                <input
+                  id="pf-country"
+                  type="text"
+                  maxLength={80}
+                  value={d.exportOther}
+                  onChange={(e) => set("exportOther", e.target.value)}
+                />
+              </label>
+            )}
+            {picked && (
+              <p className="pf-export-note">
+                {products
+                  .filter((p) => picked.access[p])
+                  .map(
+                    (p) =>
+                      `${EXPORT_PRODUCT_LABEL[p]}: ${ACCESS_LABEL[picked.access[p] ?? "verificar"]}`,
+                  )
+                  .join(" · ")}
+                {picked.note ? ` — ${picked.note}` : ""}
+              </p>
+            )}
+            {exportCountry.length >= 2 &&
+              products.map((p) => (
+                <div key={p} className="pf-docs">
+                  <h3 className="ob-label">{EXPORT_PRODUCT_LABEL[p]}: ¿qué tiene ya?</h3>
+                  {docsFor(p).map((doc) => {
+                    const id = docId(doc);
+                    return (
+                      <div key={id} className="pf-doc">
+                        <strong>{doc.title}</strong>
+                        <small>{doc.text}</small>
+                        <Chips
+                          options={[
+                            ["si", "Sí tengo"],
+                            ["tramite", "En trámite"],
+                            ["no", "No tengo"],
+                          ]}
+                          value={d.exportDocs[id] ?? null}
+                          onPick={(v) => setDoc(id, v)}
+                        />
+                      </div>
+                    );
+                  })}
+                </div>
+              ))}
+          </>
+        )}
+      </section>
+    );
+  } else if (key === "Detalle") {
     body = (
       <section className="fsec">
         <h2 className="ob-q">Un poco más de detalle</h2>
@@ -729,6 +863,7 @@ export function DiagnosisView(props: {
           </ol>
         </>
       )}
+      {!props.compact && d.export && <ExportView plan={d.export} />}
       {!props.compact && (
         <p className="dx-note">
           Diagnóstico orientativo con referencias generales de la ganadería en Colombia. No
@@ -736,5 +871,71 @@ export function DiagnosisView(props: {
         </p>
       )}
     </div>
+  );
+}
+
+function ExportView({ plan }: { plan: NonNullable<Diagnosis["export"]> }) {
+  return (
+    <section className="dx-export" aria-label="Exportación">
+      <h3 className="dx-h">Exportar a {plan.country}</h3>
+      {plan.lines.map((l) => (
+        <div key={l.product} className="dx-exp-line">
+          <strong>
+            {l.label}
+            <em>
+              {" "}
+              ·{" "}
+              {l.access
+                ? ACCESS_LABEL[l.access]
+                : "Sin datos de este país en la lista: confirme con el ICA o el INVIMA"}
+            </em>
+          </strong>
+          {l.countryNote && <p>{l.countryNote}</p>}
+          {l.missing.length > 0 && (
+            <>
+              <p className="dx-exp-h">Le falta ({l.missing.length})</p>
+              <ul>
+                {l.missing.map((m) => (
+                  <li key={m.key}>
+                    {m.title}
+                    <small> · {m.source}</small>
+                  </li>
+                ))}
+              </ul>
+            </>
+          )}
+          {l.inProgress.length > 0 && (
+            <>
+              <p className="dx-exp-h">En trámite ({l.inProgress.length})</p>
+              <ul>
+                {l.inProgress.map((m) => (
+                  <li key={m.key}>{m.title}</li>
+                ))}
+              </ul>
+            </>
+          )}
+          {l.have.length > 0 && (
+            <p className="dx-exp-h">
+              Ya tiene {l.have.length}: {l.have.map((h) => h.title).join("; ")}.
+            </p>
+          )}
+          <p className="dx-exp-h">Pasos que siguen</p>
+          <ol>
+            {l.next.map((n) => (
+              <li key={n}>{n}</li>
+            ))}
+          </ol>
+        </div>
+      ))}
+      {plan.notes.map((n) => (
+        <p key={n} className="dx-exp-warn">
+          {n}
+        </p>
+      ))}
+      <p className="dx-exp-warn">
+        Requisitos por país del ICA: afrodita.ica.gov.co (consulta de requisitos por producto y
+        país). Para negociar un país sin acuerdo: asuntos.internacionales@ica.gov.co.
+      </p>
+    </section>
   );
 }

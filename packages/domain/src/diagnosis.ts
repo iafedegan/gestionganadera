@@ -1,4 +1,5 @@
 import type { FarmProfile, Goal } from "@ganaderia/contracts";
+import { type ExportPlan, exportPlan } from "./exportDocs";
 
 /**
  * Diagnóstico rápido a partir del perfil declarado. Usa referencias generales de la ganadería
@@ -22,6 +23,8 @@ export interface DiagAction {
 }
 
 export interface Diagnosis {
+  /** Documentos que tiene y que le faltan para exportar; solo si el objetivo incluye exportar. */
+  export?: ExportPlan;
   size: "pequena" | "mediana" | "grande";
   sizeLabel: string;
   areas: DiagArea[];
@@ -179,6 +182,7 @@ export function diagnose(p: FarmProfile): Diagnosis {
     areas: [...areas].sort((a, b) => RANK[a.level] - RANK[b.level]),
     actions,
     summary,
+    ...(p.exportPlan ? { export: exportPlan(p.exportPlan) } : {}),
   };
 }
 

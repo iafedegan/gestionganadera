@@ -376,6 +376,7 @@ export const GOALS: [Goal, string][] = [
   ["trazabilidad", "Trazabilidad e ICA"],
   ["pasturas", "Manejar las pasturas"],
   ["personal", "Organizar el personal"],
+  ["exportar", "Exportar ganado, carne o genética"],
 ];
 const DEPARTMENTS = [
   "Amazonas",
