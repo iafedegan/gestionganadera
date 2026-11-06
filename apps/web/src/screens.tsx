@@ -51,6 +51,7 @@ import { CODE_LABEL, KIND_LABEL, fecha, fechaHora, num, todayLocal } from "./lab
 import { ApiError, api } from "./lib/api";
 import { type HomeStats, homeStats } from "./lib/homeStats";
 import { type OutboxItem, localdb } from "./lib/localdb";
+import { isDemoOrg } from "./lib/scope";
 import { lastEmail } from "./lib/session";
 import { type ModuleDef, type ModuleKey, canSeeModule, moduleByKey, modulesFor } from "./modules";
 import {
@@ -863,9 +864,7 @@ export function Home({
     });
   }, [orgId, dataVersion, farms]);
 
-  const demo = Boolean(
-    session?.memberships[0]?.organizationName.toLowerCase().includes("demostrativa"),
-  );
+  const demo = isDemoOrg(session?.memberships[0]?.organizationName);
   const revisar = counts.rechazado + counts.conflicto;
   const lease = session ? new Date(session.offlineLeaseUntil) : null;
   const leaseHours = lease ? (lease.getTime() - Date.now()) / 3_600_000 : 0;

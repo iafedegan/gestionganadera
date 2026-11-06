@@ -15,5 +15,12 @@ export const isDemoScope = () => dataScope.demo;
 export function demoOnly<T>(list: T[]): T[] {
   return dataScope.demo ? list : [];
 }
-export const isDemoOrg = (organizationName: string | undefined) =>
-  Boolean(organizationName?.toLowerCase().includes("demostrativa"));
+/**
+ * Organización con datos de ejemplo: la demostrativa y las cuentas de muestra del ingreso,
+ * salvo "Cuenta nueva", que debe verse vacía.
+ */
+export function isDemoOrg(organizationName: string | undefined): boolean {
+  const n = organizationName?.toLowerCase() ?? "";
+  if (n.includes("demostrativa")) return true;
+  return n.includes("(muestra)") && !n.includes("cuenta nueva");
+}
