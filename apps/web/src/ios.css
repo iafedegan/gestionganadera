@@ -1144,3 +1144,50 @@ h1 {
   display: grid;
   gap: 8px;
 }
+
+/* ───── Cuentas de muestra en el ingreso ───── */
+.lc-demo {
+  display: grid;
+  gap: 8px;
+  margin: 16px 0 4px;
+  padding: 14px;
+  border-radius: 14px;
+  background: var(--ios-fondo);
+}
+.lc-demo h2 {
+  font-size: 1rem;
+}
+.lc-demo p {
+  color: var(--ios-texto-2);
+  font-size: 0.86rem;
+}
+.lc-demo ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+.lc-demo-btn {
+  display: grid;
+  gap: 2px;
+  width: 100%;
+  padding: 12px 14px;
+  border: 0;
+  border-radius: 12px;
+  background: #fff;
+  color: var(--ios-texto);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.lc-demo-btn:disabled {
+  opacity: 0.6;
+}
+.lc-demo-btn small {
+  color: var(--ios-texto-2);
+  font-size: 0.82rem;
+}
+.lc-demo-btn:not(:disabled):active {
+  background: var(--ios-azul-suave);
+}

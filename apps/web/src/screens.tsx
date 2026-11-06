@@ -1,4 +1,4 @@
-import type { AnimalRegisterPayload, Species } from "@ganaderia/contracts";
+import type { AnimalRegisterPayload, DemoUserDto, Species } from "@ganaderia/contracts";
 import { ROLE_LABEL, can, diagnose, isDryOffDue, isWeaningDue } from "@ganaderia/domain";
 import {
   AlertTriangle,
@@ -85,7 +85,16 @@ function ModIcon({ k, size = 20 }: { k: ModuleKey; size?: number }) {
 /* ───────────── Acceso ───────────── */
 
 export function Login() {
-  const { login } = useApp();
+  const { login, demoLogin } = useApp();
+  const [demos, setDemos] = useState<DemoUserDto[]>([]);
+  const [demoBusy, setDemoBusy] = useState<string | null>(null);
+  // Solo aparecen si el servidor las ofrece; si no, la lista falla en silencio y no se muestra nada.
+  useEffect(() => {
+    api
+      .demoUsers()
+      .then(setDemos)
+      .catch(() => setDemos([]));
+  }, []);
   const inviteCode = new URLSearchParams(window.location.search).get("invitacion");
   const [mode, setMode] = useState<"ingreso" | "registro">(() =>
     new URLSearchParams(window.location.search).get("registro") !== null || inviteCode
@@ -336,6 +345,36 @@ export function Login() {
                 de su último inicio de sesión en línea.
               </span>
             </p>
+
+            {demos.length > 0 && (
+              <section className="lc-demo" aria-label="Cuentas de muestra">
+                <h2>Probar sin contraseña</h2>
+                <p>Elija una cuenta de muestra: los datos son de ejemplo.</p>
+                <ul>
+                  {demos.map((d) => (
+                    <li key={d.key}>
+                      <button
+                        type="button"
+                        className="lc-demo-btn"
+                        disabled={demoBusy !== null}
+                        onClick={async () => {
+                          setDemoBusy(d.key);
+                          setError(null);
+                          const res = await demoLogin(d.key);
+                          if (!res.ok) setError(res.message);
+                          setDemoBusy(null);
+                        }}
+                      >
+                        <strong>{d.label}</strong>
+                        <small>
+                          {demoBusy === d.key ? "Preparando la cuenta…" : d.description}
+                        </small>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            )}
 
             <p className="lc-signup">
               ¿Aún no tiene cuenta?{" "}

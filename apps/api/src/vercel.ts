@@ -21,6 +21,7 @@ function boot(): Promise<FastifyInstance> {
     const app = await buildApp({
       db,
       production: true,
+      demo: process.env.DEMO_LOGIN === "1",
       ...(origins ? { allowedOrigins: origins } : {}),
     });
     await app.ready();

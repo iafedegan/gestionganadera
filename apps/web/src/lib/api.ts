@@ -1,6 +1,7 @@
 import type {
   AssistantReply,
   AssistantRequest,
+  DemoUserDto,
   FarmCreate,
   FarmDto,
   FarmProfileDto,
@@ -107,6 +108,8 @@ export const api = {
     ),
   logout: () => request<{ ok: true }>("POST", "/v1/auth/logout"),
   me: () => request<SessionDto>("GET", "/v1/auth/me"),
+  demoUsers: () => request<DemoUserDto[]>("GET", "/v1/demo/users"),
+  demoLogin: (key: string) => request<SessionDto>("POST", "/v1/demo/login", { key }),
   approxLocation: () => request<{ lat: number; lng: number }>("GET", "/v1/geo/approx"),
   createFarm: (input: FarmCreate) => request<FarmDto>("POST", "/v1/farms", input),
   updateFarm: (id: string, input: FarmUpdate) => request<FarmDto>("PUT", `/v1/farms/${id}`, input),

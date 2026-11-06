@@ -34,6 +34,8 @@ const app = await buildApp({
   db,
   production,
   ...(!production && process.env.ASSISTANT_FAKE === "1" ? { ask: fakeAsk } : {}),
+  // En desarrollo el selector de cuentas de muestra viene activo; en producción solo con DEMO_LOGIN=1.
+  demo: !production || process.env.DEMO_LOGIN === "1",
   landingDir,
   appDir,
   ...(allowedOrigins ? { allowedOrigins } : {}),

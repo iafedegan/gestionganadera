@@ -21,7 +21,7 @@ export const hashPassword = (password: string) => hash(password, ARGON);
 
 let dummyHash: Promise<string> | undefined;
 
-const sha256 = (s: string) => createHash("sha256").update(s).digest("hex");
+export const sha256 = (s: string) => createHash("sha256").update(s).digest("hex");
 
 export interface AuthUser {
   id: string;
@@ -166,6 +166,25 @@ async function openSession(
     return loadMemberships(q, userId);
   });
   return { token, memberships };
+}
+
+/** Abre una sesión sin contraseña: solo para las cuentas de muestra, que el servidor habilita aparte. */
+export async function openDemoSession(db: Db, userId: string, userAgent: string | undefined) {
+  const { token, memberships } = await openSession(db, userId, userAgent);
+  const rows = await db.admin((q) =>
+    q<{ email: string; display_name: string; onboarding_pending: boolean }>(
+      "SELECT email, display_name, onboarding_pending FROM app_user WHERE id = $1",
+      [userId],
+    ),
+  );
+  const u = rows[0];
+  const user: AuthUser = {
+    id: userId,
+    email: u?.email ?? "",
+    displayName: u?.display_name ?? "",
+    onboardingPending: u?.onboarding_pending ?? false,
+  };
+  return { token, user, memberships };
 }
 
 export type RegisterResult =

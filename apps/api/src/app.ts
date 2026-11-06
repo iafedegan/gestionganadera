@@ -3,6 +3,7 @@ import cookie from "@fastify/cookie";
 import fastifyStatic from "@fastify/static";
 import {
   AssistantRequest,
+  DemoLoginRequest,
   ErrorCodes,
   FarmCreate,
   FarmProfile,
@@ -36,12 +37,15 @@ import {
   grants,
   login,
   logout,
+  openDemoSession,
   register,
   registerInvited,
   resolveSession,
   toSessionDto,
 } from "./auth.js";
 import type { Db } from "./db.js";
+import { DemoRateLimit, ensureDemo } from "./demo.js";
+import { DEMO_SPECS, demoSpec } from "./demoData.js";
 import { createFarm, listFarms, pull, push, updateFarm } from "./sync.js";
 import {
   acceptInvitation,
@@ -69,6 +73,8 @@ export interface AppOptions {
   landingDir?: string;
   /** Carpeta compilada de la PWA; se sirve en «/app/». */
   appDir?: string;
+  /** Permite entrar a las cuentas de muestra sin contraseña (selector de la pantalla de ingreso). */
+  demo?: boolean;
   /** Llamada al modelo del asistente. Por defecto usa ANTHROPIC_API_KEY; en pruebas se inyecta. */
   ask?: AskFn | null;
 }
@@ -88,6 +94,7 @@ export async function buildApp(opts: AppOptions): Promise<FastifyInstance> {
   const throttle = new LoginThrottle();
   const registerThrottle = new LoginThrottle();
   const inviteThrottle = new LoginThrottle();
+  const demoLimit = new DemoRateLimit();
   await app.register(cookie);
 
   app.addHook("onSend", async (req, reply) => {
@@ -153,6 +160,47 @@ export async function buildApp(opts: AppOptions): Promise<FastifyInstance> {
       maxAge: (body.data.remember ? REMEMBER_HOURS : 12) * 3600,
     });
     return toSessionDto(res.user, res.memberships);
+  });
+
+  // Cuentas de muestra: solo existen si el servidor las habilita. Sin eso responden 404.
+  app.get("/v1/demo/users", async (_req, reply) => {
+    if (!opts.demo)
+      return reply.code(404).send({ error: "NO_ENCONTRADO", message: "No disponible." });
+    return DEMO_SPECS.map(({ key, label, description }) => ({ key, label, description }));
+  });
+
+  app.post("/v1/demo/login", async (req, reply) => {
+    if (!opts.demo)
+      return reply.code(404).send({ error: "NO_ENCONTRADO", message: "No disponible." });
+    const body = DemoLoginRequest.safeParse(req.body);
+    const spec = body.success ? demoSpec(body.data.key) : undefined;
+    if (!spec)
+      return reply
+        .code(400)
+        .send({ error: "VALIDACION", message: "Esa cuenta de muestra no existe." });
+    if (!demoLimit.allow(req.ip)) {
+      return reply.code(429).send({
+        error: "BLOQUEADO",
+        message: "Demasiados ingresos de muestra. Espere unos minutos.",
+      });
+    }
+    try {
+      const { userId } = await ensureDemo(db, spec);
+      const s = await openDemoSession(db, userId, req.headers["user-agent"]);
+      reply.setCookie(COOKIE, s.token, {
+        httpOnly: true,
+        sameSite: "strict",
+        secure: opts.production ?? false,
+        path: "/",
+        maxAge: 12 * 3600,
+      });
+      return toSessionDto(s.user, s.memberships);
+    } catch (err) {
+      req.log.error(err, "no se pudo preparar la cuenta de muestra");
+      return reply
+        .code(500)
+        .send({ error: "ERROR", message: "No se pudo preparar la cuenta de muestra." });
+    }
   });
 
   // Registro público: limitado por IP para frenar altas masivas.

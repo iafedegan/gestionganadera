@@ -64,6 +64,8 @@ interface AppState {
     password: string,
   ): Promise<{ ok: true; notice?: string } | { ok: false; message: string }>;
   register(input: RegisterRequest): Promise<{ ok: true } | { ok: false; message: string }>;
+  /** Entra a una cuenta de muestra sin contraseña (solo si el servidor la ofrece). */
+  demoLogin(key: string): Promise<{ ok: true } | { ok: false; message: string }>;
   completeOnboarding(
     input: OnboardingRequest,
   ): Promise<{ ok: true } | { ok: false; message: string }>;
@@ -280,6 +282,27 @@ export function AppProvider({ children }: { children: ReactNode }) {
     [enter],
   );
 
+  const demoLogin: AppState["demoLogin"] = useCallback(
+    async (key) => {
+      try {
+        const s = await api.demoLogin(key);
+        // Las cuentas de muestra no tienen contraseña: la copia local usa una clave fija, sin secreto.
+        await enter(s, `muestra:${key}`);
+        setOnline(true);
+        return { ok: true as const };
+      } catch (err) {
+        if (err instanceof ApiError) return { ok: false as const, message: err.message };
+        if (err instanceof NetworkError)
+          return { ok: false as const, message: "Necesita conexión a internet." };
+        return {
+          ok: false as const,
+          message: err instanceof Error ? err.message : "Error inesperado.",
+        };
+      }
+    },
+    [enter],
+  );
+
   const registerInvited: AppState["registerInvited"] = useCallback(
     async (input) => {
       try {
@@ -409,6 +432,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       dataVersion,
       login,
       register,
+      demoLogin,
       completeOnboarding,
       registerInvited,
       acceptInvitation,
@@ -433,6 +457,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       dataVersion,
       login,
       register,
+      demoLogin,
       completeOnboarding,
       registerInvited,
       acceptInvitation,

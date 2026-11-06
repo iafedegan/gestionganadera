@@ -726,6 +726,15 @@ export type FarmCreate = z.input<typeof FarmCreate>;
 export const FarmUpdate = z.object({ organizationId: uuid, ...farmFields }).superRefine(checkFarm);
 export type FarmUpdate = z.input<typeof FarmUpdate>;
 
+/** Cuenta de muestra que se puede elegir en la pantalla de ingreso (solo si el servidor lo permite). */
+export interface DemoUserDto {
+  key: string;
+  label: string;
+  description: string;
+}
+export const DemoLoginRequest = z.object({ key: z.string().min(1).max(40) });
+export type DemoLoginRequest = z.infer<typeof DemoLoginRequest>;
+
 /** Códigos de error de dominio (estables; la interfaz los traduce). */
 export const ErrorCodes = {
   TAG_DUPLICADO: "TAG_DUPLICADO",
