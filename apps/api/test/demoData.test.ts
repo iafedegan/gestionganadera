@@ -1,3 +1,4 @@
+import { AnimalEventPayload } from "@ganaderia/contracts";
 import { describe, expect, it } from "vitest";
 import { DEMO_SPECS, buildHerd, demoProfile } from "../src/demoData";
 
@@ -77,6 +78,46 @@ describe("datos de muestra", () => {
       expect(p?.heads).toBe(herd.animals.length);
       expect(p?.cows).toBe(herd.animals.filter((a) => a.category === "vaca").length);
       expect((p?.milking ?? 0) <= (p?.cows ?? 0)).toBe(true);
+    }
+  });
+
+  it("todos los eventos cumplen el contrato real y ningún animal queda sin historia clínica", () => {
+    for (const spec of DEMO_SPECS.filter((x) => x.farms.length > 0)) {
+      const { animals, events } = buildHerd(spec, TODAY);
+      for (const e of events) {
+        const r = AnimalEventPayload.safeParse({
+          id: e.id,
+          animalId: e.animalId,
+          occurredOn: e.occurredOn,
+          type: e.type,
+          data: e.data,
+        });
+        expect(r.success, `${spec.key} ${e.type} ${JSON.stringify(e.data)}`).toBe(true);
+      }
+      const withHealth = new Set(events.filter((e) => e.type === "salud").map((e) => e.animalId));
+      expect(animals.filter((a) => !withHealth.has(a.id))).toEqual([]);
+    }
+  });
+
+  it("incluye escenarios clínicos variados: mastitis, abortos, secado, retiros y celos", () => {
+    for (const key of ["pequeno", "completo"]) {
+      const spec = DEMO_SPECS.find((s) => s.key === key) as never;
+      const { events } = buildHerd(spec, TODAY);
+      const reasons = events.filter((e) => e.type === "salud").map((e) => String(e.data.reason));
+      expect(reasons.some((r) => r.includes("Mastitis clínica"))).toBe(true);
+      expect(events.some((e) => e.type === "cmt" && Number(e.data.PI) === 4)).toBe(true);
+      expect(events.some((e) => e.type === "secado")).toBe(true);
+      expect(events.some((e) => e.type === "aborto")).toBe(true);
+      expect(events.some((e) => e.type === "celo")).toBe(true);
+      expect(events.some((e) => e.type === "parto" && e.data.ease === "Distocia (cesárea)")).toBe(
+        true,
+      );
+      expect(events.some((e) => e.type === "salud" && Number(e.data.meatWithdrawalDays) > 0)).toBe(
+        true,
+      );
+      const kinds = new Set(events.filter((e) => e.type === "salud").map((e) => e.data.kind));
+      for (const k of ["Vacunación", "Tratamiento", "Desparasitación", "Diagnóstico", "Control"])
+        expect(kinds.has(k)).toBe(true);
     }
   });
 });

@@ -400,7 +400,7 @@ export const DEMO_SPECS: DemoSpec[] = [
         toros: 2,
       }),
     ],
-    milkDays: 21,
+    milkDays: 30,
     supplies: true,
     map: true,
     team: [
@@ -614,86 +614,571 @@ export function buildHerd(spec: DemoSpec, today: string, seed = 7) {
       events.push({ id: uuidv7(), animalId: a.id, farm, type, occurredOn, data });
     };
 
-    // Reproducción y ordeño de las hembras adultas.
+    const vet =
+      spec.team.find((t) => t.role === "tecnico")?.displayName.replace(/ \(.*\)$/, "") ??
+      "Veterinario de la finca";
+    const staff = "Operario de la finca";
+    const mine = animals.filter((x) => x.farm === farm);
+    const daysOld = (a: DemoAnimal) =>
+      Math.round((Date.parse(today) - Date.parse(a.birthDate)) / 864e5);
+
+    type Extra = {
+      dose?: string;
+      cost?: number | null;
+      milk?: number;
+      meat?: number;
+      who?: string;
+    };
+    const health = (
+      a: DemoAnimal,
+      daysAgo: number,
+      kind: string,
+      product: string,
+      reason: string,
+      o: Extra = {},
+    ) =>
+      push(a, "salud", ago(daysAgo), {
+        kind,
+        product,
+        reason,
+        ...(o.dose ? { dose: o.dose } : {}),
+        responsible: o.who ?? vet,
+        cost: o.cost === undefined ? null : o.cost,
+        milkWithdrawalDays: o.milk ?? 0,
+        meatWithdrawalDays: o.meat ?? 0,
+      });
+
+    // Escenarios clínicos y reproductivos: cada uno se reparte entre las vacas del hato.
+    type Scenario =
+      | "mastitis_clinica"
+      | "mastitis_subclinica"
+      | "mastitis_recurrente"
+      | "seca"
+      | "repetidora"
+      | "prenez_media"
+      | "retiro_leche"
+      | "aborto"
+      | "distocia"
+      | "retencion"
+      | "hipocalcemia"
+      | "cojera"
+      | "babesiosis"
+      | "mellizos"
+      | "descarte";
+    const SCENARIOS: { name: Scenario; calf: boolean }[] = [
+      { name: "mastitis_clinica", calf: true },
+      { name: "seca", calf: false },
+      { name: "repetidora", calf: false },
+      { name: "mastitis_subclinica", calf: true },
+      { name: "retiro_leche", calf: true },
+      { name: "mastitis_recurrente", calf: false },
+      { name: "aborto", calf: false },
+      { name: "retencion", calf: true },
+      { name: "prenez_media", calf: true },
+      { name: "distocia", calf: true },
+      { name: "hipocalcemia", calf: true },
+      { name: "cojera", calf: false },
+      { name: "babesiosis", calf: false },
+      { name: "mellizos", calf: true },
+      { name: "descarte", calf: false },
+    ];
+    const scen = new Map<string, Scenario>();
+    {
+      const withCalf = dams.filter((c) => calves.some((k) => k.motherId === c.id));
+      const without = dams.filter((c) => !calves.some((k) => k.motherId === c.id));
+      const total = Math.min(dams.length, Math.max(11, Math.round(dams.length * 0.35)));
+      for (let j = 0; j < total; j++) {
+        const sc = SCENARIOS[j % SCENARIOS.length] as (typeof SCENARIOS)[number];
+        const pool = sc.calf ? withCalf : without;
+        const cow = pool.shift() ?? (sc.calf ? without : withCalf).shift();
+        if (cow) scen.set(cow.id, sc.name);
+      }
+    }
+
+    // Reproducción, ordeño y sanidad de las hembras adultas.
     for (const cow of dams) {
       const calf = calves.find((c) => c.motherId === cow.id);
-      const lactating = Boolean(calf) || rnd() < 0.55;
-      const calfAge = calf
-        ? Math.round((Date.parse(today) - Date.parse(calf.birthDate)) / 864e5)
-        : null;
-      const partoDays = calfAge === null ? between(20, 260) : Math.max(15, Math.min(240, calfAge));
-      if (lactating) {
-        push(cow, "parto", ago(partoDays), {
+      const level = cow.species === "bufalino" ? between(4, 8) : between(9, 20);
+      const calve = (
+        d: number,
+        ease: "Normal" | "Asistido" | "Distocia (cesárea)" = "Normal",
+        sex?: "Mellizos",
+      ) => {
+        if (calf) {
+          calf.birthDate = ago(d);
+          calf.entryDate = ago(d);
+        }
+        push(cow, "parto", ago(d), {
           ...(calf
-            ? { calfTag: calf.tag, calfSex: calf.sex === "hembra" ? "Hembra" : "Macho" }
+            ? { calfTag: calf.tag, calfSex: sex ?? (calf.sex === "hembra" ? "Hembra" : "Macho") }
             : {}),
           birthWeightKg: between(28, 42),
-          ease: "Normal",
+          ease,
         });
-        const base = cow.species === "bufalino" ? between(4, 8) : between(9, 20);
-        for (let d = 0; d < spec.milkDays; d++) {
-          if (d > partoDays) break;
-          const liters = Math.max(2, Math.round(base * (0.9 + rnd() * 0.2) * 10) / 10);
+      };
+      const milk = (since: number, f: (d: number) => number = () => 1) => {
+        for (let d = 0; d < spec.milkDays && d <= since; d++) {
+          const liters = Math.max(2, Math.round(level * (0.9 + rnd() * 0.2) * f(d) * 10) / 10);
           push(cow, "leche", ago(d), { liters, shift: "Mañana" });
+          push(cow, "leche", ago(d), {
+            liters: Math.max(1.5, Math.round(liters * 0.78 * 10) / 10),
+            shift: "Tarde",
+          });
         }
-        if (partoDays > 70) {
-          const sv = partoDays - between(60, 95);
-          push(cow, "servicio", ago(sv), { via: rnd() < 0.5 ? "IA" : "Monta", sire: "HOL-221" });
-          if (sv > 35) {
-            const open = rnd() < 0.25;
-            push(cow, "dx", ago(sv - 35), {
-              result: open ? "Vacía" : "Preñada",
-              method: rnd() < 0.5 ? "Ecografía" : "Palpación rectal",
-            });
-          }
-        }
-        if (rnd() < 0.08) {
-          push(cow, "cmt", ago(between(1, 6)), { AI: rnd() < 0.5 ? 3 : 1, AD: 0, PI: 0, PD: 1 });
-        }
-      } else if (rnd() < 0.4) {
-        push(cow, "servicio", ago(between(5, 40)), { via: "IA", sire: "GIR-310" });
-      }
-    }
+      };
+      const cmt = (d: number, AI: number, AD: number, PI: number, PD: number) =>
+        push(cow, "cmt", ago(d), { AI, AD, PI, PD });
+      const service = (d: number, via: "IA" | "Monta" = "IA", sire = "HOL-221") =>
+        push(cow, "servicio", ago(d), { via, sire });
+      const heat = (d: number) =>
+        push(cow, "celo", ago(d), { note: "Celo observado por el operario" });
+      const dx = (d: number, result: "Preñada" | "Vacía" | "Dudosa", method = "Ecografía") =>
+        push(cow, "dx", ago(d), { result, method });
+      const tx = (d: number, product: string, reason: string, o: Extra) =>
+        health(cow, d, "Tratamiento", product, reason, o);
 
-    // Crecimiento: dos pesajes de las crías, novillas y novillos.
-    for (const a of animals.filter(
-      (x) => x.farm === farm && ["ternero", "novilla", "novillo"].includes(x.category),
-    )) {
-      const age = (Date.parse(today) - Date.parse(a.birthDate)) / 864e5;
-      const kg = (days: number) => Math.round(35 + days * (a.category === "ternero" ? 0.7 : 0.52));
-      if (age > 90) push(a, "peso", ago(60), { kg: kg(age - 60), method: "Báscula" });
-      push(a, "peso", ago(between(1, 6)), {
-        kg: kg(age),
-        method: rnd() < 0.7 ? "Báscula" : "Cinta",
-      });
-    }
-
-    // Sanidad: vacunación a una parte del hato y algunos tratamientos con retiro vigente.
-    for (const a of animals.filter((x) => x.farm === farm)) {
-      if (rnd() < 0.45) {
-        push(a, "salud", ago(between(15, 95)), {
-          kind: "Vacunación",
-          product: "Vacuna antiaftosa",
-          reason: "Ciclo nacional",
-          dose: "2 mL SC",
-          responsible: "Veterinario de la finca",
-          cost: 3800,
-          milkWithdrawalDays: 0,
-          meatWithdrawalDays: 0,
+      const sc = scen.get(cow.id);
+      if (sc === "mastitis_clinica") {
+        calve(95);
+        milk(95, (d) => (d <= 5 ? 0.55 : 1));
+        service(35);
+        cmt(3, 0, 0, 4, 1);
+        tx(2, "Cefquinoma intramamaria", "Mastitis clínica, cuarto posterior izquierdo", {
+          dose: "1 jeringa cada 12 h por 3 días",
+          cost: 38000,
+          milk: 5,
+          meat: 5,
         });
+        tx(2, "Meloxicam", "Antiinflamatorio por mastitis", {
+          dose: "0,5 mg/kg IM",
+          cost: 22000,
+          milk: 5,
+          meat: 15,
+        });
+        cmt(1, 0, 0, 3, 1);
+      } else if (sc === "mastitis_subclinica") {
+        calve(130);
+        milk(130, () => 0.92);
+        service(50, "Monta", "BRA-114");
+        cmt(8, 0, 2, 0, 3);
+        cmt(1, 0, 3, 0, 3);
+        health(
+          cow,
+          1,
+          "Control",
+          "Seguimiento de mastitis subclínica",
+          "CMT positivo en dos cuartos, sin signos clínicos",
+          { cost: 0 },
+        );
+      } else if (sc === "mastitis_recurrente") {
+        calve(240);
+        milk(240, () => 0.8);
+        cmt(150, 4, 0, 0, 0);
+        tx(149, "Cefquinoma intramamaria", "Mastitis clínica, cuarto anterior izquierdo", {
+          cost: 38000,
+          milk: 5,
+          meat: 5,
+        });
+        cmt(100, 0, 0, 4, 0);
+        tx(
+          99,
+          "Cefquinoma intramamaria",
+          "Mastitis clínica recurrente, cuarto posterior izquierdo",
+          { cost: 38000, milk: 5, meat: 5 },
+        );
+        health(
+          cow,
+          70,
+          "Diagnóstico",
+          "Cultivo de leche y antibiograma",
+          "Mastitis recurrente · Staphylococcus aureus",
+          { cost: 85000 },
+        );
+        cmt(40, 2, 0, 3, 0);
+        tx(
+          39,
+          "Cloxacilina intramamaria",
+          "Mastitis subclínica por S. aureus, tratamiento prolongado",
+          {
+            dose: "1 jeringa cada 24 h por 5 días",
+            cost: 52000,
+            milk: 6,
+            meat: 30,
+          },
+        );
+        cmt(5, 1, 0, 3, 0);
+        health(
+          cow,
+          4,
+          "Control",
+          "Evaluación para descarte",
+          "Mastitis crónica con producción en descenso",
+          { cost: 0 },
+        );
+      } else if (sc === "seca") {
+        calve(330);
+        service(262);
+        dx(225, "Preñada");
+        push(cow, "secado", ago(39), { note: "Secado programado 60 días antes del parto" });
+        tx(39, "Cloxacilina benzatínica (terapia de vaca seca)", "Secado", {
+          cost: 30000,
+          milk: 30,
+          meat: 28,
+        });
+        health(
+          cow,
+          30,
+          "Vacunación",
+          "Vacuna reproductiva IBR/DVB/Leptospira",
+          "Refuerzo preparto",
+          { dose: "2 mL IM", cost: 9500 },
+        );
+      } else if (sc === "repetidora") {
+        calve(200);
+        milk(200, () => 0.95);
+        heat(141);
+        service(120);
+        heat(99);
+        service(98, "Monta", "BRA-114");
+        dx(60, "Vacía");
+        tx(55, "Cloprostenol (prostaglandina F2α)", "Anestro / vaca repetidora", {
+          dose: "2 mL IM",
+          cost: 18000,
+          milk: 0,
+          meat: 1,
+        });
+        health(
+          cow,
+          52,
+          "Control",
+          "Evaluación reproductiva",
+          "Condición corporal 2,5; plan de suplementación",
+          { cost: 0 },
+        );
+        heat(33);
+        service(32, "IA", "GIR-310");
+      } else if (sc === "prenez_media") {
+        calve(150);
+        milk(150);
+        service(70);
+        dx(30, "Preñada");
+      } else if (sc === "retiro_leche") {
+        calve(60);
+        milk(60, (d) => (d <= 2 ? 0.7 : 1));
+        health(cow, 2, "Diagnóstico", "Examen clínico", "Fiebre de 40,2 °C y tos", { cost: 0 });
+        tx(2, "Oxitetraciclina larga acción", "Neumonía con fiebre", {
+          dose: "1 mL por 10 kg IM",
+          cost: 45000,
+          milk: 4,
+          meat: 28,
+        });
+      } else if (sc === "aborto") {
+        calve(260);
+        milk(260, () => 0.8);
+        service(190);
+        dx(155, "Preñada");
+        push(cow, "aborto", ago(40), {
+          note: "Aborto a los cinco meses; se tomó muestra para laboratorio",
+        });
+        health(
+          cow,
+          38,
+          "Diagnóstico",
+          "Panel de abortos (brucelosis, neosporosis, leptospira)",
+          "Aborto sin causa conocida · resultado pendiente",
+          { cost: 120000 },
+        );
+        tx(35, "Oxitocina y antibiótico uterino", "Limpieza posaborto", {
+          cost: 30000,
+          milk: 3,
+          meat: 7,
+        });
+      } else if (sc === "distocia") {
+        calve(25, "Distocia (cesárea)");
+        milk(25, () => 0.9);
+        tx(25, "Penicilina-estreptomicina", "Posoperatorio de cesárea", {
+          dose: "1 mL por 20 kg IM por 5 días",
+          cost: 420000,
+          milk: 4,
+          meat: 21,
+        });
+        tx(24, "Flunixin meglumine", "Dolor posquirúrgico", { cost: 20000, milk: 2, meat: 7 });
+        health(
+          cow,
+          10,
+          "Control",
+          "Revisión posoperatoria",
+          "Retiro de puntos; cicatrización buena",
+          { cost: 0 },
+        );
+      } else if (sc === "retencion") {
+        calve(12, "Asistido");
+        milk(12, () => 0.8);
+        tx(10, "Oxitocina y oxitetraciclina intrauterina", "Retención de placenta", {
+          cost: 35000,
+          milk: 4,
+          meat: 14,
+        });
+        tx(6, "Ceftiofur", "Metritis puerperal", { cost: 48000, milk: 0, meat: 8 });
+      } else if (sc === "hipocalcemia") {
+        calve(8);
+        milk(8, () => 0.7);
+        health(cow, 7, "Diagnóstico", "Examen clínico", "Decúbito y extremidades frías", {
+          cost: 0,
+        });
+        tx(7, "Borogluconato de calcio", "Hipocalcemia posparto (fiebre de leche)", {
+          dose: "500 mL IV lento",
+          cost: 60000,
+        });
+      } else if (sc === "cojera") {
+        calve(180);
+        milk(180);
+        service(100);
+        dx(65, "Preñada", "Palpación rectal");
+        tx(14, "Corte de pezuña y oxitetraciclina tópica", "Cojera por dermatitis digital", {
+          cost: 35000,
+        });
+        health(cow, 5, "Control", "Revisión de pezuña", "Mejora; continuar baño de pezuñas", {
+          cost: 0,
+        });
+      } else if (sc === "babesiosis") {
+        calve(140);
+        milk(140);
+        service(60);
+        health(
+          cow,
+          10,
+          "Diagnóstico",
+          "Frotis sanguíneo",
+          "Fiebre y orina oscura · hemoparásitos",
+          { cost: 25000 },
+        );
+        tx(9, "Diminazeno", "Babesiosis (fiebre de garrapata)", {
+          dose: "3,5 mg/kg IM",
+          cost: 40000,
+          milk: 3,
+          meat: 14,
+        });
+        tx(9, "Complejo B y hematínico", "Apoyo por anemia", { cost: 18000 });
+        health(cow, 7, "Control", "Baño garrapaticida", "Control de garrapatas", { cost: 15000 });
+      } else if (sc === "mellizos") {
+        calve(70, "Asistido", "Mellizos");
+        milk(70);
+      } else if (sc === "descarte") {
+        calve(310);
+        milk(310, () => 0.4);
+        service(120);
+        dx(20, "Vacía");
+        health(
+          cow,
+          15,
+          "Control",
+          "Evaluación de descarte",
+          "Baja producción y cuatro servicios sin preñez",
+          { cost: 0 },
+        );
+      } else {
+        const calfAge = calf ? daysOld(calf) : null;
+        const lactating = Boolean(calf) || rnd() < 0.55;
+        const partoDays =
+          calfAge === null ? between(20, 260) : Math.max(15, Math.min(240, calfAge));
+        if (lactating) {
+          calve(partoDays);
+          milk(partoDays);
+          if (partoDays > 70) {
+            const sv = partoDays - between(60, 95);
+            if (rnd() < 0.4) heat(sv + 1);
+            service(sv, rnd() < 0.5 ? "IA" : "Monta");
+            if (sv > 35)
+              dx(
+                sv - 35,
+                rnd() < 0.25 ? "Vacía" : "Preñada",
+                rnd() < 0.5 ? "Ecografía" : "Palpación rectal",
+              );
+          }
+        } else if (rnd() < 0.4) {
+          heat(between(41, 50));
+          service(between(5, 40), "IA", "GIR-310");
+        }
       }
     }
-    for (const cow of vacas.slice(0, 2)) {
-      push(cow, "salud", ago(between(1, 4)), {
-        kind: "Tratamiento",
-        product: "Oxitetraciclina larga acción",
-        reason: "Mastitis",
-        dose: "1 mL por 10 kg IM",
-        responsible: "Veterinario de la finca",
-        cost: 45000,
-        milkWithdrawalDays: 7,
-        meatWithdrawalDays: 28,
+
+    // Novillas: primera monta y celos.
+    mine
+      .filter((x) => x.category === "novilla")
+      .forEach((nv, i) => {
+        if (daysOld(nv) < 540) return;
+        if (i % 3 === 0) {
+          const d = between(40, 90);
+          push(nv, "celo", ago(d + 1), { note: "Primer celo servido" });
+          push(nv, "servicio", ago(d), { via: "IA", sire: "GIR-310" });
+          push(nv, "dx", ago(d - 35), { result: "Preñada", method: "Ecografía" });
+        } else if (i % 3 === 1) {
+          push(nv, "celo", ago(between(2, 15)), { note: "En celo, lista para servir" });
+        }
       });
+
+    // Terneros enfermos.
+    calves.forEach((c, i) => {
+      if (daysOld(c) < 20) return;
+      if (i % 4 === 0)
+        health(c, between(3, 12), "Tratamiento", "Suero oral y enrofloxacina", "Diarrea neonatal", {
+          dose: "5 mg/kg SC",
+          cost: 24000,
+          meat: 14,
+          who: staff,
+        });
+      if (i % 7 === 1)
+        health(c, between(8, 14), "Tratamiento", "Florfenicol", "Neumonía", {
+          dose: "40 mg/kg SC",
+          cost: 52000,
+          meat: 28,
+        });
+    });
+
+    // Sanidad preventiva y pruebas de todo el hato.
+    for (const a of mine) {
+      const age = daysOld(a);
+      const adult = age > 700;
+      const clinical = () => events.filter((e) => e.animalId === a.id && e.type === "salud").length;
+      if (age < 200)
+        health(
+          a,
+          age - 1,
+          "Control",
+          "Cuidado del recién nacido",
+          "Desinfección de ombligo y calostro",
+          { cost: 0, who: staff },
+        );
+      const c1 = between(8, 35);
+      if (age > c1 + 100 && rnd() < 0.9)
+        health(a, c1, "Vacunación", "Vacuna antiaftosa", "Ciclo nacional de vacunación", {
+          dose: "2 mL SC",
+          cost: 3800,
+        });
+      if (age > c1 + 190)
+        health(
+          a,
+          c1 + between(170, 190),
+          "Vacunación",
+          "Vacuna antiaftosa",
+          "Ciclo nacional de vacunación",
+          { dose: "2 mL SC", cost: 3800 },
+        );
+      if (a.sex === "hembra" && age > 250)
+        health(
+          a,
+          age - between(120, 240),
+          "Vacunación",
+          "Vacuna Brucella abortus cepa 19",
+          "Prevención de brucelosis",
+          { dose: "2 mL SC", cost: 6500 },
+        );
+      if (age > 120 && rnd() < 0.7)
+        health(
+          a,
+          between(40, 300),
+          "Vacunación",
+          "Vacuna antirrábica",
+          "Prevención de rabia paralítica bovina",
+          { dose: "2 mL SC", cost: 3200 },
+        );
+      if (age > 90 && rnd() < 0.7)
+        health(
+          a,
+          between(20, Math.max(21, Math.min(age - 45, 200))),
+          "Vacunación",
+          "Vacuna contra clostridiosis",
+          "Carbón y edema maligno",
+          { dose: "5 mL SC", cost: 3600 },
+        );
+      if (a.sex === "hembra" && age > 450 && rnd() < 0.7)
+        health(
+          a,
+          between(25, 150),
+          "Vacunación",
+          "Vacuna reproductiva IBR/DVB/Leptospira",
+          "Prevención de abortos",
+          { dose: "2 mL IM", cost: 9500 },
+        );
+      if (age > 60 && rnd() < 0.85) {
+        const young = age < 365;
+        health(
+          a,
+          between(45, 150),
+          "Desparasitación",
+          young ? "Albendazol 10 %" : "Ivermectina 1 %",
+          young ? "Parásitos gastrointestinales" : "Parásitos internos y externos",
+          {
+            dose: young ? "7,5 mg/kg VO" : "1 mL por 50 kg SC",
+            cost: young ? 5200 : 7800,
+            meat: young ? 14 : 35,
+          },
+        );
+      }
+      if (adult && rnd() < 0.6)
+        health(
+          a,
+          between(30, 300),
+          "Diagnóstico",
+          "Prueba de brucelosis (Rosa de Bengala)",
+          "Vigilancia del hato · resultado negativo",
+          { cost: 18000 },
+        );
+      if (adult && rnd() < 0.4)
+        health(
+          a,
+          between(30, 300),
+          "Diagnóstico",
+          "Tuberculina (prueba caudal)",
+          "Vigilancia del hato · resultado negativo",
+          { cost: 22000 },
+        );
+      if (a.category === "toro") {
+        health(
+          a,
+          between(30, 200),
+          "Control",
+          "Examen andrológico",
+          "Capacidad reproductiva satisfactoria",
+          { cost: 60000 },
+        );
+        health(
+          a,
+          between(5, 60),
+          "Control",
+          "Control de condición corporal",
+          "Condición 3,5 antes de la temporada de monta",
+          { cost: 0, who: staff },
+        );
+      }
+      if (clinical() === 0)
+        health(
+          a,
+          Math.min(10, Math.max(1, age - 1)),
+          "Control",
+          "Revisión general",
+          "Chequeo de rutina",
+          { cost: 0, who: staff },
+        );
+
+      // Pesajes seriados.
+      const step =
+        a.category === "ternero" ? 45 : a.category === "vaca" || a.category === "toro" ? 110 : 75;
+      const marks: number[] = [];
+      for (let t = between(2, 6); t < age && marks.length < 8; t += step) marks.push(t);
+      if (a.category === "ternero" && age > 3) marks.push(age - 1);
+      const gain = a.category === "ternero" ? 0.7 : 0.55;
+      for (const t of marks) {
+        const grown = age - t;
+        const kg =
+          a.category === "vaca"
+            ? (a.species === "bufalino" ? 520 : 430) + between(-25, 40)
+            : a.category === "toro"
+              ? 780 + between(-40, 80)
+              : Math.round((35 + grown * gain) * (0.94 + rnd() * 0.12));
+        push(a, "peso", ago(t), { kg, method: t % 3 === 0 ? "Cinta" : "Báscula" });
+      }
     }
   });
 
