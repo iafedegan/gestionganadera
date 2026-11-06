@@ -31,6 +31,7 @@ import {
   X,
 } from "lucide-react";
 import { type ReactNode, useCallback, useEffect, useState } from "react";
+import { ExportFormsDialog } from "./ExportForms";
 import { GOALS } from "./Onboarding";
 import { ApiError, api } from "./lib/api";
 import { localdb } from "./lib/localdb";
@@ -875,9 +876,16 @@ export function DiagnosisView(props: {
 }
 
 function ExportView({ plan }: { plan: NonNullable<Diagnosis["export"]> }) {
+  const [forms, setForms] = useState(false);
   return (
     <section className="dx-export" aria-label="Exportación">
       <h3 className="dx-h">Exportar a {plan.country}</h3>
+      {plan.lines.some((l) => l.product === "ganado_pie") && (
+        <button type="button" className="btn btn-primary" onClick={() => setForms(true)}>
+          Preparar formularios del ICA
+        </button>
+      )}
+      {forms && <ExportFormsDialog country={plan.country} onClose={() => setForms(false)} />}
       {plan.lines.map((l) => (
         <div key={l.product} className="dx-exp-line">
           <strong>

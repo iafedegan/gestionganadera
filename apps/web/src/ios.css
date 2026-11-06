@@ -1117,3 +1117,30 @@ h1 {
   color: #6b3d00;
   font-size: 0.86rem;
 }
+
+/* ───── Formularios de exportación ───── */
+.xf {
+  display: grid;
+  gap: 12px;
+}
+.xf-predio {
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+  border-radius: 12px;
+  background: var(--ios-fondo);
+}
+.xf-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.xf-animals {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: 220px;
+  overflow-y: auto;
+  display: grid;
+  gap: 8px;
+}
