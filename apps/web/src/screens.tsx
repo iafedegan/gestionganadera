@@ -38,6 +38,7 @@ import {
 } from "lucide-react";
 import { type CSSProperties, type FormEvent, type ReactNode, useEffect, useState } from "react";
 import { AssistantCard } from "./Assistant";
+import { NewsStrip } from "./Ecosistema";
 import { FarmIntel } from "./FarmIntel";
 import { type PendingInvite, RegisterForm } from "./Onboarding";
 import { Pasture } from "./Pasture";
@@ -53,7 +54,14 @@ import { type HomeStats, homeStats } from "./lib/homeStats";
 import { type OutboxItem, localdb } from "./lib/localdb";
 import { isDemoOrg } from "./lib/scope";
 import { lastEmail } from "./lib/session";
-import { type ModuleDef, type ModuleKey, canSeeModule, moduleByKey, modulesFor } from "./modules";
+import {
+  GROUP_LABEL,
+  type ModuleDef,
+  type ModuleKey,
+  canSeeModule,
+  moduleByKey,
+  modulesFor,
+} from "./modules";
 import {
   haptic,
   isStandalone,
@@ -404,15 +412,51 @@ function NavList(props: {
 }) {
   const { role } = useApp();
   const list = modulesFor(role).filter((m) => !props.locked || SETUP_MODULES.includes(m.key));
+  // En celular el menú es una cuadrícula de íconos por grupos: se encuentra todo de un vistazo.
+  if (props.variant === "sheet") {
+    const groups: { title: string; items: ModuleDef[] }[] = [
+      { title: "Mi finca", items: list.filter((m) => !m.group) },
+      { title: GROUP_LABEL.ecosistema, items: list.filter((m) => m.group === "ecosistema") },
+      { title: "Mi empresa", items: list.filter((m) => m.group === "erp") },
+    ].filter((g) => g.items.length > 0);
+    return (
+      <div className="mod-grid">
+        {groups.map((g) => (
+          <section key={g.title} aria-label={g.title}>
+            <h3 className="mod-group">{g.title}</h3>
+            {/* Cuatro módulos van en una sola fila: ninguno queda suelto. */}
+            <ul className={g.items.length === 4 ? "cols-4" : undefined}>
+              {g.items.map((m) => (
+                <li key={m.key}>
+                  <button
+                    type="button"
+                    className={m.key === props.active ? "mod-tile active" : "mod-tile"}
+                    aria-current={m.key === props.active ? "page" : undefined}
+                    onClick={() => props.onPick(m.key)}
+                  >
+                    <span className="mod-icon">
+                      <ModIcon k={m.key} size={24} />
+                    </span>
+                    <span className="mod-label">{m.short}</span>
+                    {m.phase && !PROTO[m.key] && <small>Pronto</small>}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </section>
+        ))}
+      </div>
+    );
+  }
   return (
-    <ul className={props.variant === "sheet" ? "nav-list nav-sheet" : "nav-list"}>
+    <ul className="nav-list">
       {list.map((m, i) => (
         <li
           key={m.key}
           className={m.group && list[i - 1]?.group !== m.group ? "nav-first-erp" : undefined}
         >
           {m.group && list[i - 1]?.group !== m.group && (
-            <p className="nav-group">Gestión empresarial · ERP</p>
+            <p className="nav-group">{GROUP_LABEL[m.group]}</p>
           )}
           <button
             type="button"
@@ -881,7 +925,10 @@ export function Home({
     alerts.push({
       tone: "error",
       icon: <AlertTriangle size={22} />,
-      title: `${revisar} registro(s) no se pudieron confirmar`,
+      title:
+        revisar === 1
+          ? "1 registro no se pudo confirmar"
+          : `${revisar} registros no se pudieron confirmar`,
       text: "Fueron rechazados o chocan con un dato ya confirmado. Corríjalos para que se envíen.",
       go: onOpenSync,
     });
@@ -899,7 +946,7 @@ export function Home({
     alerts.push({
       tone: "info",
       icon: <Baby size={22} />,
-      title: `${weaning} cría(s) en edad de destete`,
+      title: weaning === 1 ? "1 cría en edad de destete" : `${weaning} crías en edad de destete`,
       text: "Según la edad de destete definida para la finca. Revíselas en Animales.",
       go: () => onModule("animales"),
     });
@@ -908,7 +955,7 @@ export function Home({
     alerts.push({
       tone: "info",
       icon: <Baby size={22} />,
-      title: `${dryOff} hembra(s) para secar`,
+      title: dryOff === 1 ? "1 hembra para secar" : `${dryOff} hembras para secar`,
       text: "Llegaron a los días de lactancia definidos para la finca. Regístrelo en Reproducción.",
       go: () => onModule("reproduccion"),
     });
@@ -917,7 +964,10 @@ export function Home({
     alerts.push({
       tone: "error",
       icon: <AlertTriangle size={22} />,
-      title: `${stock.expired} insumo(s) con lotes vencidos en bodega`,
+      title:
+        stock.expired === 1
+          ? "1 insumo con lotes vencidos en bodega"
+          : `${stock.expired} insumos con lotes vencidos en bodega`,
       text: "No se pueden consumir. Revíselos en Compras e insumos.",
       go: () => onModule("compras"),
     });
@@ -926,7 +976,10 @@ export function Home({
     alerts.push({
       tone: "warn",
       icon: <Clock size={22} />,
-      title: `${stock.soon} insumo(s) vencen en los próximos 30 días`,
+      title:
+        stock.soon === 1
+          ? "1 insumo vence en los próximos 30 días"
+          : `${stock.soon} insumos vencen en los próximos 30 días`,
       text: "Use primero los lotes que vencen antes: el sistema los descuenta así.",
       go: () => onModule("compras"),
     });
@@ -935,7 +988,10 @@ export function Home({
     alerts.push({
       tone: "info",
       icon: <Package size={22} />,
-      title: `${stock.low} insumo(s) por debajo del mínimo`,
+      title:
+        stock.low === 1
+          ? "1 insumo por debajo del mínimo"
+          : `${stock.low} insumos por debajo del mínimo`,
       text: "Conviene reponerlos antes de que falten.",
       go: () => onModule("compras"),
     });
@@ -944,7 +1000,10 @@ export function Home({
     alerts.push({
       tone: "info",
       icon: <Clock size={22} />,
-      title: `${counts.pendiente} registro(s) esperan ser enviados`,
+      title:
+        counts.pendiente === 1
+          ? "1 registro espera ser enviado"
+          : `${counts.pendiente} registros esperan ser enviados`,
       text: online
         ? "Se envían al sincronizar."
         : "Están guardados en este dispositivo y se enviarán al recuperar la conexión.",
@@ -1125,6 +1184,42 @@ export function Home({
         </button>
       </nav>
 
+      <article className="card home-alerts">
+        <CardHead
+          icon={<Bell size={26} aria-hidden="true" />}
+          title="Alertas para revisar"
+          sub="Situaciones que requieren su atención."
+        />
+        {alerts.length === 0 ? (
+          <div className="empty-state ok">
+            <CheckCircle2 size={34} aria-hidden="true" />
+            <p>Todo en orden. No hay alertas por ahora.</p>
+          </div>
+        ) : (
+          <ul className="alert-rows">
+            {alerts.map((a) => (
+              <li key={a.title}>
+                <span className={`ar-icon ar-${a.tone}`}>{a.icon}</span>
+                <div className="ar-text">
+                  <strong>{a.title}</strong>
+                  <p>{a.text}</p>
+                </div>
+                {a.go && (
+                  <button
+                    type="button"
+                    className="ar-go"
+                    aria-label={`Abrir: ${a.title}`}
+                    onClick={a.go}
+                  >
+                    ›
+                  </button>
+                )}
+              </li>
+            ))}
+          </ul>
+        )}
+      </article>
+
       <div className="tiles">
         <Tile
           tone="verde"
@@ -1208,7 +1303,9 @@ export function Home({
             value={monthMovs.length ? moneyM(balance) : "$ 0"}
             meta={
               monthMovs.length
-                ? `${monthMovs.length} movimiento(s) este mes`
+                ? monthMovs.length === 1
+                  ? "1 movimiento este mes"
+                  : `${monthMovs.length} movimientos este mes`
                 : "Sin ingresos ni gastos este mes"
             }
             cta={
@@ -1220,6 +1317,10 @@ export function Home({
           />
         )}
       </div>
+
+      <FarmIntel />
+
+      <AssistantCard />
 
       {savedProfile ? (
         <article className="card dx-card">
@@ -1271,147 +1372,97 @@ export function Home({
       )}
       {profileDialog}
 
-      <AssistantCard />
+      <NewsStrip onOpen={() => onModule("noticias")} />
 
-      <FarmIntel />
+      {/* Agenda y planes aún no tienen datos reales: solo se muestran en la cuenta de demostración. */}
+      {demo && (
+        <div className="two">
+          <article className="card">
+            <CardHead
+              icon={<CalendarDays size={26} aria-hidden="true" />}
+              title="Agenda del día"
+              sub="Actividades programadas para hoy en la finca."
+            />
+            {demo ? (
+              <ul className="agenda">
+                {[
+                  {
+                    t: "Pesaje del lote de levante",
+                    s: "Lote 1 · Potrero Sur",
+                    st: "Pendiente",
+                    c: "warn",
+                  },
+                  { t: "Control reproductivo", s: "Vacas en servicio", st: "Pendiente", c: "warn" },
+                  {
+                    t: "Visita del asesor",
+                    s: "Revisión general de la finca",
+                    st: "Programada",
+                    c: "info",
+                  },
+                ].map((r) => (
+                  <li key={r.t}>
+                    <span className="gi gi-on">
+                      <CalendarDays size={22} aria-hidden="true" />
+                    </span>
+                    <span className="ag-text">
+                      <strong>{r.t}</strong>
+                      <small>{r.s}</small>
+                    </span>
+                    <span className={`pill-st st-${r.c}`}>{r.st}</span>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <ul className="ghost-list" aria-hidden="true">
+                {[0, 1, 2].map((i) => (
+                  <li key={i}>
+                    <span className="gi" />
+                    <span className="gl">
+                      <i />
+                      <i />
+                    </span>
+                    <span className="gp" />
+                  </li>
+                ))}
+              </ul>
+            )}
+            <p className="ghost-note">
+              <Clock size={16} aria-hidden="true" />{" "}
+              {demo
+                ? "Datos de ejemplo: las tareas reales llegan con el módulo de tareas (semana 11)."
+                : "Las tareas, controles y visitas aparecerán aquí con el módulo de tareas (semana 11)."}
+            </p>
+          </article>
 
-      <div className="two">
-        <article className="card">
-          <CardHead
-            icon={<CalendarDays size={26} aria-hidden="true" />}
-            title="Agenda del día"
-            sub="Actividades programadas para hoy en la finca."
-            action={
-              <button type="button" className="btn btn-ghost btn-sm" disabled>
-                Ver agenda completa ›
-              </button>
-            }
-          />
-          {demo ? (
-            <ul className="agenda">
+          <article className="card">
+            <CardHead
+              icon={<ClipboardCheck size={26} aria-hidden="true" />}
+              title="Avance de mis planes"
+              sub="Seguimiento al cumplimiento de los planes de la finca."
+            />
+            <div className="plans">
               {[
-                {
-                  t: "Pesaje del lote de levante",
-                  s: "Lote 1 · Potrero Sur",
-                  st: "Pendiente",
-                  c: "warn",
-                },
-                { t: "Control reproductivo", s: "Vacas en servicio", st: "Pendiente", c: "warn" },
-                {
-                  t: "Visita del asesor",
-                  s: "Revisión general de la finca",
-                  st: "Programada",
-                  c: "info",
-                },
-              ].map((r) => (
-                <li key={r.t}>
-                  <span className="gi gi-on">
-                    <CalendarDays size={22} aria-hidden="true" />
-                  </span>
-                  <span className="ag-text">
-                    <strong>{r.t}</strong>
-                    <small>{r.s}</small>
-                  </span>
-                  <span className={`pill-st st-${r.c}`}>{r.st}</span>
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <ul className="ghost-list" aria-hidden="true">
-              {[0, 1, 2].map((i) => (
-                <li key={i}>
-                  <span className="gi" />
-                  <span className="gl">
-                    <i />
-                    <i />
-                  </span>
-                  <span className="gp" />
-                </li>
-              ))}
-            </ul>
-          )}
-          <p className="ghost-note">
-            <Clock size={16} aria-hidden="true" />{" "}
-            {demo
-              ? "Datos de ejemplo: las tareas reales llegan con el módulo de tareas (semana 11)."
-              : "Las tareas, controles y visitas aparecerán aquí con el módulo de tareas (semana 11)."}
-          </p>
-        </article>
-
-        <article className="card">
-          <CardHead
-            icon={<Bell size={26} aria-hidden="true" />}
-            title="Alertas para revisar"
-            sub="Situaciones que requieren su atención."
-            action={
-              <button type="button" className="btn btn-ghost btn-sm" onClick={onOpenSync}>
-                Ver sincronización ›
-              </button>
-            }
-          />
-          {alerts.length === 0 ? (
-            <div className="empty-state ok">
-              <CheckCircle2 size={34} aria-hidden="true" />
-              <p>Todo en orden. No hay alertas por ahora.</p>
-            </div>
-          ) : (
-            <ul className="alert-rows">
-              {alerts.map((a) => (
-                <li key={a.title}>
-                  <span className={`ar-icon ar-${a.tone}`}>{a.icon}</span>
-                  <div className="ar-text">
-                    <strong>{a.title}</strong>
-                    <p>{a.text}</p>
+                { label: "Sanidad", pct: 45, icon: <ModIcon k="sanidad" size={24} /> },
+                { label: "Pastoreo", pct: 80, icon: <ModIcon k="pasturas" size={24} /> },
+                { label: "Alimentación", pct: 60, icon: <Package size={24} aria-hidden="true" /> },
+              ].map((p) => (
+                <div key={p.label} className="plan">
+                  <span className="plan-icon">{p.icon}</span>
+                  <div>
+                    <strong>{p.label}</strong>
+                    <span className="plan-bar" aria-hidden="true">
+                      {demo && <i style={{ width: `${p.pct}%` }} />}
+                    </span>
+                    <small>{demo ? `${p.pct} % · ejemplo` : "Sin plan registrado"}</small>
                   </div>
-                  {a.go && (
-                    <button
-                      type="button"
-                      className="ar-go"
-                      aria-label={`Abrir: ${a.title}`}
-                      onClick={a.go}
-                    >
-                      ›
-                    </button>
-                  )}
-                </li>
-              ))}
-            </ul>
-          )}
-        </article>
-      </div>
-
-      <div className="two two-wide">
-        <article className="card">
-          <CardHead
-            icon={<ClipboardCheck size={26} aria-hidden="true" />}
-            title="Avance de mis planes"
-            sub="Seguimiento al cumplimiento de los planes de la finca."
-            action={
-              <button type="button" className="btn btn-ghost btn-sm" disabled>
-                Ver planes completos ›
-              </button>
-            }
-          />
-          <div className="plans">
-            {[
-              { label: "Sanidad", pct: 45, icon: <ModIcon k="sanidad" size={24} /> },
-              { label: "Pastoreo", pct: 80, icon: <ModIcon k="pasturas" size={24} /> },
-              { label: "Alimentación", pct: 60, icon: <Package size={24} aria-hidden="true" /> },
-            ].map((p) => (
-              <div key={p.label} className="plan">
-                <span className="plan-icon">{p.icon}</span>
-                <div>
-                  <strong>{p.label}</strong>
-                  <span className="plan-bar" aria-hidden="true">
-                    {demo && <i style={{ width: `${p.pct}%` }} />}
-                  </span>
-                  <small>{demo ? `${p.pct} % · ejemplo` : "Sin plan registrado"}</small>
                 </div>
-              </div>
-            ))}
-          </div>
-        </article>
+              ))}
+            </div>
+          </article>
+        </div>
+      )}
 
+      <div className="two home-extra">
         <article className="card cta-card">
           <div className="cta-text">
             <CardHead
@@ -1427,7 +1478,7 @@ export function Home({
         </article>
       </div>
 
-      <article className="card device">
+      <article className="card device home-extra">
         <CardHead
           icon={<Database size={26} aria-hidden="true" />}
           title="Este dispositivo"

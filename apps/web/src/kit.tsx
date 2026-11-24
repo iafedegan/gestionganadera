@@ -1,4 +1,4 @@
-import { Search } from "lucide-react";
+import { Check, ChevronDown, Search } from "lucide-react";
 import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { VoiceAssistant } from "./VoiceAssistant";
 import { CardHead } from "./components";
@@ -84,6 +84,7 @@ export function Tabs<K extends string>(props: {
   onChange(k: K): void;
 }) {
   const ref = useRef<HTMLDivElement>(null);
+  const [picking, setPicking] = useState(false);
   // La pestaña activa siempre queda a la vista en la barra desplazable.
   // biome-ignore lint/correctness/useExhaustiveDependencies: se recalcula al cambiar de pestaña
   useEffect(() => {
@@ -95,22 +96,79 @@ export function Tabs<K extends string>(props: {
         behavior: "smooth",
       });
   }, [props.value]);
+  const current = props.tabs.find((t) => t.key === props.value) ?? props.tabs[0];
   return (
-    <div className="kit-tabs" role="tablist" ref={ref}>
-      {props.tabs.map((t) => (
-        <button
-          key={t.key}
-          type="button"
-          role="tab"
-          aria-selected={t.key === props.value}
-          className={t.key === props.value ? "kit-tab on" : "kit-tab"}
-          onClick={() => props.onChange(t.key)}
-        >
-          {t.label}
-          {t.badge !== undefined && <span className="kit-badge">{t.badge}</span>}
-        </button>
-      ))}
-    </div>
+    <>
+      <div className="kit-tabs" role="tablist" ref={ref}>
+        {props.tabs.map((t) => (
+          <button
+            key={t.key}
+            type="button"
+            role="tab"
+            aria-selected={t.key === props.value}
+            className={t.key === props.value ? "kit-tab on" : "kit-tab"}
+            onClick={() => props.onChange(t.key)}
+          >
+            {t.label}
+            {t.badge !== undefined && <span className="kit-badge">{t.badge}</span>}
+          </button>
+        ))}
+      </div>
+
+      {/* En celular: un solo botón con la sección actual; las demás se eligen en una lista. */}
+      <button
+        type="button"
+        className="kit-tabpick"
+        aria-haspopup="dialog"
+        onClick={() => setPicking(true)}
+      >
+        <span className="ktp-label">Sección</span>
+        <span className="ktp-value">
+          {current?.label}
+          {current?.badge !== undefined && <span className="kit-badge">{current.badge}</span>}
+        </span>
+        <span className="ktp-more">
+          {props.tabs.length} secciones <ChevronDown size={18} aria-hidden="true" />
+        </span>
+      </button>
+      {picking && (
+        <>
+          <button
+            type="button"
+            className="backdrop"
+            aria-label="Cerrar"
+            tabIndex={-1}
+            onClick={() => setPicking(false)}
+          />
+          <dialog open className="sheet-panel kit-tabsheet" aria-label="Elegir sección">
+            <span className="grabber" aria-hidden="true" />
+            <h2>Ir a la sección</h2>
+            <ul>
+              {props.tabs.map((t) => {
+                const on = t.key === props.value;
+                return (
+                  <li key={t.key}>
+                    <button
+                      type="button"
+                      className={on ? "kts-row on" : "kts-row"}
+                      aria-current={on ? "true" : undefined}
+                      onClick={() => {
+                        props.onChange(t.key);
+                        setPicking(false);
+                      }}
+                    >
+                      <span>{t.label}</span>
+                      {t.badge !== undefined && <span className="kit-badge">{t.badge}</span>}
+                      {on && <Check size={20} aria-hidden="true" className="kts-check" />}
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+          </dialog>
+        </>
+      )}
+    </>
   );
 }
 

@@ -1,5 +1,5 @@
-import type { AssistantRequest } from "@ganaderia/contracts";
-import { ArrowUp, Sparkles, Stethoscope, Trash2, X } from "lucide-react";
+import type { AssistantRequest, KnowledgeSourceDto } from "@ganaderia/contracts";
+import { ArrowUp, BookOpen, Sparkles, Stethoscope, Trash2, X } from "lucide-react";
 import { type ReactNode, useEffect, useRef, useState } from "react";
 import { useFarms } from "./animals";
 import { ApiError, NetworkError, api } from "./lib/api";
@@ -14,6 +14,8 @@ import { useApp } from "./state";
 interface Turn {
   role: "user" | "assistant";
   text: string;
+  /** Notas de CONtexto Ganadero que la respuesta cita como [n]. */
+  sources?: KnowledgeSourceDto[];
 }
 
 const SUGGESTIONS = [
@@ -23,6 +25,7 @@ const SUGGESTIONS = [
   "¿Qué partos vienen en los próximos dos meses?",
   "¿Qué animales están en retiro de leche o carne?",
   "Con mi tipo de suelo, ¿qué debo tener en cuenta en los potreros?",
+  "¿Cómo controlo la garrapata sin crear resistencia?",
 ];
 
 const histKey = (org: string) => `gg.asis.${org}`;
@@ -132,6 +135,28 @@ function Rich({ text }: { text: string }) {
   return <>{blocks}</>;
 }
 
+/** Fuentes del gremio citadas en la respuesta: se abren en CONtexto Ganadero. */
+function Sources({ items }: { items: KnowledgeSourceDto[] }) {
+  return (
+    <aside className="asis-sources" aria-label="Fuentes de CONtexto Ganadero">
+      <p>
+        <BookOpen size={14} aria-hidden="true" /> Fuentes de CONtexto Ganadero
+      </p>
+      <ol>
+        {items.map((s) => (
+          <li key={s.n}>
+            <span className="asis-src-n">[{s.n}]</span>{" "}
+            <a href={s.url} target="_blank" rel="noopener noreferrer">
+              {s.title}
+            </a>
+            {s.kind === "archivo" && <small> · archivo histórico</small>}
+          </li>
+        ))}
+      </ol>
+    </aside>
+  );
+}
+
 /** Tarjeta de Inicio: una puerta de entrada con preguntas listas para tocar. */
 export function AssistantCard() {
   const [open, setOpen] = useState<string | null | false>(false);
@@ -144,8 +169,8 @@ export function AssistantCard() {
         <div>
           <h2>Pregúntele a su finca</h2>
           <p>
-            Responde con los datos de su hato, el clima y el suelo. Orienta; no reemplaza al
-            veterinario.
+            Responde con los datos de su hato, el clima, el suelo y el conocimiento del gremio en
+            CONtexto Ganadero. Orienta; no reemplaza al veterinario.
           </p>
         </div>
       </div>
@@ -196,7 +221,7 @@ export function AssistantDialog(props: { initial: string | null; onClose(): void
     const q = question.trim();
     if (q.length < 2 || busy) return;
     setError(null);
-    const history = turns.slice(-10);
+    const history = turns.slice(-10).map(({ role, text }) => ({ role, text }));
     const next = [...turns, { role: "user" as const, text: q }];
     setTurns(next);
     setDraft("");
@@ -204,7 +229,10 @@ export function AssistantDialog(props: { initial: string | null; onClose(): void
     try {
       const signals = await farmSignals(farm?.latitude ?? null, farm?.longitude ?? null);
       const r = await api.ask({ organizationId: orgId, question: q, history, ...signals });
-      const done = [...next, { role: "assistant" as const, text: r.answer }];
+      const done: Turn[] = [
+        ...next,
+        { role: "assistant", text: r.answer, ...(r.sources?.length ? { sources: r.sources } : {}) },
+      ];
       setTurns(done);
       saveHistory(orgId, done);
       setRemaining(r.remaining);
@@ -305,6 +333,7 @@ export function AssistantDialog(props: { initial: string | null; onClose(): void
             // biome-ignore lint/suspicious/noArrayIndexKey: la conversación solo crece al final
             <div key={i} className={t.role === "user" ? "asis-msg me" : "asis-msg ai"}>
               {t.role === "user" ? <p>{t.text}</p> : <Rich text={t.text} />}
+              {t.sources && t.sources.length > 0 && <Sources items={t.sources} />}
             </div>
           ))}
 
@@ -313,7 +342,7 @@ export function AssistantDialog(props: { initial: string | null; onClose(): void
               <span />
               <span />
               <span />
-              <small>Revisando su hato y el clima…</small>
+              <small>Revisando su hato, el clima y CONtexto Ganadero…</small>
             </output>
           )}
 

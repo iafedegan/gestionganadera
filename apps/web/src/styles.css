@@ -7639,3 +7639,481 @@ fieldset.voice-field {
     grid-template-columns: 1fr;
   }
 }
+
+/* ───────────── Ecosistema FEDEGÁN 5.0: noticias, capacitación, tienda y comunidad ───────────── */
+
+.eco-banner {
+  border-radius: var(--radio);
+  margin: 0 0 16px;
+  padding: 12px 16px;
+  flex-wrap: wrap;
+}
+.eco-hint {
+  margin: -4px 0 16px;
+}
+.eco-h2 {
+  font-size: 1rem;
+  margin: 24px 0 12px;
+}
+.eco-grid {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 290px), 1fr));
+  margin-bottom: 16px;
+}
+.eco-card {
+  display: flex;
+  flex-direction: column;
+  padding: 0;
+  overflow: hidden;
+  margin: 0;
+}
+.eco-body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 16px 18px 18px;
+  flex: 1;
+}
+.eco-img {
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  object-fit: cover;
+  display: block;
+  background: color-mix(in srgb, var(--texto) 6%, transparent);
+}
+.eco-lead {
+  grid-column: 1 / -1;
+}
+@media (min-width: 900px) {
+  .eco-lead {
+    flex-direction: row;
+  }
+  .eco-lead .eco-img {
+    width: 52%;
+    aspect-ratio: auto;
+    min-height: 260px;
+  }
+  .eco-lead .eco-title {
+    font-size: 1.45rem;
+  }
+}
+.eco-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font-size: 0.8rem;
+  color: var(--texto-suave);
+}
+.eco-tag {
+  display: inline-block;
+  padding: 2px 10px;
+  border-radius: var(--radio-pildora);
+  background: var(--verde-t);
+  color: var(--verde-i);
+  font-weight: 600;
+  font-size: 0.75rem;
+}
+.eco-title {
+  margin: 0;
+  font-family: var(--fuente-titular);
+  font-size: 1.1rem;
+  line-height: 1.3;
+  color: var(--texto);
+}
+.eco-text {
+  margin: 0;
+  color: var(--texto-suave);
+  font-size: 0.92rem;
+  line-height: 1.45;
+}
+.eco-out {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: auto;
+  padding-top: 4px;
+  font-weight: 600;
+  font-size: 0.9rem;
+  color: var(--verde-botella);
+  text-decoration: none;
+}
+.eco-out:hover {
+  text-decoration: underline;
+}
+a.btn.btn-primary,
+a.btn.btn-ghost {
+  text-decoration: none;
+}
+.eco-skel {
+  min-height: 220px;
+  margin: 0;
+  background: linear-gradient(
+    100deg,
+    color-mix(in srgb, var(--texto) 5%, transparent) 30%,
+    color-mix(in srgb, var(--texto) 10%, transparent) 50%,
+    color-mix(in srgb, var(--texto) 5%, transparent) 70%
+  );
+  background-size: 300% 100%;
+  animation: eco-shimmer 1.4s infinite linear;
+}
+@keyframes eco-shimmer {
+  to {
+    background-position: -150% 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .eco-skel {
+    animation: none;
+  }
+}
+.eco-search {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 6px 6px 16px;
+  margin: 0 0 16px;
+  border: 1px solid var(--borde);
+  border-radius: var(--radio-pildora);
+  background: var(--superficie);
+  color: var(--texto-suave);
+}
+.eco-search input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  font: inherit;
+  font-size: 16px;
+  color: var(--texto);
+  padding: 8px 0;
+  outline: none;
+}
+.eco-search:focus-within {
+  border-color: var(--oro);
+}
+
+/* Tienda */
+.eco-low {
+  margin-bottom: 16px;
+}
+.eco-low h2 {
+  margin: 0 0 4px;
+  font-size: 1rem;
+}
+.eco-products {
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 220px), 1fr));
+}
+.eco-pimg {
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  padding: 10px;
+  object-fit: contain;
+  background: #fff;
+  display: block;
+}
+.eco-noimg {
+  display: grid;
+  place-items: center;
+  color: var(--texto-suave);
+  background: color-mix(in srgb, var(--texto) 5%, transparent);
+}
+.eco-pname {
+  margin: 0;
+  font-size: 0.95rem;
+  line-height: 1.3;
+}
+.eco-price {
+  margin: 0;
+  font-family: var(--fuente-datos);
+  font-weight: 500;
+  font-size: 1.05rem;
+  color: var(--verde-botella);
+}
+.eco-cats {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 200px), 1fr));
+  margin-bottom: 20px;
+}
+.eco-cat {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 14px 16px;
+  border: var(--filete);
+  border-radius: var(--radio);
+  background: var(--superficie);
+  color: var(--texto);
+  font-weight: 600;
+  font-size: 0.9rem;
+  text-decoration: none;
+}
+.eco-cat:hover {
+  border-color: var(--oro);
+}
+.eco-tv {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 14px;
+}
+.eco-tv > div {
+  flex: 1;
+  min-width: 200px;
+}
+.eco-tv h2 {
+  margin: 0;
+  font-size: 1rem;
+}
+.eco-tv p {
+  margin: 2px 0 0;
+  color: var(--texto-suave);
+  font-size: 0.9rem;
+}
+.eco-tv .eco-out {
+  margin: 0;
+}
+.eco-buy {
+  margin: 4px 0 12px;
+}
+
+/* Inicio: noticias */
+.eco-strip-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+.eco-strip-head > div {
+  flex: 1;
+}
+.eco-strip-head h2 {
+  margin: 0;
+  font-size: 1.05rem;
+}
+.eco-strip-head p {
+  margin: 2px 0 0;
+  color: var(--texto-suave);
+  font-size: 0.88rem;
+}
+.eco-strip-icon {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  background: var(--verde-t);
+  color: var(--verde-i);
+}
+.eco-strip ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.eco-strip li {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px 0;
+  border-top: 1px solid var(--borde);
+}
+.eco-strip li a {
+  color: var(--texto);
+  font-weight: 600;
+  text-decoration: none;
+  line-height: 1.35;
+}
+.eco-strip li a:hover {
+  text-decoration: underline;
+}
+.eco-strip li small {
+  flex: none;
+  color: var(--texto-suave);
+}
+
+/* Comunidad */
+.eco-posts,
+.eco-replies-list {
+  list-style: none;
+  margin: 0 0 16px;
+  padding: 0;
+  display: grid;
+  gap: 12px;
+}
+.eco-post {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 100%;
+  margin: 0;
+  text-align: left;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+.eco-replies {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.82rem;
+  color: var(--texto-suave);
+}
+.eco-empty {
+  padding: 24px 0;
+}
+.eco-more {
+  display: block;
+  margin: 0 auto 16px;
+}
+.eco-back {
+  margin-bottom: 12px;
+  align-self: flex-start;
+  justify-self: start;
+  width: auto;
+}
+.eco-thread,
+.eco-reply {
+  margin: 0;
+}
+.eco-ttitle {
+  font-family: var(--fuente-titular);
+  font-size: 1.5rem;
+  margin: 10px 0;
+}
+.eco-tbody {
+  margin: 6px 0 0;
+  white-space: pre-wrap;
+  line-height: 1.55;
+}
+.eco-actions {
+  margin-top: 10px;
+}
+.eco-actions .link {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--texto-suave);
+}
+.eco-replyform {
+  display: grid;
+  gap: 12px;
+  margin-top: 8px;
+}
+.eco-replyform .btn {
+  justify-self: end;
+}
+.eco-form {
+  display: grid;
+  gap: 14px;
+}
+.eco-form select,
+.eco-form input,
+.eco-form textarea,
+.eco-replyform textarea {
+  width: 100%;
+  padding: 12px 14px;
+  border: 1px solid var(--borde);
+  border-radius: 12px;
+  background: var(--superficie);
+  color: var(--texto);
+  font: inherit;
+  font-size: 16px;
+}
+
+/* Asistente: fuentes del gremio */
+.asis-sources {
+  margin-top: 10px;
+  padding-top: 8px;
+  border-top: 1px solid color-mix(in srgb, var(--texto) 12%, transparent);
+  font-size: 0.85rem;
+}
+.asis-sources p {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0 0 4px;
+  font-weight: 600;
+  color: var(--texto-suave);
+}
+.asis-sources ol {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.asis-sources li {
+  margin: 3px 0;
+}
+.asis-sources a {
+  color: var(--verde-botella);
+}
+.asis-src-n {
+  font-family: var(--fuente-datos);
+  color: var(--texto-suave);
+}
+
+/* Tienda: catálogo completo */
+.eco-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 0 0 12px;
+  flex-wrap: wrap;
+}
+.eco-count {
+  margin: 0;
+  font-weight: 600;
+  color: var(--texto-suave);
+}
+.eco-sort select {
+  padding: 8px 12px;
+  border: 1px solid var(--borde);
+  border-radius: var(--radio-pildora);
+  background: var(--superficie);
+  color: var(--texto);
+  font: inherit;
+  font-size: 0.88rem;
+}
+.eco-pimg-link {
+  position: relative;
+  display: block;
+}
+.eco-badge {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  padding: 3px 10px;
+  border-radius: var(--radio-pildora);
+  background: var(--carmesi-cita);
+  color: #fff;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+@media (max-width: 600px) {
+  .eco-products {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+  }
+  .eco-products .eco-body {
+    padding: 10px 12px 12px;
+    gap: 4px;
+  }
+  .eco-products .eco-pname {
+    font-size: 0.82rem;
+  }
+  .eco-products .eco-price {
+    font-size: 0.92rem;
+  }
+  .eco-products .eco-out {
+    font-size: 0.8rem;
+  }
+  .eco-products .eco-meta {
+    display: none;
+  }
+}

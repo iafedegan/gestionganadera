@@ -757,6 +757,8 @@ export const ErrorCodes = {
   ASISTENTE_NO_CONFIGURADO: "ASISTENTE_NO_CONFIGURADO",
   LIMITE_DIARIO: "LIMITE_DIARIO",
   ASISTENTE_ERROR: "ASISTENTE_ERROR",
+  SERVICIO_EXTERNO: "SERVICIO_EXTERNO",
+  PUBLICACION_NO_EXISTE: "PUBLICACION_NO_EXISTE",
 } as const;
 export type ErrorCode = (typeof ErrorCodes)[keyof typeof ErrorCodes];
 
@@ -790,8 +792,126 @@ export const AssistantRequest = z.object({
 });
 export type AssistantRequest = z.infer<typeof AssistantRequest>;
 
+/** Fuente del conocimiento del gremio (CONtexto Ganadero) que el asistente pudo citar. */
+export interface KnowledgeSourceDto {
+  n: number;
+  title: string;
+  url: string;
+  kind: "articulo" | "archivo";
+}
+
 export interface AssistantReply {
   answer: string;
   /** Preguntas que le quedan hoy a la ganadería. */
   remaining: number;
+  /** Notas de CONtexto Ganadero entregadas al asistente; la respuesta las cita como [n]. */
+  sources?: KnowledgeSourceDto[];
+}
+
+/* ───────────── Ecosistema FEDEGÁN 5.0 ───────────── */
+// Contenido que ya existe en otras plataformas del gremio y la app solo conecta:
+// noticias de CONtexto Ganadero, cursos de la Escuela Virtual y productos de la tienda TvGan.
+
+export interface NewsItemDto {
+  title: string;
+  url: string;
+  summary: string;
+  image: string | null;
+  publishedAt: string | null;
+  category: string | null;
+}
+
+export interface CourseDto {
+  slug: string;
+  title: string;
+  summary: string;
+  url: string;
+}
+
+export interface StoreProductDto {
+  name: string;
+  url: string;
+  image: string | null;
+  /** Precio tal como lo publica la tienda (texto, en pesos). */
+  price: string | null;
+  category: string | null;
+  /** Cinta de la tienda sobre el producto, p. ej. «PROMOCIÓN». */
+  badge?: string | null;
+}
+
+export interface StoreCategoryDto {
+  key: string;
+  label: string;
+  url: string;
+  /** Productos publicados hoy en la categoría. */
+  count: number;
+}
+
+/** Catálogo completo publicado en TvGan (o el de una categoría). */
+export interface StoreCatalogDto {
+  items: StoreProductDto[];
+  category: string | null;
+  /** Página de la tienda con ese mismo listado. */
+  url: string;
+  updatedAt: string;
+}
+
+export interface StoreSearchDto {
+  items: StoreProductDto[];
+  total: number;
+  /** Página de la tienda con la misma búsqueda, para ver todos los resultados. */
+  moreUrl: string;
+}
+
+/* ───────────── Comunidad de productores ───────────── */
+
+export const CommunityTopic = z.enum([
+  "experiencias",
+  "sanidad",
+  "reproduccion",
+  "pasturas",
+  "leche",
+  "carne",
+  "bufalos",
+  "mercado",
+  "tecnologia",
+]);
+export type CommunityTopic = z.infer<typeof CommunityTopic>;
+
+export const CommunityPostCreate = z.object({
+  topic: CommunityTopic,
+  title: z.string().trim().min(5).max(140),
+  body: z.string().trim().min(10).max(4000),
+});
+export type CommunityPostCreate = z.infer<typeof CommunityPostCreate>;
+
+export const CommunityReplyCreate = z.object({
+  body: z.string().trim().min(2).max(3000),
+});
+export type CommunityReplyCreate = z.infer<typeof CommunityReplyCreate>;
+
+export interface CommunityPostDto {
+  id: string;
+  topic: CommunityTopic;
+  title: string;
+  body: string;
+  authorName: string;
+  /** Departamento o región que el autor eligió mostrar; nunca la finca. */
+  region: string | null;
+  mine: boolean;
+  createdAt: string;
+  replies: number;
+}
+
+export interface CommunityReplyDto {
+  id: string;
+  body: string;
+  authorName: string;
+  mine: boolean;
+  createdAt: string;
+}
+
+export interface CommunityThreadDto {
+  post: CommunityPostDto;
+  replies: CommunityReplyDto[];
 }

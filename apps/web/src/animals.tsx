@@ -12,6 +12,7 @@ import {
   Building2,
   CalendarCheck,
   CalendarDays,
+  ChevronRight,
   Cloud,
   CloudOff,
   FileText,
@@ -361,7 +362,9 @@ export function AnimalsScreen() {
                         <span className={`dot dot-${r.status}`} />
                         {STATUS_LABEL[r.status]}
                       </span>
-                      <SyncChip state={r.syncState} />
+                      {/* Solo se marca lo que falta enviar; lo sincronizado es lo normal. */}
+                      {r.syncState !== "sincronizado" && <SyncChip state={r.syncState} />}
+                      <ChevronRight className="row-go" size={18} aria-hidden="true" />
                     </td>
                   </tr>
                 ))}

@@ -8,17 +8,21 @@ import {
   Dna,
   Droplets,
   FileText,
+  GraduationCap,
   Home,
   Leaf,
   type LucideIcon,
   Map as MapIcon,
+  MessagesSquare,
   Milk,
+  Newspaper,
   Package,
   PawPrint,
   Scale,
   Scan,
   Settings,
   ShieldCheck,
+  ShoppingCart,
   Sprout,
   Stethoscope,
   Store,
@@ -43,6 +47,10 @@ export type ModuleKey =
   | "economia"
   | "asistencia"
   | "configuracion"
+  | "noticias"
+  | "capacitacion"
+  | "tienda"
+  | "comunidad"
   | "compras"
   | "ventas"
   | "personal"
@@ -63,8 +71,8 @@ export interface ModuleDef {
   label: string;
   short: string;
   icon: LucideIcon;
-  /** Grupo de la navegación: operación del hato (por defecto) o gestión empresarial (ERP). */
-  group?: "erp";
+  /** Grupo de la navegación: operación del hato (por defecto), ecosistema del gremio o ERP. */
+  group?: "erp" | "ecosistema";
   /** Semana o fase del plan en que se activa; vacío si ya está disponible. */
   phase?: string;
   title?: string;
@@ -274,7 +282,30 @@ export const MODULES: ModuleDef[] = [
       },
     ],
   },
-  { key: "configuracion", label: "Configuración", short: "Config.", icon: Settings },
+  { key: "configuracion", label: "Configuración", short: "Ajustes", icon: Settings },
+  // Ecosistema FEDEGÁN 5.0: lo que ya existe en el gremio, conectado a la app.
+  { key: "noticias", label: "Noticias", short: "Noticias", icon: Newspaper, group: "ecosistema" },
+  {
+    key: "capacitacion",
+    label: "Capacitación",
+    short: "Cursos",
+    icon: GraduationCap,
+    group: "ecosistema",
+  },
+  {
+    key: "tienda",
+    label: "Tienda TvGan",
+    short: "Tienda",
+    icon: ShoppingCart,
+    group: "ecosistema",
+  },
+  {
+    key: "comunidad",
+    label: "Comunidad",
+    short: "Comunidad",
+    icon: MessagesSquare,
+    group: "ecosistema",
+  },
   {
     key: "compras",
     label: "Compras e insumos",
@@ -445,6 +476,11 @@ export const MODULES: ModuleDef[] = [
     ],
   },
 ];
+
+export const GROUP_LABEL: Record<NonNullable<ModuleDef["group"]>, string> = {
+  ecosistema: "Ecosistema FEDEGÁN 5.0",
+  erp: "Gestión empresarial · ERP",
+};
 
 export const moduleByKey = (k: ModuleKey) => MODULES.find((m) => m.key === k) as ModuleDef;
 

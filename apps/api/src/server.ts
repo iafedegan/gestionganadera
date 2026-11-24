@@ -2,6 +2,7 @@ import { fileURLToPath } from "node:url";
 import { buildApp } from "./app.js";
 import type { AskFn } from "./assistant.js";
 import { createPgDb, createPgliteDb } from "./db.js";
+import { ecosistemaFromEnv } from "./ecosistema.js";
 
 const production = process.env.NODE_ENV === "production";
 const port = Number(process.env.PORT ?? 4173);
@@ -19,11 +20,14 @@ const appDir = process.env.APP_DIR ?? fileURLToPath(new URL("../../web/dist", im
 const fakeAsk: AskFn = async ({ messages }) => {
   const last = String(messages.at(-1)?.content ?? "");
   const data = last.match(/<datos_finca>\n([\s\S]*?)\n<\/datos_finca>/)?.[1] ?? "";
+  const notes = [...last.matchAll(/^\[(\d+)\] (.+)$/gm)].map((m) => `- ${m[2]} [${m[1]}]`);
   return {
     text: `**Modo de prueba** (sin IA). Estos son los datos que recibiría el asistente:\n${data
       .split("\n")
       .map((l) => `- ${l}`)
-      .join("\n")}\n\nPara hoy: configure ANTHROPIC_API_KEY para respuestas reales.`,
+      .join("\n")}${
+      notes.length ? `\n\nNotas de CONtexto Ganadero encontradas:\n${notes.join("\n")}` : ""
+    }\n\nPara hoy: configure ANTHROPIC_API_KEY para respuestas reales.`,
     inputTokens: 0,
     outputTokens: 0,
     refused: false,
@@ -36,6 +40,7 @@ const app = await buildApp({
   ...(!production && process.env.ASSISTANT_FAKE === "1" ? { ask: fakeAsk } : {}),
   // En desarrollo el selector de cuentas de muestra viene activo; en producción solo con DEMO_LOGIN=1.
   demo: !production || process.env.DEMO_LOGIN === "1",
+  ecosistema: ecosistemaFromEnv(),
   landingDir,
   appDir,
   ...(allowedOrigins ? { allowedOrigins } : {}),

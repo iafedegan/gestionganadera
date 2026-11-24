@@ -1,0 +1,367 @@
+/*
+ * UX en celular: nada queda escondido en filas que se salen de la pantalla.
+ * Se carga después de styles.css e ios.css para tener la última palabra.
+ */
+
+.kit-tabpick {
+  display: none;
+}
+
+@media (max-width: 900px) {
+  /* ───── Acciones del encabezado: todas visibles, en dos columnas ───── */
+  .page-head .page-actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    overflow: visible;
+    margin: 12px 0 0;
+    padding: 0;
+    -webkit-mask-image: none;
+    mask-image: none;
+  }
+  .page-head .page-actions > * {
+    width: 100%;
+    min-width: 0;
+  }
+  /* Con número impar de acciones, la principal va a lo ancho. */
+  .page-head .page-actions > :first-child:nth-last-child(odd) {
+    grid-column: 1 / -1;
+  }
+  .page-head .page-actions .btn {
+    min-height: 48px;
+    white-space: normal;
+    line-height: 1.15;
+    text-align: center;
+    padding-inline: 12px;
+  }
+
+  /* ───── Pestañas: un selector de sección en lugar de una barra desplazable ───── */
+  .kit-tabs {
+    display: none !important;
+  }
+  .kit-tabpick {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    grid-template-areas:
+      "label more"
+      "value more";
+    align-items: center;
+    width: 100%;
+    margin: 4px 0 16px;
+    padding: 10px 16px;
+    border: 1px solid var(--borde);
+    border-radius: 14px;
+    background: var(--superficie);
+    color: var(--texto);
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+    box-shadow: 0 1px 2px rgb(5 16 11 / 0.06);
+  }
+  .kit-tabpick:active {
+    background: var(--verde-t);
+  }
+  .ktp-label {
+    grid-area: label;
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--texto-suave);
+  }
+  .ktp-value {
+    grid-area: value;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 1.05rem;
+    font-weight: 700;
+  }
+  .ktp-more {
+    grid-area: more;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 6px 10px;
+    border-radius: 999px;
+    background: var(--verde-t);
+    color: var(--verde-i);
+    font-size: 0.8rem;
+    font-weight: 600;
+  }
+  .kit-tabsheet {
+    max-height: 80vh;
+    overflow-y: auto;
+    margin: 0;
+    border: 0;
+    width: auto;
+  }
+  .kit-tabsheet h2 {
+    margin: 4px 4px 10px;
+    font-size: 1.1rem;
+  }
+  .kit-tabsheet ul {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    gap: 4px;
+  }
+  .kts-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    min-height: 54px;
+    padding: 0 14px;
+    border: 0;
+    border-radius: 12px;
+    background: transparent;
+    color: var(--texto);
+    font: inherit;
+    font-size: 1.02rem;
+    text-align: left;
+    cursor: pointer;
+  }
+  .kts-row > span:first-child {
+    flex: 1;
+  }
+  .kts-row.on {
+    background: var(--verde-t);
+    font-weight: 700;
+  }
+  .kts-check {
+    color: var(--verde-i);
+  }
+
+  /* ───── «Restablecer datos de ejemplo»: discreto, es solo para la demostración ───── */
+  .kit-toolbar .btn.btn-ghost.btn-sm {
+    min-height: 0;
+    padding: 4px 0;
+    border: 0;
+    background: none;
+    color: var(--texto-suave);
+    font-size: 0.82rem;
+    font-weight: 500;
+    letter-spacing: 0;
+    text-decoration: underline;
+  }
+}
+
+/* ───── Menú «Más»: cuadrícula de íconos por grupos ───── */
+.mod-grid {
+  display: grid;
+  gap: 18px;
+  margin: 4px 0 12px;
+}
+.mod-group {
+  margin: 0 4px 8px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--texto-suave);
+}
+.mod-grid ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+.mod-tile {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 8px;
+  width: 100%;
+  min-height: 92px;
+  padding: 12px 6px 10px;
+  border: 1px solid var(--borde);
+  border-radius: 16px;
+  background: var(--superficie);
+  color: var(--texto);
+  font: inherit;
+  cursor: pointer;
+}
+.mod-tile:active {
+  transform: scale(0.97);
+}
+.mod-icon {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  background: var(--verde-t);
+  color: var(--verde-i);
+}
+.mod-label {
+  font-size: 0.82rem;
+  font-weight: 600;
+  line-height: 1.15;
+  text-align: center;
+}
+.mod-tile small {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--oro) 25%, transparent);
+  color: var(--texto);
+  font-size: 0.62rem;
+  font-weight: 700;
+}
+.mod-tile.active {
+  border-color: var(--verde-botella);
+  background: var(--verde-t);
+}
+.mod-tile.active .mod-icon {
+  background: var(--verde-botella);
+  color: var(--marfil);
+}
+
+/* ───── Filtros del ecosistema: buscador y listas con rótulo ───── */
+.eco-filters {
+  display: grid;
+  gap: 12px;
+  margin: 0 0 16px;
+  padding: 14px;
+}
+.eco-filters .eco-search {
+  margin: 0;
+}
+.eco-filter-row {
+  display: grid;
+  grid-template-columns: 1.4fr 1fr;
+  gap: 10px;
+}
+.eco-pick {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+.eco-pick-label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--texto-suave);
+  padding-left: 4px;
+}
+.eco-pick-box {
+  position: relative;
+  display: block;
+}
+.eco-pick-box select {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 100%;
+  min-height: 48px;
+  padding: 0 38px 0 14px;
+  border: 1px solid var(--borde);
+  border-radius: 12px;
+  background: var(--superficie);
+  color: var(--texto);
+  font: inherit;
+  font-size: 16px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+}
+.eco-pick-box svg {
+  position: absolute;
+  right: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  pointer-events: none;
+  color: var(--texto-suave);
+}
+.eco-pick-box select:focus-visible {
+  outline: 2px solid var(--oro);
+  outline-offset: 1px;
+}
+.eco-lowlist {
+  list-style: none;
+  margin: 10px 0 0;
+  padding: 0;
+}
+.eco-lowlist li + li {
+  border-top: 1px solid var(--borde);
+}
+.eco-lowlist button {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  width: 100%;
+  min-height: 48px;
+  padding: 0 2px;
+  border: 0;
+  background: none;
+  color: var(--texto);
+  font: inherit;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+}
+.eco-lowgo {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  color: var(--verde-i);
+  font-size: 0.88rem;
+}
+
+@media (max-width: 900px) {
+  /* Especie: tres botones iguales a todo el ancho. */
+  .kit-seg {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    width: 100%;
+  }
+  .kit-seg button {
+    min-height: 40px;
+  }
+}
+
+@media (max-width: 900px) {
+  /* Inicio: lo técnico y lo que no lleva a una acción se queda en escritorio. */
+  .page-home .home-extra {
+    display: none;
+  }
+}
+
+/* Animales: flecha que indica que la fila abre la ficha (solo en celular). */
+.row-go {
+  display: none;
+}
+@media (max-width: 900px) {
+  .col-state .row-go {
+    display: inline-block;
+    color: var(--texto-suave);
+    flex: none;
+  }
+}
+
+.mod-grid ul.cols-4 {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 6px;
+}
+.mod-grid ul.cols-4 .mod-tile {
+  min-height: 86px;
+  padding-inline: 2px;
+}
+.mod-grid ul.cols-4 .mod-label {
+  font-size: 0.74rem;
+}
+
+@media (max-width: 900px) {
+  /* Un botón de solo ícono (p. ej. actualizar) se queda junto al título, no en su propia fila. */
+  .ch-action:has(> .icon-btn:only-child) {
+    width: auto;
+    margin-left: auto;
+  }
+  .ch:has(> .ch-action > .icon-btn:only-child) {
+    flex-wrap: nowrap;
+  }
+}

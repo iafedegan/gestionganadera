@@ -19,12 +19,14 @@ import {
   PackagePlus,
   PlusCircle,
   Search,
+  ShoppingCart,
   SlidersHorizontal,
   Sprout,
   Wheat,
   X,
 } from "lucide-react";
 import { type FormEvent, type ReactNode, useEffect, useRef, useState } from "react";
+import { StoreDialog } from "./Ecosistema";
 import { Segmented, useFarms } from "./animals";
 import { Kpi, PageHead } from "./components";
 import {
@@ -496,6 +498,7 @@ function SupplyDetail(props: {
 }) {
   const { orgId, dataVersion } = useApp();
   const [rows, setRows] = useState<StockRow[]>([]);
+  const [buying, setBuying] = useState(false);
   const swipe = useSwipeDismiss<HTMLElement>(() => props.onClose?.());
   const s = props.supply;
 
@@ -549,6 +552,14 @@ function SupplyDetail(props: {
         Existencia{s.pending !== 0 ? " incluyendo registros sin enviar" : ""}
         {s.minStock > 0 ? ` · mínimo ${qtyText(s.minStock, s.unit)}` : ""}
       </p>
+      <button
+        type="button"
+        className="btn btn-ghost btn-sm eco-buy"
+        onClick={() => setBuying(true)}
+      >
+        <ShoppingCart size={16} aria-hidden="true" /> Comprar en TvGan
+      </button>
+      {buying && <StoreDialog term={s.name} onClose={() => setBuying(false)} />}
       {props.canMove && (
         <div className="detail-actions">
           <button

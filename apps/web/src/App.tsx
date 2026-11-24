@@ -3,6 +3,7 @@ import { ActivosScreen } from "./Activos";
 import { AsistenciaScreen } from "./Asistencia";
 import { ContabilidadScreen } from "./Contabilidad";
 import { EconomiaScreen } from "./Economia";
+import { CapacitacionScreen, ComunidadScreen, NoticiasScreen, TiendaScreen } from "./Ecosistema";
 import { OnboardingWizard } from "./Onboarding";
 import { PasturasScreen } from "./Pasturas";
 import { PersonalScreen } from "./Personal";
@@ -35,6 +36,10 @@ const SCREENS: Partial<Record<ModuleKey, () => ReactNode>> = {
   personal: () => <PersonalScreen />,
   activos: () => <ActivosScreen />,
   contabilidad: () => <ContabilidadScreen />,
+  noticias: () => <NoticiasScreen />,
+  capacitacion: () => <CapacitacionScreen />,
+  tienda: () => <TiendaScreen />,
+  comunidad: () => <ComunidadScreen />,
 };
 
 export function App() {

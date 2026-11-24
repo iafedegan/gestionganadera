@@ -3,6 +3,7 @@ import { join } from "node:path";
 import type { FastifyInstance } from "fastify";
 import { buildApp } from "./app.js";
 import { createPgDb } from "./db.js";
+import { ecosistemaFromEnv } from "./ecosistema.js";
 
 /**
  * Entrada para Vercel: la API como función. La instancia se reutiliza entre peticiones
@@ -22,6 +23,7 @@ function boot(): Promise<FastifyInstance> {
       db,
       production: true,
       demo: process.env.DEMO_LOGIN === "1",
+      ecosistema: ecosistemaFromEnv(),
       ...(origins ? { allowedOrigins: origins } : {}),
     });
     await app.ready();

@@ -10,6 +10,7 @@ import { isStandalone } from "./lib/standalone";
 import { AppProvider } from "./state";
 import "./styles.css";
 import "./ios.css";
+import "./movil.css";
 
 registerSW({ immediate: true });
 

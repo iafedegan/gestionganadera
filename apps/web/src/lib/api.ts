@@ -1,6 +1,12 @@
 import type {
   AssistantReply,
   AssistantRequest,
+  CommunityPostCreate,
+  CommunityPostDto,
+  CommunityReplyDto,
+  CommunityThreadDto,
+  CommunityTopic,
+  CourseDto,
   DemoUserDto,
   FarmCreate,
   FarmDto,
@@ -10,12 +16,16 @@ import type {
   InvitationCreate,
   InvitationDto,
   InvitationPreview,
+  NewsItemDto,
   OnboardingRequest,
   PullResponse,
   PushResponse,
   RegisterInvitedRequest,
   RegisterRequest,
   SessionDto,
+  StoreCatalogDto,
+  StoreCategoryDto,
+  StoreSearchDto,
   TeamDto,
 } from "@ganaderia/contracts";
 
@@ -106,6 +116,44 @@ export const api = {
       "DELETE",
       `/v1/team/members/${membershipId}?organizationId=${organizationId}`,
     ),
+  // Ecosistema FEDEGÁN 5.0: contenido de CONtexto Ganadero, la Escuela Virtual y TvGan.
+  news: () => request<{ items: NewsItemDto[] }>("GET", "/v1/ecosistema/noticias"),
+  courses: () => request<{ items: CourseDto[] }>("GET", "/v1/ecosistema/cursos"),
+  storeCategories: () =>
+    request<{ items: StoreCategoryDto[] }>("GET", "/v1/ecosistema/tienda/categorias", undefined, {
+      timeoutMs: 45_000,
+    }),
+  // La primera carga lee todas las páginas de la tienda; luego el servidor la tiene en memoria.
+  storeCatalog: (categoria?: string) =>
+    request<StoreCatalogDto>(
+      "GET",
+      `/v1/ecosistema/tienda/catalogo${categoria ? `?categoria=${encodeURIComponent(categoria)}` : ""}`,
+      undefined,
+      { timeoutMs: 45_000 },
+    ),
+  storeSearch: (q: string) =>
+    request<StoreSearchDto>("GET", `/v1/ecosistema/tienda?q=${encodeURIComponent(q)}`, undefined, {
+      keep5xx: true,
+    }),
+  communityList: (opts: { topic?: CommunityTopic; q?: string; before?: string } = {}) => {
+    const p = new URLSearchParams();
+    if (opts.topic) p.set("topic", opts.topic);
+    if (opts.q) p.set("q", opts.q);
+    if (opts.before) p.set("before", opts.before);
+    return request<{ items: CommunityPostDto[]; nextBefore: string | null }>(
+      "GET",
+      `/v1/comunidad?${p.toString()}`,
+    );
+  },
+  communityThread: (id: string) => request<CommunityThreadDto>("GET", `/v1/comunidad/${id}`),
+  communityPost: (input: CommunityPostCreate) =>
+    request<CommunityPostDto>("POST", "/v1/comunidad", input),
+  communityReply: (id: string, body: string) =>
+    request<CommunityReplyDto>("POST", `/v1/comunidad/${id}/respuestas`, { body }),
+  communityRemove: (kind: "post" | "reply", id: string) =>
+    request<{ ok: true }>("DELETE", `/v1/comunidad/${kind}/${id}`),
+  communityReport: (kind: "post" | "reply", id: string) =>
+    request<{ hidden: boolean }>("POST", `/v1/comunidad/${kind}/${id}/reporte`),
   logout: () => request<{ ok: true }>("POST", "/v1/auth/logout"),
   me: () => request<SessionDto>("GET", "/v1/auth/me"),
   demoUsers: () => request<DemoUserDto[]>("GET", "/v1/demo/users"),

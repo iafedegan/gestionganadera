@@ -3,6 +3,9 @@ import cookie from "@fastify/cookie";
 import fastifyStatic from "@fastify/static";
 import {
   AssistantRequest,
+  CommunityPostCreate,
+  CommunityReplyCreate,
+  CommunityTopic,
   DemoLoginRequest,
   ErrorCodes,
   FarmCreate,
@@ -43,9 +46,18 @@ import {
   resolveSession,
   toSessionDto,
 } from "./auth.js";
+import {
+  createPost,
+  createReply,
+  getThread,
+  hideOwn,
+  listPosts,
+  report as reportContent,
+} from "./community.js";
 import type { Db } from "./db.js";
 import { DemoRateLimit, ensureDemo } from "./demo.js";
 import { DEMO_SPECS, demoSpec } from "./demoData.js";
+import type { Ecosistema, KnowledgeHit } from "./ecosistema.js";
 import { createFarm, listFarms, pull, push, updateFarm } from "./sync.js";
 import {
   acceptInvitation,
@@ -77,6 +89,31 @@ export interface AppOptions {
   demo?: boolean;
   /** Llamada al modelo del asistente. Por defecto usa ANTHROPIC_API_KEY; en pruebas se inyecta. */
   ask?: AskFn | null;
+  /**
+   * Conectores del ecosistema FEDEGÁN 5.0 (noticias, cursos, tienda, conocimiento del gremio).
+   * Sin conector, esas rutas responden «no disponible» y el asistente usa solo la finca.
+   */
+  ecosistema?: Ecosistema | null;
+}
+
+/** Límite simple por usuario para publicar en la comunidad: evita ráfagas y spam. */
+class PostLimit {
+  private hits = new Map<string, number[]>();
+  constructor(
+    private readonly max = 12,
+    private readonly windowMs = 10 * 60_000,
+  ) {}
+  take(key: string, now = Date.now()): boolean {
+    const recent = (this.hits.get(key) ?? []).filter((t) => now - t < this.windowMs);
+    if (recent.length >= this.max) {
+      this.hits.set(key, recent);
+      return false;
+    }
+    recent.push(now);
+    this.hits.set(key, recent);
+    if (this.hits.size > 5000) this.hits.delete(this.hits.keys().next().value as string);
+    return true;
+  }
 }
 
 /** Caché de estáticos: los archivos con huella son inmutables; el resto siempre se revalida. */
@@ -515,6 +552,147 @@ export async function buildApp(opts: AppOptions): Promise<FastifyInstance> {
         ? claudeAsk(process.env.ANTHROPIC_API_KEY)
         : null;
 
+  const eco = opts.ecosistema ?? null;
+  const postLimit = new PostLimit();
+
+  /* ───── Ecosistema FEDEGÁN 5.0: contenido que vive en otras plataformas del gremio ───── */
+
+  async function fromEco<T>(reply: FastifyReply, load: (e: Ecosistema) => Promise<T>) {
+    if (!eco)
+      return reply.code(503).send({
+        error: ErrorCodes.SERVICIO_EXTERNO,
+        message: "Este servicio del ecosistema no está conectado en este servidor.",
+      });
+    try {
+      return await load(eco);
+    } catch (err) {
+      reply.log.warn(err, "ecosistema");
+      return reply.code(502).send({
+        error: ErrorCodes.SERVICIO_EXTERNO,
+        message: "El servicio no respondió. Intente de nuevo en un momento.",
+      });
+    }
+  }
+
+  app.get("/v1/ecosistema/noticias", { preHandler: requireSession }, (_req, reply) =>
+    fromEco(reply, async (e) => ({ items: await e.news() })),
+  );
+  app.get("/v1/ecosistema/cursos", { preHandler: requireSession }, (_req, reply) =>
+    fromEco(reply, async (e) => ({ items: await e.courses() })),
+  );
+  app.get("/v1/ecosistema/tienda/categorias", { preHandler: requireSession }, (_req, reply) =>
+    fromEco(reply, async (e) => ({ items: await e.storeCategories() })),
+  );
+  const catalogQuery = z.object({
+    categoria: z
+      .string()
+      .regex(/^[a-z-]{2,40}$/)
+      .optional(),
+  });
+  app.get("/v1/ecosistema/tienda/catalogo", { preHandler: requireSession }, (req, reply) => {
+    const q = catalogQuery.safeParse(req.query);
+    if (!q.success)
+      return reply
+        .code(400)
+        .send({ error: ErrorCodes.VALIDACION, message: "Categoría no válida." });
+    return fromEco(reply, (e) => e.storeCatalog(q.data.categoria));
+  });
+  const storeQuery = z.object({ q: z.string().trim().min(2).max(80) });
+  app.get("/v1/ecosistema/tienda", { preHandler: requireSession }, (req, reply) => {
+    const q = storeQuery.safeParse(req.query);
+    if (!q.success)
+      return reply
+        .code(400)
+        .send({ error: ErrorCodes.VALIDACION, message: "Escriba al menos dos letras." });
+    return fromEco(reply, (e) => e.storeSearch(q.data.q));
+  });
+
+  /* ───── Comunidad de productores ───── */
+
+  const listQuery = z.object({
+    topic: CommunityTopic.optional(),
+    before: z.string().datetime().optional(),
+    q: z.string().trim().min(2).max(80).optional(),
+  });
+  const idParam = z.object({ id: z.string().uuid() });
+  const targetParam = z.object({ kind: z.enum(["post", "reply"]), id: z.string().uuid() });
+  const notFound = (reply: FastifyReply) =>
+    reply.code(404).send({
+      error: ErrorCodes.PUBLICACION_NO_EXISTE,
+      message: "La publicación ya no está disponible.",
+    });
+  const tooFast = (reply: FastifyReply) =>
+    reply.code(429).send({
+      error: ErrorCodes.LIMITE_DIARIO,
+      message: "Está publicando muy seguido. Espere unos minutos.",
+    });
+
+  app.get("/v1/comunidad", { preHandler: requireSession }, async (req, reply) => {
+    const a = req.auth as NonNullable<FastifyRequest["auth"]>;
+    const q = listQuery.safeParse(req.query);
+    if (!q.success)
+      return reply.code(400).send({ error: ErrorCodes.VALIDACION, message: "Filtro no válido." });
+    return listPosts(db, a.user.id, {
+      ...(q.data.topic ? { topic: q.data.topic } : {}),
+      ...(q.data.before ? { before: q.data.before } : {}),
+      ...(q.data.q ? { q: q.data.q } : {}),
+    });
+  });
+
+  app.get("/v1/comunidad/:id", { preHandler: requireSession }, async (req, reply) => {
+    const a = req.auth as NonNullable<FastifyRequest["auth"]>;
+    const p = idParam.safeParse(req.params);
+    if (!p.success) return notFound(reply);
+    return (await getThread(db, a.user.id, p.data.id)) ?? notFound(reply);
+  });
+
+  app.post("/v1/comunidad", { preHandler: requireSession }, async (req, reply) => {
+    const a = req.auth as NonNullable<FastifyRequest["auth"]>;
+    const body = CommunityPostCreate.safeParse(req.body);
+    if (!body.success)
+      return reply.code(400).send({
+        error: ErrorCodes.VALIDACION,
+        message: "Escriba un título (5 a 140 letras) y un mensaje (10 a 4.000 letras).",
+      });
+    if (!postLimit.take(a.user.id)) return tooFast(reply);
+    const orgs = a.memberships.map((m) => m.organizationId);
+    return reply.code(201).send(await createPost(db, a.user.id, orgs, body.data));
+  });
+
+  app.post("/v1/comunidad/:id/respuestas", { preHandler: requireSession }, async (req, reply) => {
+    const a = req.auth as NonNullable<FastifyRequest["auth"]>;
+    const p = idParam.safeParse(req.params);
+    const body = CommunityReplyCreate.safeParse(req.body);
+    if (!p.success) return notFound(reply);
+    if (!body.success)
+      return reply
+        .code(400)
+        .send({ error: ErrorCodes.VALIDACION, message: "Escriba una respuesta más completa." });
+    if (!postLimit.take(a.user.id)) return tooFast(reply);
+    const r = await createReply(db, a.user.id, p.data.id, body.data);
+    return r ? reply.code(201).send(r) : notFound(reply);
+  });
+
+  app.delete("/v1/comunidad/:kind/:id", { preHandler: requireSession }, async (req, reply) => {
+    const a = req.auth as NonNullable<FastifyRequest["auth"]>;
+    const p = targetParam.safeParse(req.params);
+    if (!p.success || !(await hideOwn(db, a.user.id, p.data.kind, p.data.id)))
+      return notFound(reply);
+    return { ok: true };
+  });
+
+  app.post(
+    "/v1/comunidad/:kind/:id/reporte",
+    { preHandler: requireSession },
+    async (req, reply) => {
+      const a = req.auth as NonNullable<FastifyRequest["auth"]>;
+      const p = targetParam.safeParse(req.params);
+      if (!p.success) return notFound(reply);
+      const r = await reportContent(db, a.user.id, p.data.kind, p.data.id);
+      return r ?? notFound(reply);
+    },
+  );
+
   app.get("/v1/assistant/status", { preHandler: requireSession }, async () => ({
     enabled: ask !== null,
     dailyLimit: DAILY_LIMIT,
@@ -542,9 +720,22 @@ export async function buildApp(opts: AppOptions): Promise<FastifyInstance> {
         error: ErrorCodes.LIMITE_DIARIO,
         message: `Su ganadería ya hizo las ${DAILY_LIMIT} preguntas de hoy. Mañana puede seguir.`,
       });
-    const context = await farmContext(db, orgId, a.memberships, body.data);
+    // El conocimiento del gremio se busca a la vez que se arma el resumen de la finca;
+    // si CONtexto Ganadero no responde, el asistente sigue solo con los datos de la finca.
+    const [context, knowledge] = await Promise.all([
+      farmContext(db, orgId, a.memberships, body.data),
+      eco
+        ? eco.knowledge(body.data.question).catch((err): KnowledgeHit[] => {
+            req.log.warn(err, "conocimiento del gremio no disponible");
+            return [];
+          })
+        : Promise.resolve([] as KnowledgeHit[]),
+    ]);
     try {
-      const r = await ask({ system: SYSTEM_PROMPT, messages: buildMessages(body.data, context) });
+      const r = await ask({
+        system: SYSTEM_PROMPT,
+        messages: buildMessages(body.data, context, knowledge),
+      });
       await recordTokens(db, orgId, r.inputTokens, r.outputTokens);
       const [u] = await db.admin((q) =>
         q<{ questions: number }>(
@@ -556,7 +747,15 @@ export async function buildApp(opts: AppOptions): Promise<FastifyInstance> {
         r.refused || !r.text
           ? "No puedo ayudar con esa pregunta. Si se trata de la salud de un animal, consulte a su veterinario."
           : r.text;
-      return { answer, remaining: Math.max(0, DAILY_LIMIT - (u?.questions ?? 0)) };
+      // Solo se devuelven las fuentes que la respuesta realmente cita.
+      const cited = knowledge.filter((k) => answer.includes(`[${k.n}]`));
+      return {
+        answer,
+        remaining: Math.max(0, DAILY_LIMIT - (u?.questions ?? 0)),
+        ...(cited.length
+          ? { sources: cited.map(({ n, title, url, kind }) => ({ n, title, url, kind })) }
+          : {}),
+      };
     } catch (err) {
       req.log.error(err, "asistente");
       return reply.code(502).send({
