@@ -486,3 +486,169 @@
     display: none;
   }
 }
+
+/* ───── Aula: estudiar un curso dentro de la app ───── */
+.aula-video {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  border-radius: 12px;
+  overflow: hidden;
+  background: #000;
+}
+.aula-video iframe,
+.aula-video video {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border: 0;
+}
+.aula-content {
+  white-space: pre-line;
+}
+.aula-actions {
+  display: grid;
+  gap: 10px;
+}
+.aula-progress {
+  display: grid;
+  gap: 10px;
+  margin: 8px 0 4px;
+}
+.aula-bar {
+  height: 10px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--texto) 10%, transparent);
+  overflow: hidden;
+}
+.aula-bar span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--verde-botella);
+}
+.aula-cert {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  padding: 14px;
+  border-radius: 14px;
+  background: var(--verde-t);
+  color: var(--verde-i);
+}
+.aula-cert p {
+  margin: 2px 0 6px;
+}
+.aula-lessons {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+}
+.aula-row {
+  display: grid;
+  grid-template-columns: 28px 1fr auto;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 56px;
+  padding: 8px 2px;
+  border: 0;
+  border-bottom: 1px solid var(--borde);
+  background: none;
+  color: var(--texto);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.aula-row .aula-ic {
+  color: var(--texto-suave);
+}
+.aula-row.done .aula-ic {
+  color: var(--verde-botella);
+}
+.aula-row small {
+  color: var(--texto-suave);
+  white-space: nowrap;
+}
+.aula-quiz {
+  display: grid;
+  gap: 16px;
+}
+.aula-quiz fieldset {
+  margin: 0;
+  padding: 12px;
+  border: 1px solid var(--borde);
+  border-radius: 12px;
+}
+.aula-quiz legend {
+  padding: 0 6px;
+  font-weight: 700;
+}
+.aula-opt {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  min-height: 44px;
+  padding: 8px 0;
+}
+.aula-opt input {
+  margin-top: 4px;
+  width: 20px;
+  height: 20px;
+  flex: none;
+}
+.aula-error {
+  display: grid;
+  gap: 12px;
+}
+.aula-mine {
+  margin: 0 0 16px;
+  padding: 14px 16px;
+}
+.aula-mine ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.aula-mine li {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--borde);
+}
+.aula-mine small {
+  color: var(--texto-suave);
+}
+
+/* Aula: opciones de la evaluación y resultado (los formularios globales apilan etiqueta y campo). */
+.dialog-form .aula-quiz .aula-opt {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 12px;
+  min-height: 48px;
+  padding: 6px 0;
+  font-size: 1rem;
+  font-weight: 500;
+  color: var(--texto);
+}
+.dialog-form .aula-quiz .aula-opt input[type="radio"] {
+  flex: none;
+  width: 22px;
+  height: 22px;
+  min-height: 0;
+  margin: 0;
+  padding: 0;
+  accent-color: var(--verde-botella);
+}
+.aula-result {
+  display: grid;
+  gap: 12px;
+}
+.aula-result .eco-sub {
+  margin: 0;
+  font-size: 1.2rem;
+}

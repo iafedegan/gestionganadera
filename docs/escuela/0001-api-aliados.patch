@@ -1,0 +1,691 @@
+From f0e157d5e66c94200f6c33aa7d52041ab2add636 Mon Sep 17 00:00:00 2001
+From: Edgar Barragan <edgarbarragan@MacBook-Air-de-Edgar.local>
+Date: Wed, 25 Nov 2026 09:43:06 -0500
+Subject: [PATCH] =?UTF-8?q?API=20de=20aliados:=20inscribir,=20mostrar=20le?=
+ =?UTF-8?q?cciones=20y=20registrar=20avance=20desde=20otra=20aplicaci?=
+ =?UTF-8?q?=C3=B3n?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Permite que Gestión Ganadera (y otras apps de FEDEGÁN) ofrezcan los cursos sin llevar a la persona
+al portal. Rutas en /api/aliados/v1: catálogo, detalle del curso (con video y contenido solo de las
+lecciones que la persona puede abrir), inscripción, lección completada, evaluación (preguntas sin
+respuesta y calificación en el servidor) y «mis cursos» con el código de certificado.
+
+Seguridad: cada aliado tiene su clave en ALIADO_<NOMBRE>_CLAVE (Bearer + X-Aliado), comparada en
+tiempo constante; sin clave configurada nadie entra. La persona se identifica con un id opaco y su
+clave de estudiante es «<aliado>:<id>», que no puede coincidir con una cuenta del portal (correo).
+
+Las reglas de inscripción, avance, certificado y calificación pasan a lib/lms/servicio.ts y las usan
+tanto las acciones del portal como la API. Pruebas con una base en memoria.
+
+Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>
+---
+ .../v1/cursos/[slug]/inscripcion/route.ts     |  25 +++
+ .../lecciones/[leccion]/completar/route.ts    |  26 ++++
+ .../lecciones/[leccion]/evaluacion/route.ts   |  45 ++++++
+ src/app/api/aliados/v1/cursos/[slug]/route.ts |  29 ++++
+ src/app/api/aliados/v1/cursos/route.ts        |  11 ++
+ .../v1/usuarios/[usuario]/cursos/route.ts     |  22 +++
+ src/lib/lms/actions.ts                        |  54 ++-----
+ src/lib/lms/aliados.ts                        | 128 ++++++++++++++++
+ src/lib/lms/servicio.ts                       |  59 ++++++++
+ tests/aliados.test.mjs                        | 143 ++++++++++++++++++
+ 10 files changed, 497 insertions(+), 45 deletions(-)
+ create mode 100644 src/app/api/aliados/v1/cursos/[slug]/inscripcion/route.ts
+ create mode 100644 src/app/api/aliados/v1/cursos/[slug]/lecciones/[leccion]/completar/route.ts
+ create mode 100644 src/app/api/aliados/v1/cursos/[slug]/lecciones/[leccion]/evaluacion/route.ts
+ create mode 100644 src/app/api/aliados/v1/cursos/[slug]/route.ts
+ create mode 100644 src/app/api/aliados/v1/cursos/route.ts
+ create mode 100644 src/app/api/aliados/v1/usuarios/[usuario]/cursos/route.ts
+ create mode 100644 src/lib/lms/aliados.ts
+ create mode 100644 src/lib/lms/servicio.ts
+ create mode 100644 tests/aliados.test.mjs
+
+diff --git a/src/app/api/aliados/v1/cursos/[slug]/inscripcion/route.ts b/src/app/api/aliados/v1/cursos/[slug]/inscripcion/route.ts
+new file mode 100644
+index 0000000..9445bdc
+--- /dev/null
++++ b/src/app/api/aliados/v1/cursos/[slug]/inscripcion/route.ts
+@@ -0,0 +1,25 @@
++import { adminDb } from "@/lib/cms/client";
++import { aliadoAutenticado, claveEstudiante, malaSolicitud, noAutorizado, noEncontrado, ok, sinServicio } from "@/lib/lms/aliados";
++import { getCourse } from "@/lib/lms/queries";
++import { enrollLearner } from "@/lib/lms/servicio";
++
++export const dynamic = "force-dynamic";
++
++// Inscribe a la persona en el curso (gratuito). Es idempotente: repetirla no cambia nada.
++export async function POST(req: Request, ctx: { params: Promise<{ slug: string }> }) {
++  const aliado = aliadoAutenticado(req.headers);
++  if (!aliado) return noAutorizado();
++  const body = (await req.json().catch(() => null)) as { usuario?: unknown; nombre?: unknown } | null;
++  const key = claveEstudiante(aliado, body?.usuario);
++  if (!key) return malaSolicitud("El id de usuario no es válido.");
++  const nombre = typeof body?.nombre === "string" ? body.nombre.trim().slice(0, 80) : "";
++  if (nombre.length < 3) return malaSolicitud("Falta el nombre completo de la persona.");
++  const { slug } = await ctx.params;
++  const curso = await getCourse(slug);
++  if (!curso) return noEncontrado("Ese curso no existe o no está publicado.");
++  if (curso.externalUrl && curso.lessons === 0) return malaSolicitud("Este curso se toma en otra plataforma.");
++  const db = adminDb();
++  if (!db) return sinServicio();
++  await enrollLearner(db, curso.id, key, `${nombre}`);
++  return ok({ inscrito: true });
++}
+diff --git a/src/app/api/aliados/v1/cursos/[slug]/lecciones/[leccion]/completar/route.ts b/src/app/api/aliados/v1/cursos/[slug]/lecciones/[leccion]/completar/route.ts
+new file mode 100644
+index 0000000..8ba1bdc
+--- /dev/null
++++ b/src/app/api/aliados/v1/cursos/[slug]/lecciones/[leccion]/completar/route.ts
+@@ -0,0 +1,26 @@
++import { adminDb } from "@/lib/cms/client";
++import { aliadoAutenticado, claveEstudiante, malaSolicitud, noAutorizado, noEncontrado, ok, sinServicio } from "@/lib/lms/aliados";
++import { flatLessons, getCourse, getEnrollment } from "@/lib/lms/queries";
++import { markLessonDone } from "@/lib/lms/servicio";
++
++export const dynamic = "force-dynamic";
++
++// Marca una lección de video o lectura como vista. Las evaluaciones se completan aprobándolas.
++export async function POST(req: Request, ctx: { params: Promise<{ slug: string; leccion: string }> }) {
++  const aliado = aliadoAutenticado(req.headers);
++  if (!aliado) return noAutorizado();
++  const body = (await req.json().catch(() => null)) as { usuario?: unknown } | null;
++  const key = claveEstudiante(aliado, body?.usuario);
++  if (!key) return malaSolicitud("El id de usuario no es válido.");
++  const { slug, leccion } = await ctx.params;
++  const curso = await getCourse(slug);
++  const lesson = curso ? flatLessons(curso).find((l) => l.id === leccion) : undefined;
++  if (!curso || !lesson) return noEncontrado("Esa lección no existe.");
++  if (lesson.kind === "quiz") return malaSolicitud("Las evaluaciones se completan aprobándolas.");
++  const db = adminDb();
++  if (!db) return sinServicio();
++  if (!(await getEnrollment(curso.id, key))) return Response.json({ error: "sin_inscripcion", mensaje: "La persona no está inscrita en el curso." }, { status: 403 });
++  await markLessonDone(db, curso.id, lesson.id, key, null);
++  const e = await getEnrollment(curso.id, key);
++  return ok({ completada: true, terminado: e?.completedAt ?? null, certificado: e?.completedAt && e.code ? e.code : null });
++}
+diff --git a/src/app/api/aliados/v1/cursos/[slug]/lecciones/[leccion]/evaluacion/route.ts b/src/app/api/aliados/v1/cursos/[slug]/lecciones/[leccion]/evaluacion/route.ts
+new file mode 100644
+index 0000000..ee06a6d
+--- /dev/null
++++ b/src/app/api/aliados/v1/cursos/[slug]/lecciones/[leccion]/evaluacion/route.ts
+@@ -0,0 +1,45 @@
++import { adminDb } from "@/lib/cms/client";
++import { aliadoAutenticado, claveEstudiante, malaSolicitud, noAutorizado, noEncontrado, ok, sinServicio } from "@/lib/lms/aliados";
++import { flatLessons, getCourse, getEnrollment, getQuiz } from "@/lib/lms/queries";
++import { submitQuizFor } from "@/lib/lms/servicio";
++
++export const dynamic = "force-dynamic";
++
++async function contexto(slug: string, leccion: string) {
++  const curso = await getCourse(slug);
++  const lesson = curso ? flatLessons(curso).find((l) => l.id === leccion) : undefined;
++  return curso && lesson && lesson.kind === "quiz" ? { curso, lesson } : null;
++}
++
++// Preguntas de la evaluación, sin la respuesta correcta. Solo para personas inscritas.
++export async function GET(req: Request, ctx: { params: Promise<{ slug: string; leccion: string }> }) {
++  const aliado = aliadoAutenticado(req.headers);
++  if (!aliado) return noAutorizado();
++  const key = claveEstudiante(aliado, new URL(req.url).searchParams.get("usuario"));
++  if (!key) return malaSolicitud("El id de usuario no es válido.");
++  const { slug, leccion } = await ctx.params;
++  const c = await contexto(slug, leccion);
++  if (!c) return noEncontrado("Esa evaluación no existe.");
++  if (!(await getEnrollment(c.curso.id, key))) return Response.json({ error: "sin_inscripcion", mensaje: "La persona no está inscrita en el curso." }, { status: 403 });
++  const preguntas = await getQuiz(c.lesson.id);
++  return ok({ notaMinima: c.lesson.passScore, preguntas: preguntas.map((p) => ({ id: p.id, pregunta: p.question, opciones: p.options })) });
++}
++
++// Califica la evaluación en el servidor. `respuestas` es { <id de pregunta>: <índice de la opción> }.
++export async function POST(req: Request, ctx: { params: Promise<{ slug: string; leccion: string }> }) {
++  const aliado = aliadoAutenticado(req.headers);
++  if (!aliado) return noAutorizado();
++  const body = (await req.json().catch(() => null)) as { usuario?: unknown; respuestas?: unknown } | null;
++  const key = claveEstudiante(aliado, body?.usuario);
++  if (!key) return malaSolicitud("El id de usuario no es válido.");
++  if (!body?.respuestas || typeof body.respuestas !== "object" || Array.isArray(body.respuestas)) return malaSolicitud("Faltan las respuestas.");
++  const { slug, leccion } = await ctx.params;
++  const c = await contexto(slug, leccion);
++  if (!c) return noEncontrado("Esa evaluación no existe.");
++  const db = adminDb();
++  if (!db) return sinServicio();
++  const r = await submitQuizFor(db, { courseId: c.curso.id, lessonId: c.lesson.id, key, answers: body.respuestas as Record<string, unknown> });
++  if (r.error) return Response.json({ error: "no_se_pudo", mensaje: r.error }, { status: r.error.startsWith("Inscríbase") ? 403 : 400 });
++  const e = await getEnrollment(c.curso.id, key);
++  return ok({ nota: r.score, aprobado: r.passed, errores: r.wrong, terminado: e?.completedAt ?? null, certificado: e?.completedAt && e.code ? e.code : null });
++}
+diff --git a/src/app/api/aliados/v1/cursos/[slug]/route.ts b/src/app/api/aliados/v1/cursos/[slug]/route.ts
+new file mode 100644
+index 0000000..37a084c
+--- /dev/null
++++ b/src/app/api/aliados/v1/cursos/[slug]/route.ts
+@@ -0,0 +1,29 @@
++import { aliadoAutenticado, claveEstudiante, detalleCurso, malaSolicitud, noAutorizado, noEncontrado, ok } from "@/lib/lms/aliados";
++import { getCourse, getEnrollment, getProgress, videoEmbed } from "@/lib/lms/queries";
++import { siteOrigin } from "@/lib/lms/qr";
++
++export const dynamic = "force-dynamic";
++
++// Detalle de un curso. Con `?usuario=<id>` incluye la inscripción, el avance y, según corresponda,
++// el video y el contenido de las lecciones que esa persona puede abrir.
++export async function GET(req: Request, ctx: { params: Promise<{ slug: string }> }) {
++  const aliado = aliadoAutenticado(req.headers);
++  if (!aliado) return noAutorizado();
++  const { slug } = await ctx.params;
++  const curso = await getCourse(slug);
++  if (!curso) return noEncontrado("Ese curso no existe o no está publicado.");
++
++  const usuario = new URL(req.url).searchParams.get("usuario");
++  let inscripcion = null;
++  let progreso = new Map<string, number | null>();
++  if (usuario !== null) {
++    const key = claveEstudiante(aliado, usuario);
++    if (!key) return malaSolicitud("El id de usuario no es válido.");
++    inscripcion = await getEnrollment(curso.id, key);
++    if (inscripcion) progreso = await getProgress(curso.id, key);
++  }
++  return ok(detalleCurso(curso, inscripcion, progreso, (u) => {
++    const v = videoEmbed(u);
++    return { tipo: v.type, src: v.src };
++  }, await siteOrigin()));
++}
+diff --git a/src/app/api/aliados/v1/cursos/route.ts b/src/app/api/aliados/v1/cursos/route.ts
+new file mode 100644
+index 0000000..ce7245b
+--- /dev/null
++++ b/src/app/api/aliados/v1/cursos/route.ts
+@@ -0,0 +1,11 @@
++import { aliadoAutenticado, noAutorizado, ok, resumenCurso } from "@/lib/lms/aliados";
++import { getCourses } from "@/lib/lms/queries";
++
++export const dynamic = "force-dynamic";
++
++// Catálogo de cursos publicados, para aplicaciones aliadas.
++export async function GET(req: Request) {
++  if (!aliadoAutenticado(req.headers)) return noAutorizado();
++  const cursos = await getCourses();
++  return ok({ cursos: cursos.map(resumenCurso) });
++}
+diff --git a/src/app/api/aliados/v1/usuarios/[usuario]/cursos/route.ts b/src/app/api/aliados/v1/usuarios/[usuario]/cursos/route.ts
+new file mode 100644
+index 0000000..c2a0861
+--- /dev/null
++++ b/src/app/api/aliados/v1/usuarios/[usuario]/cursos/route.ts
+@@ -0,0 +1,22 @@
++import { aliadoAutenticado, claveEstudiante, malaSolicitud, noAutorizado, ok, resumenCurso } from "@/lib/lms/aliados";
++import { getMyCourses } from "@/lib/lms/queries";
++
++export const dynamic = "force-dynamic";
++
++// Cursos en los que está inscrita la persona, con su avance y el código de certificado si ya terminó.
++export async function GET(req: Request, ctx: { params: Promise<{ usuario: string }> }) {
++  const aliado = aliadoAutenticado(req.headers);
++  if (!aliado) return noAutorizado();
++  const key = claveEstudiante(aliado, (await ctx.params).usuario);
++  if (!key) return malaSolicitud("El id de usuario no es válido.");
++  const mios = await getMyCourses(key);
++  return ok({
++    cursos: mios.map((m) => ({
++      ...resumenCurso(m.course),
++      avance: { hechas: m.done, porcentaje: m.percent },
++      desde: m.enrolledAt,
++      terminado: m.completedAt,
++      certificado: m.completedAt && m.code ? m.code : null,
++    })),
++  });
++}
+diff --git a/src/lib/lms/actions.ts b/src/lib/lms/actions.ts
+index 0ac6ef7..c5b5abc 100644
+--- a/src/lib/lms/actions.ts
++++ b/src/lib/lms/actions.ts
+@@ -6,8 +6,8 @@ import { auth } from "@/auth";
+ import { hasAnyRole } from "@/lib/access";
+ import { EDITOR_ROLES } from "@/lib/cms/guard";
+ import { adminDb, CMS_TAG } from "@/lib/cms/client";
++import { enrollLearner, markLessonDone, submitQuizFor, type QuizResult } from "./servicio";
+ 
+-type Row = Record<string, unknown>;
+ const NOT_CONFIGURED = "La Escuela Virtual aún no tiene la clave de servicio (SUPABASE_SERVICE_ROLE_KEY) en el servidor.";
+ 
+ async function learner() {
+@@ -31,10 +31,6 @@ const int = (fd: FormData, k: string) => {
+ };
+ const safeUrl = (v: string) => (!v ? null : /^(https:\/\/|http:\/\/|\/(?!\/))/.test(v) ? v : null);
+ 
+-function certificateCode() {
+-  return `FED-${new Date().getFullYear()}-${Math.random().toString(36).slice(2, 8).toUpperCase()}`;
+-}
+-
+ // ---------------------------------------------------------------- estudiante
+ 
+ export async function enroll(fd: FormData) {
+@@ -44,26 +40,10 @@ export async function enroll(fd: FormData) {
+   if (!me) redirect(`/escuela-virtual/ingresar?callbackUrl=${encodeURIComponent(`/escuela-virtual/${slug}`)}`);
+   const db = adminDb();
+   if (!db) redirect(`/escuela-virtual/${slug}?error=${encodeURIComponent(NOT_CONFIGURED)}`);
+-  await db.from("lms_enrollments").upsert({ course_id: courseId, user_key: me.key, user_name: me.name }, { onConflict: "course_id,user_key", ignoreDuplicates: true });
++  await enrollLearner(db, courseId, me.key, me.name);
+   redirect(`/escuela-virtual/perfil?inscrito=${encodeURIComponent(slug)}`);
+ }
+ 
+-/** Marca la lección como vista y, si era la última, cierra el curso y emite el certificado. */
+-async function markDone(courseId: string, lessonId: string, key: string, score: number | null) {
+-  const db = adminDb()!;
+-  await db.from("lms_progress").upsert({ course_id: courseId, lesson_id: lessonId, user_key: key, score }, { onConflict: "user_key,lesson_id" });
+-  const [{ count: total }, { count: done }] = await Promise.all([
+-    db.from("lms_lessons").select("id", { count: "exact", head: true }).eq("course_id", courseId),
+-    db.from("lms_progress").select("id", { count: "exact", head: true }).eq("course_id", courseId).eq("user_key", key),
+-  ]);
+-  if (total && done && done >= total) {
+-    const { data } = await db.from("lms_enrollments").select("completed_at").eq("course_id", courseId).eq("user_key", key).maybeSingle();
+-    if (data && !data.completed_at) {
+-      await db.from("lms_enrollments").update({ completed_at: new Date().toISOString(), certificate_code: certificateCode() }).eq("course_id", courseId).eq("user_key", key);
+-    }
+-  }
+-}
+-
+ export async function completeLesson(fd: FormData) {
+   const courseId = str(fd, "course_id", 60);
+   const lessonId = str(fd, "lesson_id", 60);
+@@ -74,12 +54,12 @@ export async function completeLesson(fd: FormData) {
+   if (!me || !db) redirect(`/escuela-virtual/${slug}`);
+   const { data: enr } = await db.from("lms_enrollments").select("id").eq("course_id", courseId).eq("user_key", me.key).maybeSingle();
+   if (!enr) redirect(`/escuela-virtual/${slug}`);
+-  await markDone(courseId, lessonId, me.key, null);
++  await markLessonDone(db, courseId, lessonId, me.key, null);
+   revalidatePath(`/escuela-virtual/${slug}`, "layout");
+   redirect(next ? `/escuela-virtual/${slug}/aula/${next}` : `/escuela-virtual/${slug}/aula/${lessonId}?fin=1`);
+ }
+ 
+-export type QuizResult = { error?: string; score?: number; passed?: boolean; wrong?: { question: string; explanation: string }[] };
++export type { QuizResult };
+ 
+ export async function submitQuiz(_prev: QuizResult, fd: FormData): Promise<QuizResult> {
+   const courseId = str(fd, "course_id", 60);
+@@ -88,27 +68,11 @@ export async function submitQuiz(_prev: QuizResult, fd: FormData): Promise<QuizR
+   const me = await learner();
+   const db = adminDb();
+   if (!me || !db) return { error: "Ingrese para presentar la evaluación." };
+-  const { data: enr } = await db.from("lms_enrollments").select("id").eq("course_id", courseId).eq("user_key", me.key).maybeSingle();
+-  if (!enr) return { error: "Inscríbase al curso para presentar la evaluación." };
+-  const [{ data: qs }, { data: les }] = await Promise.all([
+-    db.from("lms_quiz_questions").select("*").eq("lesson_id", lessonId).order("sort_order", { ascending: true }),
+-    db.from("lms_lessons").select("pass_score").eq("id", lessonId).maybeSingle(),
+-  ]);
+-  const questions = (qs ?? []) as Row[];
+-  if (!questions.length) return { error: "Esta evaluación aún no tiene preguntas." };
+-  let ok = 0;
+-  const wrong: NonNullable<QuizResult["wrong"]> = [];
+-  for (const q of questions) {
+-    if (Number(fd.get(`q_${q.id}`)) === q.correct_index) ok++;
+-    else wrong.push({ question: String(q.question), explanation: String(q.explanation ?? "") });
+-  }
+-  const score = Math.round((ok / questions.length) * 100);
+-  const passed = score >= (typeof les?.pass_score === "number" ? les.pass_score : 70);
+-  if (passed) {
+-    await markDone(courseId, lessonId, me.key, score);
+-    revalidatePath(`/escuela-virtual/${slug}`, "layout");
+-  }
+-  return { score, passed, wrong };
++  const answers: Record<string, string> = {};
++  for (const [k, v] of fd.entries()) if (k.startsWith("q_")) answers[k.slice(2)] = String(v);
++  const result = await submitQuizFor(db, { courseId, lessonId, key: me.key, answers });
++  if (result.passed) revalidatePath(`/escuela-virtual/${slug}`, "layout");
++  return result;
+ }
+ 
+ export async function submitReview(fd: FormData) {
+diff --git a/src/lib/lms/aliados.ts b/src/lib/lms/aliados.ts
+new file mode 100644
+index 0000000..ba0dc0f
+--- /dev/null
++++ b/src/lib/lms/aliados.ts
+@@ -0,0 +1,128 @@
++// API de aliados de la Escuela Virtual: permite que otra aplicación de FEDEGÁN (p. ej. Gestión Ganadera)
++// inscriba a sus usuarios, muestre las lecciones y registre su avance, sin llevarlos al portal.
++//
++// Autenticación entre servidores: cada aliado tiene una clave propia en una variable de entorno
++// `ALIADO_<NOMBRE>_CLAVE` y la envía como `Authorization: Bearer …` junto con `X-Aliado: <nombre>`.
++// La persona se identifica con un id opaco del aliado; la clave de estudiante es «<aliado>:<id>», por lo que
++// nunca coincide con una cuenta del portal (que usa el correo) ni se puede suplantar a nadie por su correo.
++import { createHash, timingSafeEqual } from "node:crypto";
++import { LEVELS, type Level } from "./queries-types";
++
++const ALIADO = /^[a-z0-9-]{3,30}$/;
++const USUARIO = /^[A-Za-z0-9_-]{6,64}$/;
++
++const sha = (v: string) => createHash("sha256").update(v).digest();
++
++/** Nombre del aliado si la solicitud trae su clave correcta; null en cualquier otro caso. */
++export function aliadoAutenticado(headers: Pick<Headers, "get">, env: Record<string, string | undefined> = process.env): string | null {
++  const aliado = (headers.get("x-aliado") ?? "").trim().toLowerCase();
++  if (!ALIADO.test(aliado)) return null;
++  const esperada = env[`ALIADO_${aliado.toUpperCase().replace(/-/g, "_")}_CLAVE`];
++  const auth = headers.get("authorization") ?? "";
++  const dada = auth.startsWith("Bearer ") ? auth.slice(7).trim() : "";
++  // Se compara el resumen de ambas para no filtrar el largo de la clave y en tiempo constante.
++  if (!esperada || esperada.length < 24 || !dada || !timingSafeEqual(sha(dada), sha(esperada))) return null;
++  return aliado;
++}
++
++/** Clave de estudiante en la Escuela para un usuario del aliado; null si el id no es válido. */
++export function claveEstudiante(aliado: string, usuario: unknown): string | null {
++  return typeof usuario === "string" && USUARIO.test(usuario) ? `${aliado}:${usuario}` : null;
++}
++
++export type LeccionAliado = {
++  id: string;
++  titulo: string;
++  tipo: "video" | "lectura" | "quiz";
++  minutos: number;
++  vistaPrevia: boolean;
++  /** La persona puede abrirla: está inscrita o la lección es de vista previa gratuita. */
++  disponible: boolean;
++  completada: boolean;
++  nota: number | null;
++  notaMinima?: number;
++  // Solo si está disponible:
++  video?: { tipo: "iframe" | "file"; src: string };
++  contenido?: string;
++  recurso?: { url: string; etiqueta: string };
++};
++
++type Leccion = {
++  id: string; title: string; kind: "video" | "lectura" | "quiz"; videoUrl: string | null; content: string;
++  minutes: number; freePreview: boolean; resourceUrl: string | null; resourceLabel: string; passScore: number;
++};
++type Curso = {
++  id: string; slug: string; title: string; subtitle: string; description: string; learnPoints: string[]; category: string;
++  level: string; instructor: string; instructorBio: string; cover: string | null; certificate: boolean;
++  externalUrl: string | null; lessons: number; minutes: number; rating: number; ratings: number;
++  modules: { id: string; title: string; summary: string; lessons: Leccion[] }[];
++};
++type Inscripcion = { enrolledAt: string; completedAt: string | null; code: string | null } | null;
++
++/** Resumen de un curso para el catálogo (sin lecciones). */
++export function resumenCurso(c: Omit<Curso, "modules">) {
++  return {
++    slug: c.slug, titulo: c.title, subtitulo: c.subtitle, categoria: c.category, nivel: LEVELS[c.level as Level] ?? c.level, instructor: c.instructor,
++    imagen: c.cover, lecciones: c.lessons, minutos: c.minutes, certificado: c.certificate, externo: c.externalUrl,
++    valoracion: c.ratings ? Math.round(c.rating * 10) / 10 : null,
++  };
++}
++
++/**
++ * Detalle del curso para una persona: el temario siempre, pero el video, el texto y el recurso solo de las
++ * lecciones que puede abrir (inscrita o vista previa). La nota mínima de una evaluación se muestra; sus
++ * preguntas y respuestas no (se piden aparte y sin la respuesta correcta).
++ */
++export function detalleCurso(
++  c: Curso,
++  inscripcion: Inscripcion,
++  progreso: Map<string, number | null>,
++  embed: (url: string) => { tipo: "iframe" | "file"; src: string },
++  origenVerificacion: string,
++) {
++  const modulos = c.modules.map((m) => ({
++    id: m.id,
++    titulo: m.title,
++    lecciones: m.lessons.map((l): LeccionAliado => {
++      const disponible = Boolean(inscripcion) || l.freePreview;
++      const base: LeccionAliado = {
++        id: l.id, titulo: l.title, tipo: l.kind, minutos: l.minutes, vistaPrevia: l.freePreview, disponible,
++        completada: progreso.has(l.id), nota: progreso.get(l.id) ?? null,
++        ...(l.kind === "quiz" ? { notaMinima: l.passScore } : {}),
++      };
++      if (!disponible) return base;
++      return {
++        ...base,
++        ...(l.videoUrl ? { video: embed(l.videoUrl) } : {}),
++        ...(l.content ? { contenido: l.content } : {}),
++        ...(l.resourceUrl ? { recurso: { url: l.resourceUrl, etiqueta: l.resourceLabel } } : {}),
++      };
++    }),
++  }));
++  const total = c.modules.reduce((n, m) => n + m.lessons.length, 0);
++  const hechas = progreso.size;
++  return {
++    ...resumenCurso(c),
++    descripcion: c.description,
++    aprendera: c.learnPoints,
++    instructorBio: c.instructorBio,
++    modulos,
++    inscripcion: inscripcion
++      ? {
++          desde: inscripcion.enrolledAt,
++          avance: { hechas, total, porcentaje: total ? Math.min(100, Math.round((hechas / total) * 100)) : 0 },
++          terminado: inscripcion.completedAt,
++          certificado:
++            inscripcion.completedAt && inscripcion.code
++              ? { codigo: inscripcion.code, fecha: inscripcion.completedAt, verificar: `${origenVerificacion}/escuela-virtual/verificar/${inscripcion.code}` }
++              : null,
++        }
++      : null,
++  };
++}
++
++export const noAutorizado = () => Response.json({ error: "no_autorizado", mensaje: "Clave de aliado no válida." }, { status: 401, headers: { "Cache-Control": "no-store" } });
++export const malaSolicitud = (mensaje: string) => Response.json({ error: "solicitud_no_valida", mensaje }, { status: 400, headers: { "Cache-Control": "no-store" } });
++export const noEncontrado = (mensaje = "No existe.") => Response.json({ error: "no_existe", mensaje }, { status: 404, headers: { "Cache-Control": "no-store" } });
++export const sinServicio = () => Response.json({ error: "sin_servicio", mensaje: "La Escuela Virtual no está configurada." }, { status: 503, headers: { "Cache-Control": "no-store" } });
++export const ok = (cuerpo: unknown, status = 200) => Response.json(cuerpo, { status, headers: { "Cache-Control": "no-store" } });
+diff --git a/src/lib/lms/servicio.ts b/src/lib/lms/servicio.ts
+new file mode 100644
+index 0000000..5ede412
+--- /dev/null
++++ b/src/lib/lms/servicio.ts
+@@ -0,0 +1,59 @@
++// Reglas de la Escuela Virtual que comparten el portal (acciones del estudiante) y la API de aliados.
++// Reciben el cliente de base de datos y no dependen de Next ni de la sesión, para poder probarlas.
++import type { SupabaseClient } from "@supabase/supabase-js";
++
++type Db = Pick<SupabaseClient, "from">;
++type Row = Record<string, unknown>;
++
++export function certificateCode(): string {
++  return `FED-${new Date().getFullYear()}-${Math.random().toString(36).slice(2, 8).toUpperCase()}`;
++}
++
++/** Inscribe a la persona (clave de estudiante) si todavía no lo está. */
++export async function enrollLearner(db: Db, courseId: string, key: string, name: string): Promise<void> {
++  await db.from("lms_enrollments").upsert({ course_id: courseId, user_key: key, user_name: name }, { onConflict: "course_id,user_key", ignoreDuplicates: true });
++}
++
++/** Marca la lección como vista y, si era la última, cierra el curso y emite el certificado. */
++export async function markLessonDone(db: Db, courseId: string, lessonId: string, key: string, score: number | null): Promise<void> {
++  await db.from("lms_progress").upsert({ course_id: courseId, lesson_id: lessonId, user_key: key, score }, { onConflict: "user_key,lesson_id" });
++  const [{ count: total }, { count: done }] = await Promise.all([
++    db.from("lms_lessons").select("id", { count: "exact", head: true }).eq("course_id", courseId),
++    db.from("lms_progress").select("id", { count: "exact", head: true }).eq("course_id", courseId).eq("user_key", key),
++  ]);
++  if (total && done && done >= total) {
++    const { data } = await db.from("lms_enrollments").select("completed_at").eq("course_id", courseId).eq("user_key", key).maybeSingle();
++    if (data && !data.completed_at) {
++      await db.from("lms_enrollments").update({ completed_at: new Date().toISOString(), certificate_code: certificateCode() }).eq("course_id", courseId).eq("user_key", key);
++    }
++  }
++}
++
++export type QuizResult = { error?: string; score?: number; passed?: boolean; wrong?: { question: string; explanation: string }[] };
++
++/** Califica una evaluación: `answers` trae, por pregunta, el índice de la opción elegida. */
++export function gradeQuiz(questions: Row[], answers: Record<string, unknown>, passScore: number): Required<Pick<QuizResult, "score" | "passed" | "wrong">> {
++  let ok = 0;
++  const wrong: { question: string; explanation: string }[] = [];
++  for (const q of questions) {
++    if (Number(answers[String(q.id)]) === q.correct_index) ok++;
++    else wrong.push({ question: String(q.question), explanation: String(q.explanation ?? "") });
++  }
++  const score = questions.length ? Math.round((ok / questions.length) * 100) : 0;
++  return { score, passed: score >= passScore, wrong };
++}
++
++/** Presenta la evaluación de una lección: califica en el servidor y, si aprueba, marca la lección. */
++export async function submitQuizFor(db: Db, input: { courseId: string; lessonId: string; key: string; answers: Record<string, unknown> }): Promise<QuizResult> {
++  const { data: enr } = await db.from("lms_enrollments").select("id").eq("course_id", input.courseId).eq("user_key", input.key).maybeSingle();
++  if (!enr) return { error: "Inscríbase al curso para presentar la evaluación." };
++  const [{ data: qs }, { data: les }] = await Promise.all([
++    db.from("lms_quiz_questions").select("*").eq("lesson_id", input.lessonId).order("sort_order", { ascending: true }),
++    db.from("lms_lessons").select("pass_score").eq("id", input.lessonId).maybeSingle(),
++  ]);
++  const questions = (qs ?? []) as Row[];
++  if (!questions.length) return { error: "Esta evaluación aún no tiene preguntas." };
++  const result = gradeQuiz(questions, input.answers, typeof les?.pass_score === "number" ? les.pass_score : 70);
++  if (result.passed) await markLessonDone(db, input.courseId, input.lessonId, input.key, result.score);
++  return result;
++}
+diff --git a/tests/aliados.test.mjs b/tests/aliados.test.mjs
+new file mode 100644
+index 0000000..37c95f6
+--- /dev/null
++++ b/tests/aliados.test.mjs
+@@ -0,0 +1,143 @@
++import test from "node:test";
++import assert from "node:assert/strict";
++import { aliadoAutenticado, claveEstudiante, detalleCurso } from "../src/lib/lms/aliados.ts";
++import { enrollLearner, gradeQuiz, markLessonDone, submitQuizFor } from "../src/lib/lms/servicio.ts";
++
++const CLAVE = "clave-de-prueba-con-mas-de-24-caracteres";
++const hdr = (o) => ({ get: (k) => o[k.toLowerCase()] ?? null });
++
++test("solo entra el aliado con su clave correcta", () => {
++  const env = { ALIADO_GESTIONGANADERA_CLAVE: CLAVE };
++  assert.equal(aliadoAutenticado(hdr({ "x-aliado": "gestionganadera", authorization: `Bearer ${CLAVE}` }), env), "gestionganadera");
++  assert.equal(aliadoAutenticado(hdr({ "x-aliado": "GestionGanadera", authorization: `Bearer ${CLAVE}` }), env), "gestionganadera");
++  assert.equal(aliadoAutenticado(hdr({ "x-aliado": "gestionganadera", authorization: "Bearer otra" }), env), null);
++  assert.equal(aliadoAutenticado(hdr({ "x-aliado": "gestionganadera" }), env), null);
++  assert.equal(aliadoAutenticado(hdr({ "x-aliado": "gestionganadera", authorization: `Bearer ${CLAVE}` }), {}), null, "sin clave configurada nadie entra");
++  assert.equal(aliadoAutenticado(hdr({ "x-aliado": "otro", authorization: `Bearer ${CLAVE}` }), env), null, "la clave de un aliado no sirve para otro");
++  assert.equal(aliadoAutenticado(hdr({ "x-aliado": "../x", authorization: `Bearer ${CLAVE}` }), env), null);
++  assert.equal(aliadoAutenticado(hdr({ "x-aliado": "gestionganadera", authorization: "Bearer corta" }), { ALIADO_GESTIONGANADERA_CLAVE: "corta" }), null, "claves débiles se rechazan");
++});
++
++test("la clave de estudiante lleva el aliado y nunca es un correo", () => {
++  assert.equal(claveEstudiante("gestionganadera", "u_0192abcdef"), "gestionganadera:u_0192abcdef");
++  assert.equal(claveEstudiante("gestionganadera", "ana@correo.com"), null);
++  assert.equal(claveEstudiante("gestionganadera", "corto"), null);
++  assert.equal(claveEstudiante("gestionganadera", 12345678), null);
++});
++
++const leccion = (id, extra = {}) => ({
++  id, title: `L ${id}`, kind: "video", videoUrl: `https://youtu.be/${id}`, content: "texto", minutes: 5, freePreview: false,
++  resourceUrl: null, resourceLabel: "", passScore: 70, ...extra,
++});
++const curso = {
++  id: "c1", slug: "salud", title: "Salud", subtitle: "", description: "d", learnPoints: ["a"], category: "Sanidad", level: "basico",
++  instructor: "Dr", instructorBio: "", cover: null, certificate: true, externalUrl: null, lessons: 3, minutes: 15, rating: 0, ratings: 0,
++  modules: [{ id: "m1", title: "Bloque", summary: "", lessons: [leccion("l1", { freePreview: true }), leccion("l2"), leccion("l3", { kind: "quiz", videoUrl: null })] }],
++};
++const embed = (u) => ({ tipo: "iframe", src: u });
++
++test("sin inscripción solo se abre la vista previa y no se filtra el video del resto", () => {
++  const d = detalleCurso(curso, null, new Map(), embed, "https://x.co");
++  const [l1, l2, l3] = d.modulos[0].lecciones;
++  assert.equal(l1.disponible, true);
++  assert.ok(l1.video);
++  assert.equal(l2.disponible, false);
++  assert.equal(l2.video, undefined);
++  assert.equal(l2.contenido, undefined);
++  assert.equal(l3.notaMinima, 70);
++  assert.equal(d.inscripcion, null);
++  assert.ok(!JSON.stringify(d).includes("youtu.be/l2"));
++});
++
++test("inscrita, ve todo, su avance y el certificado al terminar", () => {
++  const ins = { enrolledAt: "2026-11-01", completedAt: null, code: null };
++  const d = detalleCurso(curso, ins, new Map([["l1", null]]), embed, "https://x.co");
++  assert.ok(d.modulos[0].lecciones[1].video);
++  assert.deepEqual(d.inscripcion.avance, { hechas: 1, total: 3, porcentaje: 33 });
++  assert.equal(d.inscripcion.certificado, null);
++  const fin = detalleCurso(curso, { enrolledAt: "2026-11-01", completedAt: "2026-11-20", code: "FED-2026-ABC123" }, new Map([["l1", null], ["l2", null], ["l3", 90]]), embed, "https://x.co");
++  assert.equal(fin.inscripcion.certificado.verificar, "https://x.co/escuela-virtual/verificar/FED-2026-ABC123");
++  assert.equal(fin.modulos[0].lecciones[2].nota, 90);
++});
++
++test("califica la evaluación y pide la nota mínima", () => {
++  const qs = [{ id: "q1", question: "a", correct_index: 1, explanation: "e1" }, { id: "q2", question: "b", correct_index: 0 }];
++  assert.deepEqual(gradeQuiz(qs, { q1: 1, q2: 0 }, 70), { score: 100, passed: true, wrong: [] });
++  const r = gradeQuiz(qs, { q1: "1", q2: 3 }, 70);
++  assert.equal(r.score, 50);
++  assert.equal(r.passed, false);
++  assert.deepEqual(r.wrong, [{ question: "b", explanation: "" }]);
++  assert.equal(gradeQuiz(qs, {}, 70).score, 0);
++});
++
++/** Base en memoria con la parte de la interfaz de Supabase que usan estas reglas. */
++function fakeDb(tables) {
++  let seq = 0;
++  class Q {
++    constructor(t) { this.t = t; this.f = []; this.op = "select"; }
++    select(_c, o) { this.o = o ?? {}; return this; }
++    eq(c, v) { this.f.push([c, v]); return this; }
++    order() { return this; }
++    maybeSingle() { this.single = true; return this; }
++    upsert(row, o) { this.op = "upsert"; this.row = row; this.opt = o ?? {}; return this; }
++    update(row) { this.op = "update"; this.row = row; return this; }
++    rows() { return (tables[this.t] ??= []).filter((r) => this.f.every(([c, v]) => r[c] === v)); }
++    then(res, rej) {
++      try {
++        const all = (tables[this.t] ??= []);
++        if (this.op === "upsert") {
++          const keys = String(this.opt.onConflict ?? "id").split(",");
++          const hit = all.find((r) => keys.every((k) => r[k] === this.row[k]));
++          if (!hit) all.push({ id: `id${++seq}`, ...this.row });
++          else if (!this.opt.ignoreDuplicates) Object.assign(hit, this.row);
++          return Promise.resolve({ data: null, error: null }).then(res, rej);
++        }
++        if (this.op === "update") { for (const r of this.rows()) Object.assign(r, this.row); return Promise.resolve({ error: null }).then(res, rej); }
++        const rows = this.rows();
++        const out = this.o?.head ? { count: rows.length, data: null } : this.single ? { data: rows[0] ?? null, error: null } : { data: rows, count: rows.length };
++        return Promise.resolve(out).then(res, rej);
++      } catch (e) { return Promise.reject(e).then(res, rej); }
++    }
++  }
++  return { from: (t) => new Q(t) };
++}
++
++test("inscribir es idempotente y terminar todas las lecciones emite el certificado una sola vez", async () => {
++  const t = { lms_lessons: [{ id: "l1", course_id: "c1" }, { id: "l2", course_id: "c1" }] };
++  const db = fakeDb(t);
++  const key = "gestionganadera:u_0192abcdef";
++  await enrollLearner(db, "c1", key, "Ana Pérez");
++  await enrollLearner(db, "c1", key, "Otro Nombre");
++  assert.equal(t.lms_enrollments.length, 1);
++  assert.equal(t.lms_enrollments[0].user_name, "Ana Pérez");
++
++  await markLessonDone(db, "c1", "l1", key, null);
++  assert.equal(t.lms_enrollments[0].completed_at, undefined);
++  await markLessonDone(db, "c1", "l1", key, null);
++  assert.equal(t.lms_progress.length, 1, "repetir una lección no duplica el avance");
++  await markLessonDone(db, "c1", "l2", key, null);
++  const code = t.lms_enrollments[0].certificate_code;
++  assert.match(code, /^FED-\d{4}-[A-Z0-9]{1,6}$/);
++  assert.ok(t.lms_enrollments[0].completed_at);
++  await markLessonDone(db, "c1", "l2", key, null);
++  assert.equal(t.lms_enrollments[0].certificate_code, code, "el certificado no se vuelve a emitir");
++});
++
++test("la evaluación exige inscripción, califica y solo aprobada cuenta como avance", async () => {
++  const t = {
++    lms_lessons: [{ id: "q", course_id: "c1", pass_score: 70 }],
++    lms_quiz_questions: [{ id: "a", lesson_id: "q", question: "?", correct_index: 2, sort_order: 0 }],
++  };
++  const db = fakeDb(t);
++  const key = "gestionganadera:u_0192abcdef";
++  const sin = await submitQuizFor(db, { courseId: "c1", lessonId: "q", key, answers: { a: 2 } });
++  assert.match(sin.error, /Inscríbase/);
++  await enrollLearner(db, "c1", key, "Ana Pérez");
++  const mal = await submitQuizFor(db, { courseId: "c1", lessonId: "q", key, answers: { a: 0 } });
++  assert.equal(mal.passed, false);
++  assert.equal((t.lms_progress ?? []).length, 0);
++  const bien = await submitQuizFor(db, { courseId: "c1", lessonId: "q", key, answers: { a: 2 } });
++  assert.deepEqual([bien.score, bien.passed], [100, true]);
++  assert.equal(t.lms_progress[0].score, 100);
++  assert.ok(t.lms_enrollments[0].completed_at, "era la única lección: el curso queda terminado");
++});
+-- 
+2.54.0 (Apple Git-157)
+

@@ -759,6 +759,8 @@ export const ErrorCodes = {
   ASISTENTE_ERROR: "ASISTENTE_ERROR",
   SERVICIO_EXTERNO: "SERVICIO_EXTERNO",
   PUBLICACION_NO_EXISTE: "PUBLICACION_NO_EXISTE",
+  AULA_NO_EXISTE: "AULA_NO_EXISTE",
+  AULA_SIN_INSCRIPCION: "AULA_SIN_INSCRIPCION",
 } as const;
 export type ErrorCode = (typeof ErrorCodes)[keyof typeof ErrorCodes];
 
@@ -847,7 +849,101 @@ export interface CourseDto {
   description?: string;
   outcomes?: string[];
   modules?: CourseModuleDto[];
+  /** El servidor está conectado a la API de la Escuela: se puede inscribir y estudiar dentro de la app. */
+  enrollable?: boolean;
 }
+
+/* ───── Aula: estudiar un curso de la Escuela Virtual dentro de la app ───── */
+
+export interface AulaLessonDto {
+  id: string;
+  title: string;
+  kind: "video" | "lectura" | "quiz";
+  minutes: number;
+  /** Vista previa gratuita: se abre sin estar inscrito. */
+  preview: boolean;
+  /** Se puede abrir: la persona está inscrita o es vista previa. */
+  available: boolean;
+  done: boolean;
+  score: number | null;
+  /** Nota mínima para aprobar (solo evaluaciones). */
+  passScore?: number;
+  // Solo si está disponible:
+  video?: { type: "iframe" | "file"; src: string };
+  content?: string;
+  resource?: { url: string; label: string };
+}
+
+export interface AulaModuleDto {
+  id: string;
+  title: string;
+  lessons: AulaLessonDto[];
+}
+
+export interface AulaCertificateDto {
+  code: string;
+  date: string;
+  /** Página pública donde cualquiera puede comprobar el certificado. */
+  verifyUrl: string;
+}
+
+export interface AulaEnrollmentDto {
+  since: string;
+  done: number;
+  total: number;
+  percent: number;
+  completedAt: string | null;
+  certificate: AulaCertificateDto | null;
+}
+
+export interface AulaCourseDto {
+  slug: string;
+  title: string;
+  subtitle: string;
+  image: string | null;
+  level: string;
+  instructor: string;
+  minutes: number;
+  hasCertificate: boolean;
+  description: string;
+  outcomes: string[];
+  modules: AulaModuleDto[];
+  enrollment: AulaEnrollmentDto | null;
+}
+
+export interface AulaQuizDto {
+  passScore: number;
+  questions: { id: string; question: string; options: string[] }[];
+}
+
+export interface AulaQuizResultDto {
+  score: number;
+  passed: boolean;
+  wrong: { question: string; explanation: string }[];
+  completedAt: string | null;
+  certificate: string | null;
+}
+
+export interface AulaProgressDto {
+  completedAt: string | null;
+  certificate: string | null;
+}
+
+export interface MyCourseDto {
+  slug: string;
+  title: string;
+  image: string | null;
+  done: number;
+  percent: number;
+  completedAt: string | null;
+  certificate: string | null;
+}
+
+/** Respuestas de una evaluación: índice de la opción elegida por pregunta. */
+export const AulaQuizAnswers = z.object({
+  answers: z.record(z.string().min(1).max(60), z.number().int().min(0).max(20)),
+});
+export type AulaQuizAnswers = z.infer<typeof AulaQuizAnswers>;
 
 export interface StoreProductDto {
   name: string;

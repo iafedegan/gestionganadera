@@ -3,6 +3,7 @@ import cookie from "@fastify/cookie";
 import fastifyStatic from "@fastify/static";
 import {
   AssistantRequest,
+  AulaQuizAnswers,
   CommunityPostCreate,
   CommunityReplyCreate,
   CommunityTopic,
@@ -57,7 +58,7 @@ import {
 import type { Db } from "./db.js";
 import { DemoRateLimit, ensureDemo } from "./demo.js";
 import { DEMO_SPECS, demoSpec } from "./demoData.js";
-import type { Ecosistema, KnowledgeHit } from "./ecosistema.js";
+import { type Aula, AulaError, type Ecosistema, type KnowledgeHit } from "./ecosistema.js";
 import { createFarm, listFarms, pull, push, updateFarm } from "./sync.js";
 import {
   acceptInvitation,
@@ -578,8 +579,115 @@ export async function buildApp(opts: AppOptions): Promise<FastifyInstance> {
     fromEco(reply, async (e) => ({ items: await e.news() })),
   );
   app.get("/v1/ecosistema/cursos", { preHandler: requireSession }, (_req, reply) =>
-    fromEco(reply, async (e) => ({ items: await e.courses() })),
+    fromEco(reply, async (e) => ({
+      // «enrollable»: el servidor puede inscribir y llevar el avance en la Escuela (hay clave de aliado).
+      items: (await e.courses()).map((c) => (e.aula ? { ...c, enrollable: true } : c)),
+    })),
   );
+
+  /* ───── Aula: estudiar los cursos de la Escuela dentro de la app ───── */
+
+  /** El servidor llama a la Escuela con la clave de aliado; el celular nunca la ve. */
+  async function fromAula<T>(reply: FastifyReply, load: (aula: Aula) => Promise<T>) {
+    const aula = eco?.aula;
+    if (!aula)
+      return reply.code(503).send({
+        error: ErrorCodes.SERVICIO_EXTERNO,
+        message: "Estudiar dentro de la app todavía no está disponible. Use el enlace al curso.",
+      });
+    try {
+      return await load(aula);
+    } catch (err) {
+      if (err instanceof AulaError) {
+        if (err.status === 404)
+          return reply.code(404).send({
+            error: ErrorCodes.AULA_NO_EXISTE,
+            message: "Ese curso o lección ya no está disponible.",
+          });
+        if (err.status === 403)
+          return reply.code(403).send({
+            error: ErrorCodes.AULA_SIN_INSCRIPCION,
+            message: "Inscríbase al curso para continuar.",
+          });
+        if (err.status === 400)
+          return reply.code(400).send({
+            error: ErrorCodes.VALIDACION,
+            message: err.message || "No se pudo completar la acción.",
+          });
+      }
+      reply.log.warn(err, "aula");
+      return reply.code(502).send({
+        error: ErrorCodes.SERVICIO_EXTERNO,
+        message: "La Escuela Virtual no respondió. Intente de nuevo en un momento.",
+      });
+    }
+  }
+  const courseParam = z.object({ slug: z.string().regex(/^[a-z0-9-]{2,100}$/) });
+  const lessonParam = courseParam.extend({ lesson: z.string().regex(/^[A-Za-z0-9_-]{8,64}$/) });
+  const invalid = (reply: FastifyReply) =>
+    reply.code(400).send({ error: ErrorCodes.VALIDACION, message: "Dirección no válida." });
+  const learnerName = (u: { displayName: string; email: string }) =>
+    u.displayName.trim().length >= 3 ? u.displayName.trim() : (u.email.split("@")[0] ?? "Ganadero");
+
+  app.get("/v1/ecosistema/cursos/:slug", { preHandler: requireSession }, (req, reply) => {
+    const a = req.auth as NonNullable<FastifyRequest["auth"]>;
+    const p = courseParam.safeParse(req.params);
+    if (!p.success) return invalid(reply);
+    return fromAula(reply, (aula) => aula.detail(p.data.slug, a.user.id));
+  });
+  app.post(
+    "/v1/ecosistema/cursos/:slug/inscripcion",
+    { preHandler: requireSession },
+    (req, reply) => {
+      const a = req.auth as NonNullable<FastifyRequest["auth"]>;
+      const p = courseParam.safeParse(req.params);
+      if (!p.success) return invalid(reply);
+      return fromAula(reply, async (aula) => {
+        await aula.enroll(p.data.slug, a.user.id, learnerName(a.user));
+        return aula.detail(p.data.slug, a.user.id);
+      });
+    },
+  );
+  app.post(
+    "/v1/ecosistema/cursos/:slug/lecciones/:lesson/completar",
+    { preHandler: requireSession },
+    (req, reply) => {
+      const a = req.auth as NonNullable<FastifyRequest["auth"]>;
+      const p = lessonParam.safeParse(req.params);
+      if (!p.success) return invalid(reply);
+      return fromAula(reply, (aula) => aula.complete(p.data.slug, p.data.lesson, a.user.id));
+    },
+  );
+  app.get(
+    "/v1/ecosistema/cursos/:slug/lecciones/:lesson/evaluacion",
+    { preHandler: requireSession },
+    (req, reply) => {
+      const a = req.auth as NonNullable<FastifyRequest["auth"]>;
+      const p = lessonParam.safeParse(req.params);
+      if (!p.success) return invalid(reply);
+      return fromAula(reply, (aula) => aula.quiz(p.data.slug, p.data.lesson, a.user.id));
+    },
+  );
+  app.post(
+    "/v1/ecosistema/cursos/:slug/lecciones/:lesson/evaluacion",
+    { preHandler: requireSession },
+    (req, reply) => {
+      const a = req.auth as NonNullable<FastifyRequest["auth"]>;
+      const p = lessonParam.safeParse(req.params);
+      const b = AulaQuizAnswers.safeParse(req.body);
+      if (!p.success || !b.success)
+        return reply
+          .code(400)
+          .send({ error: ErrorCodes.VALIDACION, message: "Responda todas las preguntas." });
+      return fromAula(reply, (aula) =>
+        aula.submitQuiz(p.data.slug, p.data.lesson, a.user.id, b.data.answers),
+      );
+    },
+  );
+  app.get("/v1/ecosistema/mis-cursos", { preHandler: requireSession }, (req, reply) => {
+    const a = req.auth as NonNullable<FastifyRequest["auth"]>;
+    return fromAula(reply, async (aula) => ({ items: await aula.mine(a.user.id) }));
+  });
   app.get("/v1/ecosistema/tienda/categorias", { preHandler: requireSession }, (_req, reply) =>
     fromEco(reply, async (e) => ({ items: await e.storeCategories() })),
   );

@@ -23,6 +23,7 @@ import {
   Tv,
 } from "lucide-react";
 import { type FormEvent, type ReactNode, useCallback, useEffect, useRef, useState } from "react";
+import { AulaDialog } from "./Aula";
 import { PageHead } from "./components";
 import { fecha, fechaHora } from "./labels";
 import { ApiError, NetworkError, api } from "./lib/api";
@@ -371,6 +372,8 @@ const COURSE_AREA: Record<string, string> = {
 
 export function CapacitacionScreen() {
   const r = useRemote("cursos", async () => (await api.courses()).items);
+  const inApp = r.data?.some((c) => c.enrollable) ?? false;
+  const mine = useRemote("mis-cursos", async () => (inApp ? (await api.myCourses()).items : []));
   return (
     <section className="page">
       <PageHead
@@ -379,20 +382,38 @@ export function CapacitacionScreen() {
         title="Capacitación"
         lead="Cursos de la Escuela Virtual FEDEGÁN–FNG. Estudie a su ritmo desde el celular y lleve lo aprendido a su finca."
         actions={
-          <>
-            <OutLink className="btn btn-primary" href={`${ESCUELA}/mis-cursos`}>
-              Mis cursos
-            </OutLink>
-            <OutLink className="btn btn-ghost" href={`${ESCUELA}/carnet`}>
-              Mi carné
-            </OutLink>
-          </>
+          inApp ? undefined : (
+            <>
+              <OutLink className="btn btn-primary" href={`${ESCUELA}/mis-cursos`}>
+                Mis cursos
+              </OutLink>
+              <OutLink className="btn btn-ghost" href={`${ESCUELA}/carnet`}>
+                Mi carné
+              </OutLink>
+            </>
+          )
         }
       />
-      <p className="hint eco-hint">
-        Los cursos, el avance y los certificados se manejan en la Escuela Virtual con su propia
-        cuenta.
-      </p>
+      {inApp ? (
+        (mine.data?.length ?? 0) > 0 && (
+          <section className="card aula-mine" aria-label="Mis cursos">
+            <h2 className="eco-sub">Mis cursos</h2>
+            <ul>
+              {mine.data?.map((m) => (
+                <li key={m.slug}>
+                  <span>{m.title}</span>
+                  <small>{m.certificate ? `Certificado ${m.certificate}` : `${m.percent} %`}</small>
+                </li>
+              ))}
+            </ul>
+          </section>
+        )
+      ) : (
+        <p className="hint eco-hint">
+          Los cursos, el avance y los certificados se manejan en la Escuela Virtual con su propia
+          cuenta.
+        </p>
+      )}
       <RemoteState r={r} what="El catálogo de cursos">
         {(items) => (
           <div className="eco-grid">
@@ -421,6 +442,7 @@ function CourseFacts({ c }: { c: CourseDto }) {
 
 function CourseCard({ c }: { c: CourseDto }) {
   const [open, setOpen] = useState(false);
+  const inApp = Boolean(c.enrollable);
   return (
     <article className="card eco-card eco-course">
       {c.image && <img className="eco-img" src={c.image} alt="" loading="lazy" />}
@@ -434,12 +456,17 @@ function CourseCard({ c }: { c: CourseDto }) {
         {c.instructor && <p className="eco-text eco-instr">Instructor: {c.instructor}</p>}
         <div className="eco-actions">
           <button type="button" className="btn btn-primary" onClick={() => setOpen(true)}>
-            Ver contenido
+            {inApp ? "Estudiar este curso" : "Ver contenido"}
           </button>
-          <OutLink href={c.url}>Ir al curso</OutLink>
+          {!inApp && <OutLink href={c.url}>Ir al curso</OutLink>}
         </div>
       </div>
-      {open && <CourseDialog c={c} onClose={() => setOpen(false)} />}
+      {open &&
+        (inApp ? (
+          <AulaDialog course={c} onClose={() => setOpen(false)} />
+        ) : (
+          <CourseDialog c={c} onClose={() => setOpen(false)} />
+        ))}
     </article>
   );
 }

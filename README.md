@@ -27,12 +27,22 @@ La app conecta lo que ya existe en el gremio en vez de duplicarlo:
 | Módulo | Fuente | Cómo se conecta |
 |---|---|---|
 | Noticias (y franja en Inicio) | CONtexto Ganadero | Feed RSS público `/feed.xml` |
-| Capacitación | Escuela Virtual FEDEGÁN–FNG | Catálogo de cursos de su sitio; el estudio y los certificados siguen allá |
+| Capacitación | Escuela Virtual FEDEGÁN–FNG | Catálogo leído de su sitio. Con la clave de aliado (abajo) la persona se inscribe, ve las lecciones, presenta evaluaciones y obtiene su certificado dentro de la app |
 | Tienda TvGan (y «Comprar en TvGan» en Compras e insumos) | TvGan (Odoo) | Búsqueda pública de productos; la compra y el pago se hacen en TvGan |
 | Asistente de la finca | CONtexto Ganadero | `/api/assistant` devuelve notas del archivo que el asistente cita como [n] |
 | Comunidad | Propia (tablas `community_*`) | Preguntas y experiencias entre productores, con reportes y ocultamiento |
 
 El servidor guarda en memoria cada respuesta externa un tiempo y, si una fuente falla, sirve la última buena. Variables opcionales: `CONTEXTO_URL`, `ESCUELA_URL`, `TVGAN_URL` (otros ambientes) y `ECOSISTEMA=0` (apaga los conectores, p. ej. sin salida a internet).
+
+### Estudiar los cursos dentro de la app (API de aliados de la Escuela)
+
+La Escuela Virtual guarda cuentas, inscripciones, avance y evaluaciones en su propio servidor, así que Gestión Ganadera habla con una API de aliados que se agrega a ese portal (`/api/aliados/v1`; el cambio está en `docs/escuela/0001-api-aliados.patch`, un `git am` sobre el repositorio `fedegan`). La app nunca llama a la Escuela desde el celular: lo hace el servidor con una clave de aliado.
+
+- **Escuela (repo `fedegan`)**: variable `ALIADO_GESTIONGANADERA_CLAVE` (mínimo 24 caracteres). Cada aliado tiene la suya: `ALIADO_<NOMBRE>_CLAVE`.
+- **Esta app (servidor)**: `ESCUELA_API_KEY` (la misma clave) y, si la Escuela no está en `fedegan.vercel.app`, `ESCUELA_API_URL` (p. ej. `https://escuela.fedegan.org.co/api/aliados/v1`). Sin la clave, las tarjetas siguen mostrando el curso y el enlace a la Escuela.
+- **Identidad**: la persona se identifica con el id de su usuario aquí; en la Escuela queda como estudiante `gestionganadera:<id>`, que no puede coincidir con ninguna cuenta del portal ni suplantar a nadie por su correo. Lo estudiado aquí no aparece en «Mis cursos» del portal, sino en la app.
+- **Seguridad**: clave comparada en tiempo constante, sin clave configurada nadie entra, video y contenido solo de las lecciones que la persona puede abrir (inscrita o vista previa) y evaluaciones calificadas en el servidor de la Escuela.
+
 
 ## Calidad
 

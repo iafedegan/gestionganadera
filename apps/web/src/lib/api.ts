@@ -1,6 +1,10 @@
 import type {
   AssistantReply,
   AssistantRequest,
+  AulaCourseDto,
+  AulaProgressDto,
+  AulaQuizDto,
+  AulaQuizResultDto,
   CommunityPostCreate,
   CommunityPostDto,
   CommunityReplyDto,
@@ -16,6 +20,7 @@ import type {
   InvitationCreate,
   InvitationDto,
   InvitationPreview,
+  MyCourseDto,
   NewsItemDto,
   OnboardingRequest,
   PullResponse,
@@ -119,6 +124,25 @@ export const api = {
   // Ecosistema FEDEGÁN 5.0: contenido de CONtexto Ganadero, la Escuela Virtual y TvGan.
   news: () => request<{ items: NewsItemDto[] }>("GET", "/v1/ecosistema/noticias"),
   courses: () => request<{ items: CourseDto[] }>("GET", "/v1/ecosistema/cursos"),
+  // Aula: estudiar un curso de la Escuela Virtual dentro de la app.
+  myCourses: () => request<{ items: MyCourseDto[] }>("GET", "/v1/ecosistema/mis-cursos"),
+  aula: (slug: string) => request<AulaCourseDto>("GET", `/v1/ecosistema/cursos/${slug}`),
+  aulaEnroll: (slug: string) =>
+    request<AulaCourseDto>("POST", `/v1/ecosistema/cursos/${slug}/inscripcion`, {}),
+  aulaComplete: (slug: string, lesson: string) =>
+    request<AulaProgressDto>(
+      "POST",
+      `/v1/ecosistema/cursos/${slug}/lecciones/${lesson}/completar`,
+      {},
+    ),
+  aulaQuiz: (slug: string, lesson: string) =>
+    request<AulaQuizDto>("GET", `/v1/ecosistema/cursos/${slug}/lecciones/${lesson}/evaluacion`),
+  aulaSubmitQuiz: (slug: string, lesson: string, answers: Record<string, number>) =>
+    request<AulaQuizResultDto>(
+      "POST",
+      `/v1/ecosistema/cursos/${slug}/lecciones/${lesson}/evaluacion`,
+      { answers },
+    ),
   storeCategories: () =>
     request<{ items: StoreCategoryDto[] }>("GET", "/v1/ecosistema/tienda/categorias", undefined, {
       timeoutMs: 45_000,

@@ -5,8 +5,11 @@ import type { AskFn } from "../src/assistant.js";
 import { hashPassword } from "../src/auth.js";
 import { type Db, createPgliteDb } from "../src/db.js";
 import {
+  type Aula,
+  AulaError,
   type Ecosistema,
   createEcosistema,
+  mapAulaCourse,
   parseCourseDetail,
   parseCoursePage,
   parseCourseSlugs,
@@ -424,5 +427,210 @@ describe("comunidad de productores", () => {
     }
     const t = await app.inject({ url: `/v1/comunidad/${postId}`, headers: { cookie: cookieA } });
     expect(t.statusCode).toBe(404);
+  });
+});
+
+describe("aula: estudiar los cursos de la Escuela dentro de la app", () => {
+  const escuelaCurso = {
+    slug: "salud-animal",
+    titulo: "Salud animal",
+    subtitulo: "Enfermedades",
+    imagen: "https://e.co/cursos/curso-04.jpg",
+    nivel: "Básico",
+    instructor: "Dr. Ovalle",
+    minutos: 30,
+    certificado: true,
+    descripcion: "Texto",
+    aprendera: ["Vacunar", "Desparasitar"],
+    modulos: [
+      {
+        id: "m1",
+        titulo: "Bloque",
+        lecciones: [
+          {
+            id: "l1abcdef",
+            titulo: "Intro",
+            tipo: "video",
+            minutos: 8,
+            vistaPrevia: true,
+            disponible: true,
+            completada: false,
+            nota: null,
+            video: { tipo: "iframe", src: "https://www.youtube-nocookie.com/embed/abc" },
+          },
+          {
+            id: "l2abcdef",
+            titulo: "Peligrosa",
+            tipo: "video",
+            minutos: 5,
+            vistaPrevia: false,
+            disponible: true,
+            completada: true,
+            nota: null,
+            video: { tipo: "iframe", src: "javascript:alert(1)" },
+            recurso: { url: "http://inseguro.co/x.pdf", etiqueta: "Guía" },
+          },
+          {
+            id: "l3abcdef",
+            titulo: "Examen",
+            tipo: "quiz",
+            minutos: 10,
+            vistaPrevia: false,
+            disponible: false,
+            completada: false,
+            nota: null,
+            notaMinima: 80,
+          },
+        ],
+      },
+    ],
+    inscripcion: {
+      desde: "2026-11-01",
+      avance: { hechas: 1, total: 3, porcentaje: 33 },
+      terminado: null,
+      certificado: null,
+    },
+  };
+
+  it("traduce el curso de la Escuela y descarta direcciones que no son https", () => {
+    const c = mapAulaCourse(escuelaCurso);
+    expect(c.title).toBe("Salud animal");
+    expect(mapAulaCourse({ ...escuelaCurso, nivel: "intermedio" }).level).toBe("Intermedio");
+    expect(c.outcomes).toEqual(["Vacunar", "Desparasitar"]);
+    expect(c.enrollment).toMatchObject({ done: 1, total: 3, percent: 33, certificate: null });
+    const [intro, peligrosa, examen] = c.modules[0]?.lessons ?? [];
+    expect(intro?.video).toEqual({
+      type: "iframe",
+      src: "https://www.youtube-nocookie.com/embed/abc",
+    });
+    expect(peligrosa?.video).toBeUndefined();
+    expect(peligrosa?.resource).toBeUndefined();
+    expect(examen).toMatchObject({ kind: "quiz", passScore: 80, available: false });
+    expect(mapAulaCourse({ ...escuelaCurso, inscripcion: null }).enrollment).toBeNull();
+  });
+
+  it("solo hay aula con una clave de aliado y se presenta ante la Escuela con ella", async () => {
+    expect(createEcosistema({}).aula).toBeUndefined();
+    expect(createEcosistema({ escuelaApiKey: "corta" }).aula).toBeUndefined();
+
+    const calls: { url: string; method: string; headers: Headers; body: unknown }[] = [];
+    const key = "una-clave-de-aliado-de-mas-de-24-caracteres";
+    const eco = createEcosistema({
+      escuelaApiUrl: "https://e.co/api/aliados/v1/",
+      escuelaApiKey: key,
+      fetch: (async (url: string, init: RequestInit) => {
+        calls.push({
+          url,
+          method: init.method ?? "GET",
+          headers: new Headers(init.headers),
+          body: init.body ? JSON.parse(String(init.body)) : null,
+        });
+        if (String(url).includes("/inscripcion"))
+          return new Response(JSON.stringify({ inscrito: true }), { status: 200 });
+        if (String(url).includes("/evaluacion"))
+          return new Response(
+            JSON.stringify({ error: "sin_inscripcion", mensaje: "No inscrita" }),
+            { status: 403 },
+          );
+        return new Response(JSON.stringify(escuelaCurso), { status: 200 });
+      }) as unknown as typeof fetch,
+    });
+    const user = "0192a7f0-1111-7aaa-8bbb-123456789abc";
+    await eco.aula?.enroll("salud-animal", user, "Ana María Pérez");
+    const detail = await eco.aula?.detail("salud-animal", user);
+    expect(detail?.slug).toBe("salud-animal");
+
+    expect(calls[0]).toMatchObject({
+      url: "https://e.co/api/aliados/v1/cursos/salud-animal/inscripcion",
+      method: "POST",
+      body: { usuario: user, nombre: "Ana María Pérez" },
+    });
+    expect(calls[0]?.headers.get("authorization")).toBe(`Bearer ${key}`);
+    expect(calls[0]?.headers.get("x-aliado")).toBe("gestionganadera");
+    expect(calls[1]?.url).toBe(`https://e.co/api/aliados/v1/cursos/salud-animal?usuario=${user}`);
+
+    await expect(eco.aula?.quiz("salud-animal", "l3abcdef", user)).rejects.toBeInstanceOf(
+      AulaError,
+    );
+  });
+
+  const aula: Aula = {
+    detail: async (slug) => ({ ...mapAulaCourse(escuelaCurso), slug }),
+    enroll: async (_slug, userId, name) => {
+      enrolled.push({ userId, name });
+    },
+    complete: async () => ({ completedAt: null, certificate: null }),
+    quiz: async () => {
+      throw new AulaError(403, "sin_inscripcion", "No inscrita");
+    },
+    submitQuiz: async () => ({
+      score: 100,
+      passed: true,
+      wrong: [],
+      completedAt: null,
+      certificate: null,
+    }),
+    mine: async () => [],
+  };
+  const enrolled: { userId: string; name: string }[] = [];
+
+  it("las rutas inscriben con el nombre real, traducen errores y marcan los cursos como inscribibles", async () => {
+    const withAula = await buildApp({
+      db,
+      ask: fakeAsk,
+      ecosistema: { ...fakeEco, aula },
+    });
+    try {
+      const h = { cookie: cookieA, ...H };
+      const list = await withAula.inject({ url: "/v1/ecosistema/cursos", headers: h });
+      expect(list.json().items[0].enrollable).toBe(true);
+      const plain = await app.inject({ url: "/v1/ecosistema/cursos", headers: h });
+      expect(plain.json().items[0].enrollable).toBeUndefined();
+
+      const enroll = await withAula.inject({
+        method: "POST",
+        url: "/v1/ecosistema/cursos/salud-animal/inscripcion",
+        headers: h,
+        payload: {},
+      });
+      expect(enroll.statusCode).toBe(200);
+      expect(enrolled[0]?.name).toBe("Ana María Pérez");
+      expect(enrolled[0]?.userId).toMatch(/^[0-9a-f-]{36}$/);
+
+      const sin = await withAula.inject({
+        url: "/v1/ecosistema/cursos/salud-animal/lecciones/l3abcdef/evaluacion",
+        headers: h,
+      });
+      expect(sin.statusCode).toBe(403);
+      expect(sin.json().error).toBe("AULA_SIN_INSCRIPCION");
+
+      const badSlug = await withAula.inject({ url: "/v1/ecosistema/cursos/..%2Fx", headers: h });
+      expect(badSlug.statusCode).toBe(400);
+      const badBody = await withAula.inject({
+        method: "POST",
+        url: "/v1/ecosistema/cursos/salud-animal/lecciones/l3abcdef/evaluacion",
+        headers: h,
+        payload: { answers: { q1: "a" } },
+      });
+      expect(badBody.statusCode).toBe(400);
+      const okBody = await withAula.inject({
+        method: "POST",
+        url: "/v1/ecosistema/cursos/salud-animal/lecciones/l3abcdef/evaluacion",
+        headers: h,
+        payload: { answers: { q1: 2 } },
+      });
+      expect(okBody.json().passed).toBe(true);
+
+      expect(
+        (await withAula.inject({ url: "/v1/ecosistema/cursos/salud-animal" })).statusCode,
+      ).toBe(401);
+    } finally {
+      await withAula.close();
+    }
+    const none = await app.inject({
+      url: "/v1/ecosistema/cursos/salud-animal",
+      headers: { cookie: cookieA },
+    });
+    expect(none.statusCode).toBe(503);
   });
 });

@@ -1,6 +1,12 @@
 import type {
+  AulaCourseDto,
+  AulaLessonDto,
+  AulaProgressDto,
+  AulaQuizDto,
+  AulaQuizResultDto,
   CourseDto,
   CourseModuleDto,
+  MyCourseDto,
   NewsItemDto,
   StoreCatalogDto,
   StoreCategoryDto,
@@ -25,7 +31,35 @@ export interface KnowledgeHit {
   summary: string;
 }
 
+/** Error de la API de la Escuela: lleva el estado HTTP y el mensaje que ella dio. */
+export class AulaError extends Error {
+  constructor(
+    readonly status: number,
+    readonly code: string,
+    message: string,
+  ) {
+    super(message);
+  }
+}
+
+/** Estudiar dentro de la app: habla con la API de aliados de la Escuela (solo desde el servidor). */
+export interface Aula {
+  detail(slug: string, userId: string): Promise<AulaCourseDto>;
+  enroll(slug: string, userId: string, name: string): Promise<void>;
+  complete(slug: string, lessonId: string, userId: string): Promise<AulaProgressDto>;
+  quiz(slug: string, lessonId: string, userId: string): Promise<AulaQuizDto>;
+  submitQuiz(
+    slug: string,
+    lessonId: string,
+    userId: string,
+    answers: Record<string, number>,
+  ): Promise<AulaQuizResultDto>;
+  mine(userId: string): Promise<MyCourseDto[]>;
+}
+
 export interface Ecosistema {
+  /** Presente solo si el servidor tiene la clave de la API de la Escuela. */
+  aula?: Aula;
   news(): Promise<NewsItemDto[]>;
   courses(): Promise<CourseDto[]>;
   storeSearch(term: string): Promise<StoreSearchDto>;
@@ -40,6 +74,9 @@ export interface EcosistemaOptions {
   fetch?: typeof fetch;
   contextoUrl?: string;
   escuelaUrl?: string;
+  /** API de aliados de la Escuela (p. ej. https://fedegan.vercel.app/api/aliados/v1) y la clave de este aliado. */
+  escuelaApiUrl?: string;
+  escuelaApiKey?: string;
   tvganUrl?: string;
   now?: () => number;
 }
@@ -278,6 +315,172 @@ export function parseCourseDetail(html: string, origin: string): CourseDetail {
   return out;
 }
 
+/* ───────────── Aula (API de aliados de la Escuela) ───────────── */
+
+type Obj = Record<string, unknown>;
+const str = (v: unknown, d = "") => (typeof v === "string" ? v : d);
+const num = (v: unknown, d = 0) => (typeof v === "number" && Number.isFinite(v) ? v : d);
+const arr = (v: unknown): Obj[] => (Array.isArray(v) ? (v as Obj[]) : []);
+
+const LEVEL_LABEL: Record<string, string> = {
+  basico: "Básico",
+  intermedio: "Intermedio",
+  avanzado: "Avanzado",
+};
+
+function mapLesson(raw: Obj): AulaLessonDto {
+  const kind = raw.tipo === "quiz" || raw.tipo === "lectura" ? raw.tipo : "video";
+  const video = raw.video as Obj | undefined;
+  const recurso = raw.recurso as Obj | undefined;
+  // Solo se aceptan direcciones https para video y recursos: lo que llega de fuera no se confía.
+  const https = (u: unknown) => (typeof u === "string" && /^https:\/\//i.test(u) ? u : null);
+  const src = https(video?.src);
+  const rUrl = https(recurso?.url);
+  return {
+    id: str(raw.id),
+    title: str(raw.titulo),
+    kind,
+    minutes: num(raw.minutos),
+    preview: raw.vistaPrevia === true,
+    available: raw.disponible === true,
+    done: raw.completada === true,
+    score: typeof raw.nota === "number" ? raw.nota : null,
+    ...(kind === "quiz" ? { passScore: num(raw.notaMinima, 70) } : {}),
+    ...(src
+      ? { video: { type: video?.tipo === "file" ? ("file" as const) : ("iframe" as const), src } }
+      : {}),
+    ...(typeof raw.contenido === "string" && raw.contenido ? { content: raw.contenido } : {}),
+    ...(rUrl ? { resource: { url: rUrl, label: str(recurso?.etiqueta, "Material") } } : {}),
+  };
+}
+
+/** Traduce el detalle de curso de la API de la Escuela (en español) al de la app. */
+export function mapAulaCourse(raw: Obj): AulaCourseDto {
+  const ins = raw.inscripcion as Obj | null | undefined;
+  const avance = (ins?.avance ?? {}) as Obj;
+  const cert = ins?.certificado as Obj | null | undefined;
+  return {
+    slug: str(raw.slug),
+    title: str(raw.titulo),
+    subtitle: str(raw.subtitulo),
+    image: str(raw.imagen) || null,
+    level: LEVEL_LABEL[str(raw.nivel).toLowerCase()] ?? str(raw.nivel),
+    instructor: str(raw.instructor),
+    minutes: num(raw.minutos),
+    hasCertificate: raw.certificado !== false,
+    description: str(raw.descripcion),
+    outcomes: Array.isArray(raw.aprendera)
+      ? raw.aprendera.filter((x) => typeof x === "string")
+      : [],
+    modules: arr(raw.modulos).map((m) => ({
+      id: str(m.id),
+      title: str(m.titulo),
+      lessons: arr(m.lecciones).map(mapLesson),
+    })),
+    enrollment: ins
+      ? {
+          since: str(ins.desde),
+          done: num(avance.hechas),
+          total: num(avance.total),
+          percent: num(avance.porcentaje),
+          completedAt: str(ins.terminado) || null,
+          certificate: cert
+            ? { code: str(cert.codigo), date: str(cert.fecha), verifyUrl: str(cert.verificar) }
+            : null,
+        }
+      : null,
+  };
+}
+
+function createAula(opts: {
+  doFetch: typeof fetch;
+  base: string;
+  key: string;
+}): Aula {
+  async function call<T>(method: string, path: string, body?: unknown): Promise<T> {
+    const res = await opts.doFetch(`${opts.base}${path}`, {
+      method,
+      headers: {
+        authorization: `Bearer ${opts.key}`,
+        "x-aliado": "gestionganadera",
+        accept: "application/json",
+        "user-agent": UA,
+        ...(body ? { "content-type": "application/json" } : {}),
+      },
+      ...(body ? { body: JSON.stringify(body) } : {}),
+      signal: AbortSignal.timeout(12_000),
+    });
+    const json = (await res.json().catch(() => null)) as Obj | null;
+    if (!res.ok) throw new AulaError(res.status, str(json?.error), str(json?.mensaje));
+    return (json ?? {}) as T;
+  }
+  const enc = encodeURIComponent;
+  return {
+    detail: async (slug, userId) =>
+      mapAulaCourse(await call<Obj>("GET", `/cursos/${enc(slug)}?usuario=${enc(userId)}`)),
+    enroll: async (slug, userId, name) => {
+      await call("POST", `/cursos/${enc(slug)}/inscripcion`, { usuario: userId, nombre: name });
+    },
+    complete: async (slug, lessonId, userId) => {
+      const r = await call<Obj>(
+        "POST",
+        `/cursos/${enc(slug)}/lecciones/${enc(lessonId)}/completar`,
+        {
+          usuario: userId,
+        },
+      );
+      return { completedAt: str(r.terminado) || null, certificate: str(r.certificado) || null };
+    },
+    quiz: async (slug, lessonId, userId) => {
+      const r = await call<Obj>(
+        "GET",
+        `/cursos/${enc(slug)}/lecciones/${enc(lessonId)}/evaluacion?usuario=${enc(userId)}`,
+      );
+      return {
+        passScore: num(r.notaMinima, 70),
+        questions: arr(r.preguntas).map((q) => ({
+          id: str(q.id),
+          question: str(q.pregunta),
+          options: Array.isArray(q.opciones) ? q.opciones.filter((x) => typeof x === "string") : [],
+        })),
+      };
+    },
+    submitQuiz: async (slug, lessonId, userId, answers) => {
+      const r = await call<Obj>(
+        "POST",
+        `/cursos/${enc(slug)}/lecciones/${enc(lessonId)}/evaluacion`,
+        {
+          usuario: userId,
+          respuestas: answers,
+        },
+      );
+      return {
+        score: num(r.nota),
+        passed: r.aprobado === true,
+        wrong: arr(r.errores).map((e) => ({
+          question: str(e.question),
+          explanation: str(e.explanation),
+        })),
+        completedAt: str(r.terminado) || null,
+        certificate: str(r.certificado) || null,
+      };
+    },
+    mine: async (userId) =>
+      arr((await call<Obj>("GET", `/usuarios/${enc(userId)}/cursos`)).cursos).map((c) => {
+        const avance = (c.avance ?? {}) as Obj;
+        return {
+          slug: str(c.slug),
+          title: str(c.titulo),
+          image: str(c.imagen) || null,
+          done: num(avance.hechas),
+          percent: num(avance.porcentaje),
+          completedAt: str(c.terminado) || null,
+          certificate: str(c.certificado) || null,
+        };
+      }),
+  };
+}
+
 /* ───────────── Tienda TvGan (Odoo) ───────────── */
 
 interface OdooHit {
@@ -465,7 +668,17 @@ export function createEcosistema(opts: EcosistemaOptions = {}): Ecosistema {
     });
   }
 
+  const aula =
+    opts.escuelaApiKey && opts.escuelaApiKey.length >= 24
+      ? createAula({
+          doFetch,
+          base: (opts.escuelaApiUrl ?? `${escuelaOrigin}/api/aliados/v1`).replace(/\/$/, ""),
+          key: opts.escuelaApiKey,
+        })
+      : undefined;
+
   return {
+    ...(aula ? { aula } : {}),
     news: () =>
       memo("news", 15 * MIN, async () => {
         const items = parseRss(await get(`${contexto}/feed.xml`));
@@ -608,6 +821,8 @@ export function ecosistemaFromEnv(env: NodeJS.ProcessEnv = process.env): Ecosist
   return createEcosistema({
     ...(env.CONTEXTO_URL ? { contextoUrl: env.CONTEXTO_URL } : {}),
     ...(env.ESCUELA_URL ? { escuelaUrl: env.ESCUELA_URL } : {}),
+    ...(env.ESCUELA_API_URL ? { escuelaApiUrl: env.ESCUELA_API_URL } : {}),
+    ...(env.ESCUELA_API_KEY ? { escuelaApiKey: env.ESCUELA_API_KEY } : {}),
     ...(env.TVGAN_URL ? { tvganUrl: env.TVGAN_URL } : {}),
   });
 }
