@@ -27,7 +27,7 @@ import {
 } from "lucide-react";
 import { type FormEvent, type ReactNode, useEffect, useRef, useState } from "react";
 import { StoreDialog } from "./Ecosistema";
-import { Segmented, useFarms } from "./animals";
+import { Segmented, useActiveFarm, useFarms } from "./animals";
 import { Kpi, PageHead } from "./components";
 import {
   STOCK_STATUS_LABEL,
@@ -69,7 +69,9 @@ export function SuppliesScreen() {
   const farms = useFarms();
   const wide = useMedia("(min-width: 1440px)");
   const [overview, setOverview] = useState<SupplyOverview[] | null>(null);
-  const [farmId, setFarmId] = useState("");
+  const active = useActiveFarm();
+  const [farmId, setFarmId] = useState(active);
+  useEffect(() => setFarmId(active), [active]);
   const [q, setQ] = useState("");
   const [category, setCategory] = useState("");
   const [selected, setSelected] = useState<string | null>(null);

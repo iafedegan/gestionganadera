@@ -40,10 +40,11 @@ import { type CSSProperties, type FormEvent, type ReactNode, useEffect, useState
 import { AssistantCard } from "./Assistant";
 import { NewsStrip } from "./Ecosistema";
 import { FarmIntel } from "./FarmIntel";
+import { FarmChip } from "./FarmPicker";
 import { type PendingInvite, RegisterForm } from "./Onboarding";
 import { Pasture } from "./Pasture";
 import { DiagnosisView, ProfileWizard, useFarmProfile } from "./Profile";
-import { RegisterDialog, useFarms } from "./animals";
+import { RegisterDialog, useActiveFarm, useFarms } from "./animals";
 import { art } from "./art";
 import { CardHead, CountUp, PageHead, Tile } from "./components";
 import { MOV_SEED, type Mov } from "./herd";
@@ -571,6 +572,7 @@ export function Shell(props: {
               <span>{org}</span>
             </span>
             <span className="brand-mark brand-mini only-mobile" aria-hidden="true" />
+            <FarmChip />
             <div className="topbar-title">
               <strong>{moduleByKey(props.module).label}</strong>
               <span>{org}</span>
@@ -844,6 +846,7 @@ export function Home({
   const { orgId, counts, dataVersion, lastSync, online, role, session, syncNow, syncing } =
     useApp();
   const farms = useFarms();
+  const active = useActiveFarm();
   const [weaning, setWeaning] = useState(0);
   const [dryOff, setDryOff] = useState(0);
   const [inv, setInv] = useState<{ total: number; bovino: number; bufalino: number } | null>(null);
@@ -865,8 +868,11 @@ export function Home({
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: dataVersion fuerza la relectura
   useEffect(() => {
-    void localdb.counts(orgId).then(setInv);
-    void localdb.calves(orgId).then((list) => {
+    const inScope = <T extends { farmId: string }>(list: T[]) =>
+      active ? list.filter((x) => x.farmId === active) : list;
+    if (!active) void localdb.counts(orgId).then(setInv);
+    void localdb.calves(orgId).then((all) => {
+      const list = inScope(all);
       const today = todayLocal();
       setWeaning(
         list.filter((c) => {
@@ -877,7 +883,15 @@ export function Home({
       );
     });
     void Promise.all([localdb.herdAnimals(orgId), localdb.listAnimalEvents(orgId)]).then(
-      ([herd, events]) => {
+      ([allHerd, allEvents]) => {
+        const herd = inScope(allHerd);
+        const events = inScope(allEvents);
+        if (active)
+          setInv({
+            total: herd.length,
+            bovino: herd.filter((a) => a.species === "bovino").length,
+            bufalino: herd.filter((a) => a.species === "bufalino").length,
+          });
         const today = todayLocal();
         setStats(homeStats(herd, events, today));
         setDryOff(
@@ -896,7 +910,7 @@ export function Home({
         );
       },
     );
-    void localdb.supplyOverview({ orgId }).then((list) => {
+    void localdb.supplyOverview({ orgId, ...(active ? { farmId: active } : {}) }).then((list) => {
       const c = { low: 0, soon: 0, expired: 0 };
       for (const s of list) {
         const st = statusOf(s);
@@ -906,7 +920,7 @@ export function Home({
       }
       setStock(c);
     });
-  }, [orgId, dataVersion, farms]);
+  }, [orgId, dataVersion, farms, active]);
 
   const demo = isDemoOrg(session?.memberships[0]?.organizationName);
   const revisar = counts.rechazado + counts.conflicto;
@@ -1021,8 +1035,9 @@ export function Home({
 
   const first = (session?.displayName ?? "").trim().split(/\s+/)[0] ?? "";
   const dateText = longDate.format(new Date());
-  const farmText =
-    farms.length === 1
+  const farmText = active
+    ? ` · ${farms.find((f) => f.id === active)?.name ?? ""}`
+    : farms.length === 1
       ? ` · ${farms[0]?.name}`
       : farms.length > 1
         ? ` · ${farms.length} fincas`

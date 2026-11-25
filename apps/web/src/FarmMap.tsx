@@ -1,4 +1,5 @@
 import L from "leaflet";
+import { useActiveFarm } from "./animals";
 import "leaflet/dist/leaflet.css";
 import { can, uuidv7 } from "@ganaderia/domain";
 import {
@@ -188,7 +189,12 @@ const COLORS = [
 export function FarmMap() {
   const { notify, orgId, online, syncNow, dataVersion, role, session } = useApp();
   const canEdit = role ? can(role, "farm.write") : false;
-  const [farmId, setFarmId] = useState<string | null>(null);
+  const active = useActiveFarm();
+  const [farmId, setFarmId] = useState<string | null>(active || null);
+  // La finca activa de la barra superior manda sobre la elegida en esta pantalla.
+  useEffect(() => {
+    if (active) setFarmId(active);
+  }, [active]);
   const [farms, setFarms] = useState<LocalFarm[]>([]);
   const [meta, setMeta] = useState<LocalFarmMap | null>(null);
   const el = useRef<HTMLDivElement>(null);

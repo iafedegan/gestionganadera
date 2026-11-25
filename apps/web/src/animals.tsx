@@ -52,6 +52,7 @@ import {
   num,
   todayLocal,
 } from "./labels";
+import { scopedFarm, useStoredFarm } from "./lib/activeFarm";
 import {
   type AnimalDetail,
   type LocalAnimal,
@@ -73,6 +74,11 @@ export function useFarms() {
     void localdb.listFarms(orgId).then(setFarms);
   }, [orgId, dataVersion]);
   return farms;
+}
+
+/** La finca activa (vacío = todas) ya validada contra las fincas existentes. */
+export function useActiveFarm(): string {
+  return scopedFarm(useStoredFarm(), useFarms());
 }
 
 /** Marca de especie: círculo con la inicial; color distinto por especie, nunca solo color. */
@@ -103,7 +109,10 @@ export function AnimalsScreen() {
   const [q, setQ] = useState("");
   const [species, setSpecies] = useState("");
   const [category, setCategory] = useState("");
-  const [farmId, setFarmId] = useState("");
+  const active = useActiveFarm();
+  const [farmId, setFarmId] = useState(active);
+  // La finca activa de la barra superior manda sobre el filtro de esta pantalla.
+  useEffect(() => setFarmId(active), [active]);
   const [rows, setRows] = useState<LocalAnimal[] | null>(null);
   const [selected, setSelected] = useState<string | null>(null);
   const [registering, setRegistering] = useState(false);
@@ -125,8 +134,18 @@ export function AnimalsScreen() {
         ...(farmId ? { farmId } : {}),
       })
       .then(setRows);
-    void localdb.counts(orgId).then(setInv);
-  }, [orgId, q, species, category, farmId, dataVersion]);
+    if (active) {
+      // Totales de la finca activa de la barra superior.
+      void localdb.herdAnimals(orgId).then((all) => {
+        const herd = all.filter((a) => a.farmId === active);
+        setInv({
+          total: herd.length,
+          bovino: herd.filter((a) => a.species === "bovino").length,
+          bufalino: herd.filter((a) => a.species === "bufalino").length,
+        });
+      });
+    } else void localdb.counts(orgId).then(setInv);
+  }, [orgId, q, species, category, farmId, active, dataVersion]);
 
   const farmName = (id: string) => farms.find((f) => f.id === id)?.name ?? "—";
   const canRegister = role !== null && can(role, "animal.write");

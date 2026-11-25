@@ -1,7 +1,7 @@
 import type { AssistantRequest, KnowledgeSourceDto } from "@ganaderia/contracts";
 import { ArrowUp, BookOpen, Sparkles, Stethoscope, Trash2, X } from "lucide-react";
 import { type ReactNode, useEffect, useRef, useState } from "react";
-import { useFarms } from "./animals";
+import { useActiveFarm, useFarms } from "./animals";
 import { ApiError, NetworkError, api } from "./lib/api";
 import { getSoil, getWeather, texture, thi } from "./lib/farmIntel";
 import { useApp } from "./state";
@@ -192,7 +192,11 @@ export function AssistantCard() {
 export function AssistantDialog(props: { initial: string | null; onClose(): void }) {
   const { orgId, online } = useApp();
   const farms = useFarms();
-  const farm = farms.find((f) => f.latitude != null && f.longitude != null) ?? farms[0];
+  const active = useActiveFarm();
+  const farm =
+    farms.find((f) => f.id === active) ??
+    farms.find((f) => f.latitude != null && f.longitude != null) ??
+    farms[0];
   const ref = useRef<HTMLDialogElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);

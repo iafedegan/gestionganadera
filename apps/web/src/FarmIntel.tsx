@@ -10,7 +10,7 @@ import {
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { FarmDialog } from "./FarmForm";
-import { useFarms } from "./animals";
+import { useActiveFarm, useFarms } from "./animals";
 import { CardHead } from "./components";
 import { useHerdData } from "./herdData";
 import {
@@ -54,7 +54,11 @@ export function FarmIntel() {
   const { online } = useApp();
   const farms = useFarms();
   const herd = useHerdData();
-  const farm = farms.find((f) => f.latitude != null && f.longitude != null) ?? farms[0];
+  const active = useActiveFarm();
+  const farm =
+    farms.find((f) => f.id === active) ??
+    farms.find((f) => f.latitude != null && f.longitude != null) ??
+    farms[0];
   const lat = farm?.latitude ?? null;
   const lon = farm?.longitude ?? null;
   const [weather, setWeather] = useState<Weather | null>(null);
