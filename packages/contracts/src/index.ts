@@ -821,11 +821,32 @@ export interface NewsItemDto {
   category: string | null;
 }
 
+export interface CourseLessonDto {
+  title: string;
+  /** Duración tal como la publica la Escuela, p. ej. «8 min». */
+  duration: string | null;
+  preview: boolean;
+}
+
+export interface CourseModuleDto {
+  title: string;
+  lessons: CourseLessonDto[];
+}
+
 export interface CourseDto {
   slug: string;
   title: string;
   summary: string;
   url: string;
+  /** Lo siguiente lo lee el servidor de la ficha del curso; falta si la Escuela no respondió. */
+  image?: string | null;
+  level?: string | null;
+  lessonCount?: number | null;
+  duration?: string | null;
+  instructor?: string | null;
+  description?: string;
+  outcomes?: string[];
+  modules?: CourseModuleDto[];
 }
 
 export interface StoreProductDto {

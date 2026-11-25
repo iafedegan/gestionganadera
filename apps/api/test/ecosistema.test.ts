@@ -7,6 +7,7 @@ import { type Db, createPgliteDb } from "../src/db.js";
 import {
   type Ecosistema,
   createEcosistema,
+  parseCourseDetail,
   parseCoursePage,
   parseCourseSlugs,
   parseRss,
@@ -51,6 +52,36 @@ describe("lectura de fuentes del ecosistema", () => {
         '<title>Salud Animal · Escuela Virtual FEDEGÁN</title><meta name="description" content="Enfermedades y manejo"',
       ),
     ).toEqual({ title: "Salud Animal", summary: "Enfermedades y manejo" });
+  });
+
+  it("lee la ficha de un curso: nivel, lecciones, instructor, qué se aprende y temario", () => {
+    const html = `<img src="/_next/image?url=%2Fcursos%2Fcurso-01.jpg&amp;w=1920">
+      <ul><li><svg><path/></svg> Básico</li><li>9<!-- --> <!-- -->lecciones</li><li>1 h 9 min</li></ul>
+      <p>Instructor: <b>M.V. Ana Pérez</b></p>
+      <h2>Lo que aprenderá</h2><ul><li>Pastos</li><li>Sanidad</li></ul>
+      <h2>Contenido del curso</h2><p>1 módulos · 2 lecciones · 15 min</p>
+      <div><span>01</span><h3>Bloque uno</h3><span>2 lecciones</span>
+        <ul><li>Introducción</li><li>Vista previa</li><li>8 min</li><li>Cierre</li><li>7 min</li></ul></div>
+      <h2>Descripción</h2><p>Curso de prueba.</p><h2>Instructor</h2><p>Ana</p>`;
+    expect(parseCourseDetail(html, "https://escuela.co")).toEqual({
+      image: "https://escuela.co/cursos/curso-01.jpg",
+      level: "Básico",
+      lessonCount: 9,
+      duration: "1 h 9 min",
+      instructor: "M.V. Ana Pérez",
+      outcomes: ["Pastos", "Sanidad"],
+      modules: [
+        {
+          title: "Bloque uno",
+          lessons: [
+            { title: "Introducción", duration: "8 min", preview: true },
+            { title: "Cierre", duration: "7 min", preview: false },
+          ],
+        },
+      ],
+      description: "Curso de prueba.",
+    });
+    expect(parseCourseDetail("<p>sin datos</p>", "https://escuela.co")).toEqual({});
   });
 
   it("convierte los resultados de TvGan en productos con enlace y precio", () => {

@@ -1,5 +1,6 @@
 import type {
   CourseDto,
+  CourseModuleDto,
   NewsItemDto,
   StoreCatalogDto,
   StoreCategoryDto,
@@ -189,6 +190,92 @@ export function parseCoursePage(html: string): { title: string | null; summary: 
   const title = raw ? stripTags(raw).replace(/\s*·\s*Escuela Virtual.*$/i, "") : null;
   const summary = stripTags(html.match(/<meta name="description" content="([^"]*)"/i)?.[1] ?? "");
   return { title: title || null, summary };
+}
+
+type CourseDetail = Pick<
+  CourseDto,
+  | "image"
+  | "level"
+  | "lessonCount"
+  | "duration"
+  | "instructor"
+  | "description"
+  | "outcomes"
+  | "modules"
+>;
+
+/** Texto de la página, un elemento por línea (sin íconos, scripts ni estilos). */
+function pageTokens(html: string): string[] {
+  const body = html
+    .replace(/<(script|style|svg)\b[\s\S]*?<\/\1>/gi, " ")
+    .replace(/<!--[\s\S]*?-->/g, "");
+  return decodeEntities(body.replace(/<[^>]*>/g, "\n"))
+    .split("\n")
+    .map((t) => t.replace(/\s+/g, " ").trim())
+    .filter(Boolean);
+}
+
+const LEVELS = ["Básico", "Intermedio", "Avanzado"];
+const DURATION = /^(?:\d+\s*h)?(?:\s*\d+\s*min)?$/;
+
+/**
+ * Ficha de un curso de la Escuela Virtual: nivel, lecciones, duración, instructor, lo que se
+ * aprende, el temario y la descripción. La Escuela no publica una API; se lee su página, así
+ * que lo que no se encuentre se omite en vez de inventarse.
+ */
+export function parseCourseDetail(html: string, origin: string): CourseDetail {
+  const t = pageTokens(html);
+  const at = (label: string, from = 0) => t.findIndex((x, i) => i >= from && x === label);
+
+  const out: CourseDetail = {};
+
+  const img = html.match(/\/_next\/image\?url=(%2Fcursos%2F[^&"]+)/)?.[1];
+  if (img) out.image = safeUrl(decodeURIComponent(img), origin);
+
+  const level = t.find((x) => LEVELS.includes(x));
+  if (level) out.level = level;
+  const lessons = t.map((x) => x.match(/^(\d+)\s+lecciones?$/)?.[1]).find(Boolean);
+  if (lessons) out.lessonCount = Number(lessons);
+  const dur = t.find((x) => /\d/.test(x) && DURATION.test(x));
+  if (dur) out.duration = dur;
+
+  const iInstr = t.findIndex((x) => /^Instructor:?$/.test(x));
+  if (iInstr >= 0 && t[iInstr + 1]) out.instructor = t[iInstr + 1] ?? null;
+
+  const iLearn = at("Lo que aprenderá");
+  const iContent = at("Contenido del curso");
+  if (iLearn >= 0 && iContent > iLearn) out.outcomes = t.slice(iLearn + 1, iContent);
+
+  if (iContent >= 0) {
+    const iDesc = at("Descripción", iContent);
+    const rows = t.slice(iContent + 2, iDesc > iContent ? iDesc : undefined);
+    const modules: CourseModuleDto[] = [];
+    let cur: CourseModuleDto | null = null;
+    for (let i = 0; i < rows.length; i++) {
+      const row = rows[i] ?? "";
+      if (/^\d{2}$/.test(row)) {
+        cur = { title: rows[i + 1] ?? "", lessons: [] };
+        modules.push(cur);
+        i += 2; // título y «N lecciones»
+        continue;
+      }
+      if (!cur || row === "Vista previa") continue;
+      const next = rows[i + 1] ?? "";
+      const preview = next === "Vista previa";
+      const mins = (preview ? rows[i + 2] : next) ?? "";
+      const hasDuration = /^\d+\s*(min|h)\b/.test(mins);
+      cur.lessons.push({ title: row, duration: hasDuration ? mins : null, preview });
+      i += (preview ? 1 : 0) + (hasDuration ? 1 : 0);
+    }
+    const filled = modules.filter((m) => m.lessons.length > 0);
+    if (filled.length > 0) out.modules = filled;
+    if (iDesc >= 0) {
+      const iEnd = t.findIndex((x, i) => i > iDesc && x === "Instructor");
+      const desc = t.slice(iDesc + 1, iEnd > iDesc ? iEnd : iDesc + 2).join(" ");
+      if (desc) out.description = desc.slice(0, 1500);
+    }
+  }
+  return out;
 }
 
 /* ───────────── Tienda TvGan (Odoo) ───────────── */
@@ -387,7 +474,8 @@ export function createEcosistema(opts: EcosistemaOptions = {}): Ecosistema {
       }),
 
     courses: () =>
-      memo("courses", 6 * 60 * MIN, async () => {
+      // Una hora: los cursos nuevos o cambiados en la Escuela aparecen en la app sin publicar nada.
+      memo("courses", 60 * MIN, async () => {
         let slugs: string[] = [];
         try {
           slugs = parseCourseSlugs(await get(escuela));
@@ -396,24 +484,34 @@ export function createEcosistema(opts: EcosistemaOptions = {}): Ecosistema {
         }
         if (slugs.length === 0) slugs = COURSE_FALLBACK.map((c) => c.slug);
         const known = new Map(COURSE_FALLBACK.map((c) => [c.slug, c]));
-        return Promise.all(
+        const courses = await Promise.all(
           slugs.slice(0, 40).map(async (slug): Promise<CourseDto> => {
             const url = `${escuelaOrigin}/escuela-virtual/${slug}`;
             const fallbackTitle =
               known.get(slug)?.title ??
               slug.replace(/-/g, " ").replace(/^./, (c) => c.toUpperCase());
             try {
-              const page = parseCoursePage(await get(url, 8_000));
+              const html = await get(url, 8_000);
+              const page = parseCoursePage(html);
               return {
                 slug,
                 url,
                 title: page.title ?? fallbackTitle,
                 summary: page.summary || known.get(slug)?.summary || "",
+                ...parseCourseDetail(html, escuelaOrigin),
               };
             } catch {
               return { slug, url, title: fallbackTitle, summary: known.get(slug)?.summary ?? "" };
             }
           }),
+        );
+        // La Escuela repite un mismo texto de descripción en todos los cursos mientras no escribe
+        // el de cada uno: no se muestra repetido.
+        const seen = new Map<string, number>();
+        for (const c of courses)
+          if (c.description) seen.set(c.description, (seen.get(c.description) ?? 0) + 1);
+        return courses.map((c) =>
+          c.description && (seen.get(c.description) ?? 0) > 1 ? { ...c, description: "" } : c,
         );
       }),
 

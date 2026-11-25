@@ -365,3 +365,33 @@
     flex-wrap: nowrap;
   }
 }
+
+/* Diálogos de solo lectura (ficha del curso, tienda): sin <form>, el cuerpo se desplaza solo. */
+.dialog-form[open]:not(:has(> form)) {
+  display: flex;
+  flex-direction: column;
+}
+.dialog-form[open]:not(:has(> form)) > .dialog-head {
+  flex: none;
+}
+.dialog-form[open]:not(:has(> form)) > .dialog-body {
+  flex: 1;
+  min-height: 0;
+}
+
+/* Vista «Sitio completo» de Noticias: CONtexto dentro de la app. */
+.eco-vista {
+  margin: 0 0 14px;
+}
+.eco-vista[class~="kit-seg"] {
+  grid-template-columns: 1fr 1fr;
+}
+.eco-frame {
+  display: block;
+  width: 100%;
+  height: calc(100dvh - 300px);
+  min-height: 420px;
+  border: 1px solid var(--borde);
+  border-radius: 14px;
+  background: var(--superficie);
+}

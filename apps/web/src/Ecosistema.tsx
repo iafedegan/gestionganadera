@@ -230,6 +230,7 @@ function relDate(iso: string | null): string {
 export function NoticiasScreen() {
   const r = useRemote("noticias", async () => (await api.news()).items);
   const [cat, setCat] = useState("");
+  const [vista, setVista] = useState<"notas" | "sitio">("notas");
   const cats = [...new Set((r.data ?? []).map((n) => n.category).filter(Boolean))] as string[];
   return (
     <section className="page">
@@ -240,35 +241,61 @@ export function NoticiasScreen() {
         lead="Lo último de CONtexto Ganadero, el medio de FEDEGÁN: mercado, sanidad, clima y políticas para el campo."
         actions={<OutLink href="https://www.contextoganadero.com">Abrir CONtexto Ganadero</OutLink>}
       />
-      <RemoteState r={r} what="Las noticias">
-        {(items) => {
-          const list = cat ? items.filter((n) => n.category === cat) : items;
-          return (
-            <>
-              {cats.length > 1 && (
-                <div className="card eco-filters">
-                  <Picker
-                    label="Sección"
-                    value={cat}
-                    options={cats.map((c) => ({ key: c, label: c }))}
-                    onChange={setCat}
-                    allLabel="Todas las noticias"
-                  />
-                </div>
-              )}
-              {list.length === 0 ? (
-                <p className="empty">No hay noticias en esta sección por ahora.</p>
-              ) : (
-                <div className="eco-grid">
-                  {list.map((n, i) => (
-                    <NewsCard key={n.url} n={n} lead={i === 0 && !cat} />
-                  ))}
-                </div>
-              )}
-            </>
-          );
-        }}
-      </RemoteState>
+      <div className="kit-seg eco-vista">
+        <button type="button" aria-pressed={vista === "notas"} onClick={() => setVista("notas")}>
+          Notas
+        </button>
+        <button type="button" aria-pressed={vista === "sitio"} onClick={() => setVista("sitio")}>
+          Sitio completo
+        </button>
+      </div>
+      {vista === "sitio" && (
+        <>
+          <iframe
+            className="eco-frame"
+            title="CONtexto Ganadero"
+            src="https://www.contextoganadero.com/"
+            loading="lazy"
+            referrerPolicy="no-referrer"
+          />
+          <p className="hint eco-hint">
+            Si el sitio no aparece, el medio no permite verse dentro de otras aplicaciones:{" "}
+            <OutLink href="https://www.contextoganadero.com">ábralo en el navegador</OutLink> o use
+            la vista «Notas».
+          </p>
+        </>
+      )}
+      {vista === "notas" && (
+        <RemoteState r={r} what="Las noticias">
+          {(items) => {
+            const list = cat ? items.filter((n) => n.category === cat) : items;
+            return (
+              <>
+                {cats.length > 1 && (
+                  <div className="card eco-filters">
+                    <Picker
+                      label="Sección"
+                      value={cat}
+                      options={cats.map((c) => ({ key: c, label: c }))}
+                      onChange={setCat}
+                      allLabel="Todas las noticias"
+                    />
+                  </div>
+                )}
+                {list.length === 0 ? (
+                  <p className="empty">No hay noticias en esta sección por ahora.</p>
+                ) : (
+                  <div className="eco-grid">
+                    {list.map((n, i) => (
+                      <NewsCard key={n.url} n={n} lead={i === 0 && !cat} />
+                    ))}
+                  </div>
+                )}
+              </>
+            );
+          }}
+        </RemoteState>
+      )}
     </section>
   );
 }
@@ -379,18 +406,104 @@ export function CapacitacionScreen() {
   );
 }
 
+function CourseFacts({ c }: { c: CourseDto }) {
+  const facts = [c.level, c.lessonCount ? `${c.lessonCount} lecciones` : null, c.duration].filter(
+    Boolean,
+  );
+  return facts.length === 0 ? null : (
+    <p className="eco-meta">
+      {facts.map((f) => (
+        <span key={f}>{f}</span>
+      ))}
+    </p>
+  );
+}
+
 function CourseCard({ c }: { c: CourseDto }) {
+  const [open, setOpen] = useState(false);
   return (
     <article className="card eco-card eco-course">
+      {c.image && <img className="eco-img" src={c.image} alt="" loading="lazy" />}
       <div className="eco-body">
         <p className="eco-meta">
           <span className="eco-tag">{COURSE_AREA[c.slug] ?? "Curso"}</span>
         </p>
         <h2 className="eco-title">{c.title}</h2>
         {c.summary && <p className="eco-text">{c.summary}</p>}
-        <OutLink href={c.url}>Ir al curso</OutLink>
+        <CourseFacts c={c} />
+        {c.instructor && <p className="eco-text eco-instr">Instructor: {c.instructor}</p>}
+        <div className="eco-actions">
+          <button type="button" className="btn btn-primary" onClick={() => setOpen(true)}>
+            Ver contenido
+          </button>
+          <OutLink href={c.url}>Ir al curso</OutLink>
+        </div>
       </div>
+      {open && <CourseDialog c={c} onClose={() => setOpen(false)} />}
     </article>
+  );
+}
+
+function CourseDialog({ c, onClose }: { c: CourseDto; onClose(): void }) {
+  const ref = useRef<HTMLDialogElement>(null);
+  useEffect(() => {
+    ref.current?.showModal();
+  }, []);
+  return (
+    <dialog ref={ref} className="dialog dialog-form" onClose={onClose} aria-labelledby="eco-cd">
+      <header className="dialog-head">
+        <button
+          type="button"
+          className="icon-btn"
+          aria-label="Cerrar"
+          onClick={() => ref.current?.close()}
+        >
+          ✕
+        </button>
+        <h2 id="eco-cd">{c.title}</h2>
+      </header>
+      <div className="dialog-body">
+        {c.image && <img className="eco-img eco-cd-img" src={c.image} alt="" />}
+        <CourseFacts c={c} />
+        {c.instructor && <p className="eco-text">Instructor: {c.instructor}</p>}
+        {(c.description || c.summary) && <p className="eco-text">{c.description || c.summary}</p>}
+        {c.outcomes && c.outcomes.length > 0 && (
+          <>
+            <h3 className="eco-sub">Lo que aprenderá</h3>
+            <ul className="eco-checks">
+              {c.outcomes.map((o) => (
+                <li key={o}>{o}</li>
+              ))}
+            </ul>
+          </>
+        )}
+        {c.modules && c.modules.length > 0 && (
+          <>
+            <h3 className="eco-sub">Contenido del curso</h3>
+            {c.modules.map((m) => (
+              <div key={m.title} className="eco-module">
+                <p className="eco-module-title">{m.title}</p>
+                <ol className="eco-lessons">
+                  {m.lessons.map((l) => (
+                    <li key={l.title}>
+                      <span>{l.title}</span>
+                      {l.duration && <small>{l.duration}</small>}
+                    </li>
+                  ))}
+                </ol>
+              </div>
+            ))}
+          </>
+        )}
+        <p className="hint">
+          Para inscribirse, ver los videos y obtener el certificado, ingrese a la Escuela Virtual
+          con su cuenta.
+        </p>
+        <OutLink className="btn btn-primary eco-cta" href={c.url}>
+          Ir al curso en la Escuela Virtual
+        </OutLink>
+      </div>
+    </dialog>
   );
 }
 

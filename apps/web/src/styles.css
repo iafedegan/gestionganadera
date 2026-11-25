@@ -8117,3 +8117,61 @@ a.btn.btn-ghost {
     display: none;
   }
 }
+
+/* Cursos de la Escuela Virtual */
+.eco-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  margin-top: auto;
+  padding-top: 8px;
+}
+.eco-instr {
+  font-size: 0.85rem;
+  color: var(--texto-suave);
+}
+.eco-cd-img {
+  border-radius: 12px;
+  margin-bottom: 12px;
+}
+.eco-sub {
+  margin: 18px 0 8px;
+  font-size: 1rem;
+}
+.eco-checks {
+  margin: 0;
+  padding-left: 20px;
+  display: grid;
+  gap: 6px;
+}
+.eco-module-title {
+  margin: 0 0 6px;
+  font-weight: 700;
+}
+.eco-lessons {
+  margin: 0;
+  padding-left: 22px;
+  display: grid;
+  gap: 2px;
+}
+.eco-lessons li {
+  padding: 6px 0;
+  border-bottom: 1px solid var(--borde);
+}
+.eco-lessons li::marker {
+  color: var(--texto-suave);
+  font-size: 0.85rem;
+}
+.eco-lessons li span {
+  margin-right: 8px;
+}
+.eco-lessons small {
+  color: var(--texto-suave);
+  white-space: nowrap;
+}
+.eco-cta {
+  display: flex;
+  justify-content: center;
+  margin-top: 8px;
+}
