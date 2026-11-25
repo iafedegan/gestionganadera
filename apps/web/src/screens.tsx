@@ -37,6 +37,7 @@ import {
   X,
 } from "lucide-react";
 import { type CSSProperties, type FormEvent, type ReactNode, useEffect, useState } from "react";
+import { AlertsSheet, useAlerts } from "./Alerts";
 import { AssistantCard } from "./Assistant";
 import { NewsStrip } from "./Ecosistema";
 import { FarmIntel } from "./FarmIntel";
@@ -516,6 +517,17 @@ export function Shell(props: {
   }, []);
   const pendientes = counts.pendiente;
   const revisar = counts.rechazado + counts.conflicto;
+  const [alertsOpen, setAlertsOpen] = useState(false);
+  const shellAlerts = useAlerts(
+    () => {
+      setAlertsOpen(false);
+      props.onSyncOpen(true);
+    },
+    (m) => {
+      setAlertsOpen(false);
+      props.onModule(m);
+    },
+  );
   const org = session?.memberships[0]?.organizationName ?? "";
   const name = session?.displayName ?? "";
 
@@ -590,11 +602,12 @@ export function Shell(props: {
             <button
               type="button"
               className="icon-btn"
-              aria-label={`Sincronización${pendientes + revisar > 0 ? `, ${pendientes + revisar} pendientes` : ""}`}
-              onClick={() => props.onSyncOpen(true)}
+              aria-label={`Alertas${shellAlerts.length > 0 ? `, ${shellAlerts.length}` : ""}`}
+              aria-haspopup="dialog"
+              onClick={() => setAlertsOpen(true)}
             >
               <Bell size={20} />
-              {pendientes + revisar > 0 && <span className="dot">{pendientes + revisar}</span>}
+              {shellAlerts.length > 0 && <span className="dot">{shellAlerts.length}</span>}
             </button>
             <div className="user-wrap">
               {mobile ? (
@@ -816,6 +829,7 @@ export function Shell(props: {
       </div>
 
       {props.syncOpen && <SyncDrawer onClose={() => props.onSyncOpen(false)} />}
+      {alertsOpen && <AlertsSheet alerts={shellAlerts} onClose={() => setAlertsOpen(false)} />}
     </div>
   );
 }
@@ -847,10 +861,7 @@ export function Home({
     useApp();
   const farms = useFarms();
   const active = useActiveFarm();
-  const [weaning, setWeaning] = useState(0);
-  const [dryOff, setDryOff] = useState(0);
   const [inv, setInv] = useState<{ total: number; bovino: number; bufalino: number } | null>(null);
-  const [stock, setStock] = useState({ low: 0, soon: 0, expired: 0 });
   const [stats, setStats] = useState<HomeStats | null>(null);
   const [movs] = useStore<Mov>("movs-eco", MOV_SEED);
   const farmProfile = useFarmProfile();
@@ -871,168 +882,25 @@ export function Home({
     const inScope = <T extends { farmId: string }>(list: T[]) =>
       active ? list.filter((x) => x.farmId === active) : list;
     if (!active) void localdb.counts(orgId).then(setInv);
-    void localdb.calves(orgId).then((all) => {
-      const list = inScope(all);
-      const today = todayLocal();
-      setWeaning(
-        list.filter((c) => {
-          const months = farms.find((f) => f.id === c.farmId)?.speciesSettings[c.species as Species]
-            ?.weaningMonths;
-          return months !== undefined && isWeaningDue(c.birthDate, months, today);
-        }).length,
-      );
-    });
     void Promise.all([localdb.herdAnimals(orgId), localdb.listAnimalEvents(orgId)]).then(
       ([allHerd, allEvents]) => {
         const herd = inScope(allHerd);
-        const events = inScope(allEvents);
         if (active)
           setInv({
             total: herd.length,
             bovino: herd.filter((a) => a.species === "bovino").length,
             bufalino: herd.filter((a) => a.species === "bufalino").length,
           });
-        const today = todayLocal();
-        setStats(homeStats(herd, events, today));
-        setDryOff(
-          herd.filter((a) => {
-            const days = farms.find((f) => f.id === a.farmId)?.speciesSettings[a.species as Species]
-              ?.dryOffDays;
-            return (
-              days !== undefined &&
-              isDryOffDue(
-                events.filter((e) => e.animalId === a.id),
-                days,
-                today,
-              )
-            );
-          }).length,
-        );
+        setStats(homeStats(herd, inScope(allEvents), todayLocal()));
       },
     );
-    void localdb.supplyOverview({ orgId, ...(active ? { farmId: active } : {}) }).then((list) => {
-      const c = { low: 0, soon: 0, expired: 0 };
-      for (const s of list) {
-        const st = statusOf(s);
-        if (st === "bajo_minimo" || (st === "sin_existencia" && s.minStock > 0)) c.low++;
-        else if (st === "vence_pronto") c.soon++;
-        else if (st === "vencido") c.expired++;
-      }
-      setStock(c);
-    });
-  }, [orgId, dataVersion, farms, active]);
+  }, [orgId, dataVersion, active]);
 
   const demo = isDemoOrg(session?.memberships[0]?.organizationName);
-  const revisar = counts.rechazado + counts.conflicto;
   const lease = session ? new Date(session.offlineLeaseUntil) : null;
-  const leaseHours = lease ? (lease.getTime() - Date.now()) / 3_600_000 : 0;
   const pctBov = inv && inv.total > 0 ? Math.round((inv.bovino / inv.total) * 100) : 0;
 
-  const alerts: {
-    tone: "error" | "warn" | "info";
-    icon: ReactNode;
-    title: string;
-    text: string;
-    go?: () => void;
-  }[] = [];
-  if (revisar > 0) {
-    alerts.push({
-      tone: "error",
-      icon: <AlertTriangle size={22} />,
-      title:
-        revisar === 1
-          ? "1 registro no se pudo confirmar"
-          : `${revisar} registros no se pudieron confirmar`,
-      text: "Fueron rechazados o chocan con un dato ya confirmado. Corríjalos para que se envíen.",
-      go: onOpenSync,
-    });
-  }
-  if (role && can(role, "farm.write") && farms.length === 0 && online) {
-    alerts.push({
-      tone: "info",
-      icon: <Building2 size={22} />,
-      title: "Registre su finca para empezar",
-      text: "Con sus datos y áreas ya puede cargar animales y calcular la carga.",
-      go: () => onModule("configuracion"),
-    });
-  }
-  if (weaning > 0) {
-    alerts.push({
-      tone: "info",
-      icon: <Baby size={22} />,
-      title: weaning === 1 ? "1 cría en edad de destete" : `${weaning} crías en edad de destete`,
-      text: "Según la edad de destete definida para la finca. Revíselas en Animales.",
-      go: () => onModule("animales"),
-    });
-  }
-  if (dryOff > 0) {
-    alerts.push({
-      tone: "info",
-      icon: <Baby size={22} />,
-      title: dryOff === 1 ? "1 hembra para secar" : `${dryOff} hembras para secar`,
-      text: "Llegaron a los días de lactancia definidos para la finca. Regístrelo en Reproducción.",
-      go: () => onModule("reproduccion"),
-    });
-  }
-  if (stock.expired > 0) {
-    alerts.push({
-      tone: "error",
-      icon: <AlertTriangle size={22} />,
-      title:
-        stock.expired === 1
-          ? "1 insumo con lotes vencidos en bodega"
-          : `${stock.expired} insumos con lotes vencidos en bodega`,
-      text: "No se pueden consumir. Revíselos en Compras e insumos.",
-      go: () => onModule("compras"),
-    });
-  }
-  if (stock.soon > 0) {
-    alerts.push({
-      tone: "warn",
-      icon: <Clock size={22} />,
-      title:
-        stock.soon === 1
-          ? "1 insumo vence en los próximos 30 días"
-          : `${stock.soon} insumos vencen en los próximos 30 días`,
-      text: "Use primero los lotes que vencen antes: el sistema los descuenta así.",
-      go: () => onModule("compras"),
-    });
-  }
-  if (stock.low > 0) {
-    alerts.push({
-      tone: "info",
-      icon: <Package size={22} />,
-      title:
-        stock.low === 1
-          ? "1 insumo por debajo del mínimo"
-          : `${stock.low} insumos por debajo del mínimo`,
-      text: "Conviene reponerlos antes de que falten.",
-      go: () => onModule("compras"),
-    });
-  }
-  if (counts.pendiente > 0) {
-    alerts.push({
-      tone: "info",
-      icon: <Clock size={22} />,
-      title:
-        counts.pendiente === 1
-          ? "1 registro espera ser enviado"
-          : `${counts.pendiente} registros esperan ser enviados`,
-      text: online
-        ? "Se envían al sincronizar."
-        : "Están guardados en este dispositivo y se enviarán al recuperar la conexión.",
-      go: onOpenSync,
-    });
-  }
-  if (lease && leaseHours > 0 && leaseHours < 24) {
-    alerts.push({
-      tone: "warn",
-      icon: <KeyRound size={22} />,
-      title: "El permiso para trabajar sin conexión vence pronto",
-      text: `Conéctese antes del ${fechaHora(lease.toISOString())} para renovarlo.`,
-    });
-  }
-
+  const alerts = useAlerts(onOpenSync, onModule);
   const first = (session?.displayName ?? "").trim().split(/\s+/)[0] ?? "";
   const dateText = longDate.format(new Date());
   const farmText = active
@@ -1198,42 +1066,6 @@ export function Home({
           <span>{syncing ? "Enviando…" : "Sincronizar"}</span>
         </button>
       </nav>
-
-      <article className="card home-alerts">
-        <CardHead
-          icon={<Bell size={26} aria-hidden="true" />}
-          title="Alertas para revisar"
-          sub="Situaciones que requieren su atención."
-        />
-        {alerts.length === 0 ? (
-          <div className="empty-state ok">
-            <CheckCircle2 size={34} aria-hidden="true" />
-            <p>Todo en orden. No hay alertas por ahora.</p>
-          </div>
-        ) : (
-          <ul className="alert-rows">
-            {alerts.map((a) => (
-              <li key={a.title}>
-                <span className={`ar-icon ar-${a.tone}`}>{a.icon}</span>
-                <div className="ar-text">
-                  <strong>{a.title}</strong>
-                  <p>{a.text}</p>
-                </div>
-                {a.go && (
-                  <button
-                    type="button"
-                    className="ar-go"
-                    aria-label={`Abrir: ${a.title}`}
-                    onClick={a.go}
-                  >
-                    ›
-                  </button>
-                )}
-              </li>
-            ))}
-          </ul>
-        )}
-      </article>
 
       <div className="tiles">
         <Tile
