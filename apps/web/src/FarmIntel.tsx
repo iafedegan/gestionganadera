@@ -9,7 +9,9 @@ import {
   Wind,
 } from "lucide-react";
 import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import { FarmDialog } from "./FarmForm";
+import { DashTile } from "./HomeStory";
 import { useActiveFarm, useFarms } from "./animals";
 import { CardHead } from "./components";
 import { useHerdData } from "./herdData";
@@ -27,27 +29,16 @@ import { useApp } from "./state";
 
 const TONE = { rojo: "al-rojo", ambar: "al-ambar", verde: "al-verde", azul: "al-azul" } as const;
 const thiTone = (v: number) => (v < 72 ? "ok" : v < 79 ? "warn" : "bad");
-/** El índice de temperatura y humedad dicho en palabras sencillas. */
-const calor = (thi: number) =>
+/** El calor del día en tres o cuatro palabras, para el recuadro del Inicio. */
+const calorCorto = (thi: number) =>
   thi < 72
-    ? "El ganado está cómodo con este clima."
+    ? "Cómodo para el ganado"
     : thi < 79
-      ? "Hace un calor algo pesado para el ganado."
+      ? "Calor algo pesado"
       : thi < 89
-        ? "Calor fuerte: dele sombra y agua al ganado."
-        : "Calor extremo: proteja al ganado con sombra y agua.";
-/** Lo que viene en la semana, en una frase (solo si cambia algo frente a hoy). */
-function weekNote(days: { date: string; thi: number; rain: number }[], todayThi: number) {
-  const rest = days.slice(1, 7);
-  const hot = rest.filter((d) => d.thi >= 79).length;
-  const heavy = rest.find((d) => d.rain >= 20);
-  if (heavy)
-    return `Se espera lluvia fuerte el ${new Date(`${heavy.date}T12:00:00`).toLocaleDateString("es-CO", { weekday: "long" })}.`;
-  if (hot > 0 && todayThi < 79)
-    return hot === 1 ? "Viene un día de mucho calor." : `Vienen ${hot} días de mucho calor.`;
-  if (rest.length > 0 && rest.every((d) => d.rain < 1)) return "No se espera lluvia en la semana.";
-  return "";
-}
+        ? "Calor fuerte: sombra y agua"
+        : "Calor extremo: sombra y agua";
+
 const day = (d: string, i: number) =>
   i === 0 ? "Hoy" : new Date(`${d}T12:00:00`).toLocaleDateString("es-CO", { weekday: "short" });
 
@@ -71,9 +62,9 @@ function Insights({ items }: { items: Insight[] }) {
  * «Su finca hoy»: el clima de los próximos 7 días y el suelo donde está el hato, con alertas
  * que anticipan estrés calórico, lluvias fuertes o sequía. Funciona sin señal con lo último guardado.
  */
-export function FarmIntel({ compact = false }: { compact?: boolean } = {}) {
+export function FarmIntel({ tile = false }: { tile?: boolean } = {}) {
   const { online } = useApp();
-  const [open, setOpen] = useState(!compact);
+  const [open, setOpen] = useState(!tile);
   const farms = useFarms();
   const herd = useHerdData();
   const active = useActiveFarm();
@@ -93,14 +84,32 @@ export function FarmIntel({ compact = false }: { compact?: boolean } = {}) {
   useEffect(() => {
     if (lat === null || lon === null) return;
     setLoading(true);
-    void Promise.all([getWeather(lat, lon), getSoil(lat, lon)]).then(([w, s]) => {
+    // El clima no espera al suelo: SoilGrids puede tardar bastante más.
+    void getWeather(lat, lon).then((w) => {
       setWeather(w);
-      setSoil(s);
       setLoading(false);
     });
+    void getSoil(lat, lon).then(setSoil);
   }, [lat, lon, online]);
 
   if (!farm) return null;
+
+  if ((lat === null || lon === null) && tile) {
+    return (
+      <>
+        <DashTile
+          icon={MapPin}
+          tone="sol"
+          label="Clima"
+          value="—"
+          note="Ubique su finca para verlo"
+          state="none"
+          onClick={() => setEditing(true)}
+        />
+        {editing && <FarmDialog farm={farm} onClose={() => setEditing(false)} />}
+      </>
+    );
+  }
 
   if (lat === null || lon === null) {
     return (
@@ -126,43 +135,7 @@ export function FarmIntel({ compact = false }: { compact?: boolean } = {}) {
   const now = weather?.current;
   const today = weather?.days[0];
 
-  if (!open) {
-    const tip = weekNote(weather?.days ?? [], today?.thi ?? 0);
-    return (
-      <article className="card intel intel-mini">
-        <span className={`im-ic thi-${today ? thiTone(today.thi) : "ok"}`} aria-hidden="true">
-          {today && today.rain >= 5 ? <CloudRain size={28} /> : <Sun size={28} />}
-        </span>
-        <div className="im-text">
-          {now && today ? (
-            <>
-              <strong>
-                Hoy en {farm.name}: {Math.round(now.temp)}°,{" "}
-                {today.rain >= 1
-                  ? `${Math.round(today.rain)} mm de lluvia`
-                  : today.rainProb >= 40
-                    ? "puede llover"
-                    : "sin lluvia"}
-              </strong>
-              <p>
-                {calor(today.thi)}
-                {tip ? ` ${tip}` : ""}
-              </p>
-            </>
-          ) : (
-            <strong>
-              {loading ? "Consultando el clima…" : "Sin pronóstico guardado todavía."}
-            </strong>
-          )}
-        </div>
-        <button type="button" className="btn btn-ghost btn-sm" onClick={() => setOpen(true)}>
-          Ver la semana
-        </button>
-      </article>
-    );
-  }
-
-  return (
+  const full = (
     <article className="card intel">
       <CardHead
         icon={<Sun size={26} aria-hidden="true" />}
@@ -308,4 +281,46 @@ export function FarmIntel({ compact = false }: { compact?: boolean } = {}) {
       </p>
     </article>
   );
+
+  if (tile) {
+    const tone = today ? thiTone(today.thi) : null;
+    return (
+      <>
+        <DashTile
+          icon={today && today.rain >= 5 ? CloudRain : Sun}
+          tone="sol"
+          label="Clima hoy"
+          value={now ? `${Math.round(now.temp)}°` : "…"}
+          note={today ? calorCorto(today.thi) : loading ? "Consultando…" : "Sin pronóstico"}
+          state={tone === "ok" ? "ok" : tone === "warn" ? "warn" : tone === "bad" ? "bad" : "none"}
+          onClick={() => setOpen(true)}
+        />
+        {open &&
+          createPortal(
+            <>
+              <button
+                type="button"
+                className="backdrop"
+                aria-label="Cerrar"
+                tabIndex={-1}
+                onClick={() => setOpen(false)}
+              />
+              <aside className="sheet-panel intel-sheet" aria-label="Clima y suelo">
+                <span className="grabber" aria-hidden="true" />
+                {full}
+                <button
+                  type="button"
+                  className="btn btn-ghost btn-block"
+                  onClick={() => setOpen(false)}
+                >
+                  Cerrar
+                </button>
+              </aside>
+            </>,
+            document.body,
+          )}
+      </>
+    );
+  }
+  return full;
 }

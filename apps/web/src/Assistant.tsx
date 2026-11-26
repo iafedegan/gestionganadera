@@ -159,23 +159,8 @@ function Sources({ items }: { items: KnowledgeSourceDto[] }) {
 }
 
 /** Tarjeta de Inicio: una puerta de entrada con preguntas listas para tocar. */
-export function AssistantCard({ compact = false }: { compact?: boolean } = {}) {
+export function AssistantCard() {
   const [open, setOpen] = useState<string | null | false>(false);
-  if (compact)
-    return (
-      <>
-        <button type="button" className="card asis-mini" onClick={() => setOpen(null)}>
-          <span className="asis-badge" aria-hidden="true">
-            <Sparkles size={22} />
-          </span>
-          <span className="am-text">
-            <strong>¿Tiene una duda? Pregúntele a su finca</strong>
-            <small>Le responde con sus propios datos, como si le contara.</small>
-          </span>
-        </button>
-        {open !== false && <AssistantDialog initial={open} onClose={() => setOpen(false)} />}
-      </>
-    );
   return (
     <article className="card asis-card">
       <div className="asis-card-head">

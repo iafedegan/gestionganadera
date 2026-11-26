@@ -1,19 +1,15 @@
 import type { AnimalRegisterPayload, DemoUserDto, Species } from "@ganaderia/contracts";
-import { ROLE_LABEL, can, diagnose, isDryOffDue, isWeaningDue } from "@ganaderia/domain";
+import { ROLE_LABEL, can, isDryOffDue, isWeaningDue } from "@ganaderia/domain";
 import {
   AlertTriangle,
   ArrowLeft,
   ArrowRight,
   Bell,
   Building2,
-  CalendarDays,
   CheckCircle2,
   ChevronDown,
   Circle,
-  ClipboardCheck,
-  Clock,
   CloudOff,
-  Database,
   Download,
   Eye,
   EyeOff,
@@ -22,27 +18,24 @@ import {
   LogOut,
   Mail,
   Menu,
-  Package,
   PawPrint,
   Plus,
   RefreshCw,
   Share,
   SquarePlus,
-  Stethoscope,
   Wifi,
   WifiOff,
   X,
 } from "lucide-react";
 import { type CSSProperties, type FormEvent, type ReactNode, useEffect, useState } from "react";
 import { AlertsSheet, useAlerts } from "./Alerts";
-import { AssistantCard } from "./Assistant";
-import { NewsStrip } from "./Ecosistema";
+import { AssistantDialog } from "./Assistant";
 import { FarmIntel } from "./FarmIntel";
 import { FarmChip } from "./FarmPicker";
 import { HomeStory } from "./HomeStory";
 import { type PendingInvite, RegisterForm } from "./Onboarding";
 import { Pasture } from "./Pasture";
-import { DiagnosisView, ProfileWizard, useFarmProfile } from "./Profile";
+import { ProfileWizard, useFarmProfile } from "./Profile";
 import { QuickSheet, quickFor } from "./QuickAdd";
 import { RegisterDialog, useActiveFarm, useFarms } from "./animals";
 import { art } from "./art";
@@ -53,7 +46,6 @@ import { CODE_LABEL, KIND_LABEL, fecha, fechaHora, num, todayLocal } from "./lab
 import { ApiError, api } from "./lib/api";
 import { type HomeStats, homeStats } from "./lib/homeStats";
 import { type OutboxItem, localdb } from "./lib/localdb";
-import { isDemoOrg } from "./lib/scope";
 import { lastEmail } from "./lib/session";
 import {
   GROUP_LABEL,
@@ -902,8 +894,7 @@ export function Home({
   /** Configuración mínima pendiente: Inicio muestra solo los pasos para completarla. */
   setup: SetupState | null;
 }) {
-  const { orgId, counts, dataVersion, lastSync, online, role, session, syncNow, syncing } =
-    useApp();
+  const { orgId, dataVersion, role, session } = useApp();
   const farms = useFarms();
   const active = useActiveFarm();
   const [inv, setInv] = useState<{ total: number; bovino: number; bufalino: number } | null>(null);
@@ -911,8 +902,8 @@ export function Home({
   const [movs] = useStore<Mov>("movs-eco", MOV_SEED);
   const farmProfile = useFarmProfile();
   const [profileOpen, setProfileOpen] = useState<"edit" | "view" | null>(null);
+  const [asking, setAsking] = useState(false);
   const savedProfile = farmProfile.dto?.profile ?? null;
-  const canProfile = Boolean(role && can(role, "farm.write"));
   const profileDialog = profileOpen && (
     <ProfileWizard
       initial={savedProfile}
@@ -940,9 +931,6 @@ export function Home({
       },
     );
   }, [orgId, dataVersion, active]);
-
-  const demo = isDemoOrg(session?.memberships[0]?.organizationName);
-  const lease = session ? new Date(session.offlineLeaseUntil) : null;
 
   const alerts = useAlerts(onOpenSync, onModule);
   const first = (session?.displayName ?? "").trim().split(/\s+/)[0] ?? "";
@@ -1045,198 +1033,21 @@ export function Home({
   }
 
   return (
-    <HomeStory
-      kicker={first ? `${greeting()}, ${first}` : greeting()}
-      dateText={`${dateText.charAt(0).toUpperCase()}${dateText.slice(1)}${farmText}`}
-      inv={inv}
-      stats={stats}
-      money={canSeeModule("economia", role) ? { count: monthMovs.length, balance } : null}
-      alerts={alerts}
-      quick={quickFor(role)}
-      pending={counts.pendiente}
-      syncing={syncing}
-      onSync={() => void syncNow()}
-      onModule={onModule}
-      weather={<FarmIntel compact />}
-      assistant={<AssistantCard compact />}
-      more={
-        <>
-          {savedProfile ? (
-            <article className="card dx-card">
-              <CardHead
-                icon={<Stethoscope size={26} aria-hidden="true" />}
-                title="Diagnóstico de su finca"
-                sub="Según el perfil que respondió. Lo que más pide atención va primero."
-              />
-              <DiagnosisView d={diagnose(savedProfile)} compact />
-              <div className="dx-buttons">
-                <button
-                  type="button"
-                  className="btn btn-primary btn-sm"
-                  onClick={() => setProfileOpen("view")}
-                >
-                  Ver completo ›
-                </button>
-                {canProfile && (
-                  <button
-                    type="button"
-                    className="btn btn-ghost btn-sm"
-                    onClick={() => setProfileOpen("edit")}
-                  >
-                    Actualizar respuestas
-                  </button>
-                )}
-              </div>
-            </article>
-          ) : (
-            canProfile &&
-            farmProfile.known && (
-              <article className="card dx-card">
-                <CardHead
-                  icon={<Stethoscope size={26} aria-hidden="true" />}
-                  title="Haga el diagnóstico de su finca"
-                  sub="Unas preguntas de 2 a 5 minutos para saber por dónde empezar."
-                />
-                <div className="dx-buttons">
-                  <button
-                    type="button"
-                    className="btn btn-primary btn-sm"
-                    onClick={() => setProfileOpen("edit")}
-                  >
-                    Responder ahora ›
-                  </button>
-                </div>
-              </article>
-            )
-          )}
-          {profileDialog}
-          <NewsStrip onOpen={() => onModule("noticias")} />
-
-          {/* Agenda y planes aún no tienen datos reales: solo se muestran en la cuenta de demostración. */}
-          {demo && (
-            <div className="two">
-              <article className="card">
-                <CardHead
-                  icon={<CalendarDays size={26} aria-hidden="true" />}
-                  title="Agenda del día"
-                  sub="Actividades programadas para hoy en la finca."
-                />
-                {demo ? (
-                  <ul className="agenda">
-                    {[
-                      {
-                        t: "Pesaje del lote de levante",
-                        s: "Lote 1 · Potrero Sur",
-                        st: "Pendiente",
-                        c: "warn",
-                      },
-                      {
-                        t: "Control reproductivo",
-                        s: "Vacas en servicio",
-                        st: "Pendiente",
-                        c: "warn",
-                      },
-                      {
-                        t: "Visita del asesor",
-                        s: "Revisión general de la finca",
-                        st: "Programada",
-                        c: "info",
-                      },
-                    ].map((r) => (
-                      <li key={r.t}>
-                        <span className="gi gi-on">
-                          <CalendarDays size={22} aria-hidden="true" />
-                        </span>
-                        <span className="ag-text">
-                          <strong>{r.t}</strong>
-                          <small>{r.s}</small>
-                        </span>
-                        <span className={`pill-st st-${r.c}`}>{r.st}</span>
-                      </li>
-                    ))}
-                  </ul>
-                ) : (
-                  <ul className="ghost-list" aria-hidden="true">
-                    {[0, 1, 2].map((i) => (
-                      <li key={i}>
-                        <span className="gi" />
-                        <span className="gl">
-                          <i />
-                          <i />
-                        </span>
-                        <span className="gp" />
-                      </li>
-                    ))}
-                  </ul>
-                )}
-                <p className="ghost-note">
-                  <Clock size={16} aria-hidden="true" />{" "}
-                  {demo
-                    ? "Datos de ejemplo: las tareas reales llegan con el módulo de tareas (semana 11)."
-                    : "Las tareas, controles y visitas aparecerán aquí con el módulo de tareas (semana 11)."}
-                </p>
-              </article>
-
-              <article className="card">
-                <CardHead
-                  icon={<ClipboardCheck size={26} aria-hidden="true" />}
-                  title="Avance de mis planes"
-                  sub="Seguimiento al cumplimiento de los planes de la finca."
-                />
-                <div className="plans">
-                  {[
-                    { label: "Sanidad", pct: 45, icon: <ModIcon k="sanidad" size={24} /> },
-                    { label: "Pastoreo", pct: 80, icon: <ModIcon k="pasturas" size={24} /> },
-                    {
-                      label: "Alimentación",
-                      pct: 60,
-                      icon: <Package size={24} aria-hidden="true" />,
-                    },
-                  ].map((p) => (
-                    <div key={p.label} className="plan">
-                      <span className="plan-icon">{p.icon}</span>
-                      <div>
-                        <strong>{p.label}</strong>
-                        <span className="plan-bar" aria-hidden="true">
-                          {demo && <i style={{ width: `${p.pct}%` }} />}
-                        </span>
-                        <small>{demo ? `${p.pct} % · ejemplo` : "Sin plan registrado"}</small>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </article>
-            </div>
-          )}
-
-          <article className="card device">
-            <CardHead
-              icon={<Database size={26} aria-hidden="true" />}
-              title="Este dispositivo"
-              sub="Copia local cifrada de sus fincas."
-            />
-            <dl className="kv kv-row">
-              <div>
-                <dt>Conexión</dt>
-                <dd>{online ? "En línea" : "Sin conexión"}</dd>
-              </div>
-              <div>
-                <dt>Última sincronización</dt>
-                <dd>{lastSync ? fechaHora(lastSync) : "Aún no en esta sesión"}</dd>
-              </div>
-              <div>
-                <dt>Trabajo sin conexión hasta</dt>
-                <dd>{lease ? fechaHora(lease.toISOString()) : "—"}</dd>
-              </div>
-              <div>
-                <dt>Cifrado</dt>
-                <dd>Con su contraseña (AES-256)</dd>
-              </div>
-            </dl>
-          </article>
-        </>
-      }
-    />
+    <>
+      <HomeStory
+        kicker={first ? `${greeting()}, ${first}` : greeting()}
+        dateText={`${dateText.charAt(0).toUpperCase()}${dateText.slice(1)}${farmText}`}
+        inv={inv}
+        stats={stats}
+        money={canSeeModule("economia", role) ? { count: monthMovs.length, balance } : null}
+        alerts={alerts}
+        onModule={onModule}
+        weather={<FarmIntel tile />}
+        onAsk={() => setAsking(true)}
+      />
+      {asking && <AssistantDialog initial={null} onClose={() => setAsking(false)} />}
+      {profileDialog}
+    </>
   );
 }
 
