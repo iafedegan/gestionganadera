@@ -60,6 +60,7 @@ import {
   GROUP_LABEL,
   type ModuleDef,
   type ModuleKey,
+  ROLE_TABS,
   canSeeModule,
   moduleByKey,
   modulesFor,
@@ -362,8 +363,11 @@ export function Login() {
                 <h2>Probar sin contraseña</h2>
                 <p>Elija una cuenta de muestra: los datos son de ejemplo.</p>
                 <ul>
-                  {demos.map((d) => (
+                  {demos.map((d, i) => (
                     <li key={d.key}>
+                      {d.group && d.group !== demos[i - 1]?.group && (
+                        <h3 className="lc-demo-group">{d.group}</h3>
+                      )}
                       <button
                         type="button"
                         className="lc-demo-btn"
@@ -476,7 +480,7 @@ function NavList(props: {
   );
 }
 
-const BOTTOM: ModuleKey[] = ["inicio", "animales", "produccion", "reproduccion"];
+const DEFAULT_TABS: ModuleKey[] = ["inicio", "animales", "produccion", "reproduccion"];
 
 export function Shell(props: {
   module: ModuleKey;
@@ -718,21 +722,23 @@ export function Shell(props: {
       </div>
 
       <nav className="bottom-nav" aria-label="Módulos">
-        {BOTTOM.filter((k) => !props.locked || SETUP_MODULES.includes(k)).map((k) => (
-          <button
-            key={k}
-            type="button"
-            className={k === props.module ? "tab active" : "tab"}
-            aria-current={k === props.module ? "page" : undefined}
-            onClick={() => {
-              haptic(8);
-              pick(k);
-            }}
-          >
-            <ModIcon k={k} size={22} />
-            <span>{moduleByKey(k).short}</span>
-          </button>
-        ))}
+        {((role && ROLE_TABS[role]) || DEFAULT_TABS)
+          .filter((k) => !props.locked || SETUP_MODULES.includes(k))
+          .map((k) => (
+            <button
+              key={k}
+              type="button"
+              className={k === props.module ? "tab active" : "tab"}
+              aria-current={k === props.module ? "page" : undefined}
+              onClick={() => {
+                haptic(8);
+                pick(k);
+              }}
+            >
+              <ModIcon k={k} size={22} />
+              <span>{moduleByKey(k).short}</span>
+            </button>
+          ))}
         <button type="button" className="tab" onClick={() => setMore(true)}>
           <Menu size={22} aria-hidden="true" />
           <span>Más</span>

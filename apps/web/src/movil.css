@@ -1247,3 +1247,91 @@
 .traza-source {
   font-size: 0.78rem;
 }
+
+/* ───── Perfiles de muestra agrupados e Inicio por rol ───── */
+.lc-demo-group {
+  margin: 14px 2px 6px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--texto-suave);
+}
+.role-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+.role-action {
+  display: grid;
+  gap: 4px;
+  justify-items: start;
+  min-height: 112px;
+  padding: 14px;
+  border: 1px solid var(--borde);
+  border-radius: 16px;
+  background: var(--superficie);
+  color: var(--texto);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.role-action:active {
+  transform: scale(0.98);
+}
+.role-action small {
+  color: var(--texto-suave);
+  font-size: 0.8rem;
+  line-height: 1.2;
+}
+.role-ic {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  background: var(--verde-t);
+  color: var(--verde-i);
+}
+.role-tiles {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin: 0 0 14px;
+}
+.role-tiles > div {
+  padding: 12px 14px;
+  border: 1px solid var(--borde);
+  border-radius: 14px;
+  background: var(--superficie);
+}
+.role-tiles > div.warn {
+  background: #fef3c7;
+}
+.role-tiles dt {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--texto-suave);
+}
+.role-tiles dd {
+  margin: 4px 0 0;
+  font-size: 1.5rem;
+  font-weight: 800;
+}
+.role-todo {
+  display: grid;
+  gap: 8px;
+  padding: 14px 16px;
+  margin-bottom: 14px;
+}
+.role-todo h2 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font-size: 1.05rem;
+}

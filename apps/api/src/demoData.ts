@@ -1213,3 +1213,71 @@ export const DEMO_STAFF: DemoStaffSpec[] = [
 ];
 
 export const demoStaffSpec = (key: string) => DEMO_STAFF.find((s) => s.key === key);
+
+/**
+ * Perfiles por rol: personas del equipo de la ganadería de muestra «Con todos los datos», para ver
+ * las pantallas y permisos de cada nivel.
+ */
+export interface DemoRoleSpec {
+  key: string;
+  label: string;
+  description: string;
+  email: string;
+  displayName: string;
+  role: "admin_entidad" | "mayordomo" | "operario" | "veterinario" | "tecnico";
+}
+
+const roleSpec = (
+  key: string,
+  role: DemoRoleSpec["role"],
+  label: string,
+  displayName: string,
+  description: string,
+): DemoRoleSpec => ({
+  key,
+  role,
+  label,
+  displayName,
+  description,
+  email: `demo-rol-${key.replace("rol_", "")}@${DOMAIN}`,
+});
+
+export const DEMO_ROLES: DemoRoleSpec[] = [
+  roleSpec(
+    "rol_admin",
+    "admin_entidad",
+    "Administrador de la finca",
+    "Andrés Admin (muestra)",
+    "Maneja la finca e invita personas. No ve la economía.",
+  ),
+  roleSpec(
+    "rol_mayordomo",
+    "mayordomo",
+    "Mayordomo (jefe de finca)",
+    "Manuel Mayordomo (muestra)",
+    "Dirige el trabajo diario: animales, potreros e insumos.",
+  ),
+  roleSpec(
+    "rol_veterinario",
+    "veterinario",
+    "Veterinario",
+    "Valeria Veterinaria (muestra)",
+    "Historia clínica, reproducción y tratamientos.",
+  ),
+  roleSpec(
+    "rol_operario",
+    "operario",
+    "Operario o vaquero",
+    "Óscar Operario (muestra)",
+    "Registra ordeños, pesajes y novedades del día.",
+  ),
+  roleSpec(
+    "rol_tecnico",
+    "tecnico",
+    "Asesor técnico",
+    "Tatiana Asesora (muestra)",
+    "Consulta el expediente y la trazabilidad, y acompaña.",
+  ),
+];
+
+export const demoRoleSpec = (key: string) => DEMO_ROLES.find((s) => s.key === key);

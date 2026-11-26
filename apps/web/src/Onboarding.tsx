@@ -44,7 +44,9 @@ export interface PendingInvite {
 
 const INVITE_ROLE: Record<InvitationPreview["role"], string> = {
   operario: "empleado",
-  tecnico: "veterinario o asesor",
+  mayordomo: "mayordomo (jefe de finca)",
+  veterinario: "veterinario",
+  tecnico: "asesor técnico",
   admin_entidad: "administrador",
 };
 

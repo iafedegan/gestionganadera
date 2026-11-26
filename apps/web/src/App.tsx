@@ -11,6 +11,7 @@ import { PasturasScreen } from "./Pasturas";
 import { PersonalScreen } from "./Personal";
 import { ProduccionScreen } from "./Produccion";
 import { ReproduccionScreen } from "./Reproduccion";
+import { HAS_ROLE_HOME, RoleHome } from "./RoleHome";
 import { SanidadScreen } from "./Sanidad";
 import { Splash } from "./Splash";
 import { StaffGate } from "./Tecnigan";
@@ -103,7 +104,9 @@ export function App() {
         onSyncOpen={setSyncOpen}
         locked={locked}
       >
-        {shown === "inicio" ? (
+        {shown === "inicio" && !locked && role && HAS_ROLE_HOME.includes(role) ? (
+          <RoleHome onOpenSync={() => setSyncOpen(true)} onModule={setModule} />
+        ) : shown === "inicio" ? (
           <Home
             onOpenSync={() => setSyncOpen(true)}
             onModule={setModule}

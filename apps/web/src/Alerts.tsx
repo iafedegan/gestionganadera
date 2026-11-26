@@ -14,7 +14,7 @@ import { createPortal } from "react-dom";
 import { useActiveFarm, useFarms } from "./animals";
 import { fechaHora, todayLocal } from "./labels";
 import { localdb } from "./lib/localdb";
-import type { ModuleKey } from "./modules";
+import { type ModuleKey, canSeeModule } from "./modules";
 import { useApp } from "./state";
 import { statusOf } from "./supplies";
 
@@ -188,7 +188,9 @@ export function useAlerts(onOpenSync: () => void, onModule: (m: ModuleKey) => vo
     });
   }
 
-  return alerts;
+  // Nadie recibe avisos de un módulo que su rol no puede abrir (p. ej. bodega para el veterinario).
+  const allowed = canSeeModule("compras", role);
+  return allowed ? alerts : alerts.filter((a) => !a.title.includes("insumo"));
 }
 
 /** Hoja inferior de la campana: lista de alertas, o «todo en orden». */

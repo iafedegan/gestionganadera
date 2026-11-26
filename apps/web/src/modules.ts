@@ -503,7 +503,73 @@ const REQUIRES: Partial<Record<ModuleKey, Permission>> = {
   activos: "farm.write",
 };
 
+/** Módulos de cada rol (propietario y administrador ven todos los que sus permisos admiten). */
+const ROLE_MODULES: Partial<Record<Role, readonly ModuleKey[]>> = {
+  mayordomo: [
+    "inicio",
+    "animales",
+    "produccion",
+    "reproduccion",
+    "sanidad",
+    "pasturas",
+    "compras",
+    "asistencia",
+    "configuracion",
+    "noticias",
+    "capacitacion",
+    "comunidad",
+    "tienda",
+  ],
+  veterinario: [
+    "inicio",
+    "animales",
+    "sanidad",
+    "reproduccion",
+    "produccion",
+    "asistencia",
+    "configuracion",
+    "noticias",
+    "capacitacion",
+    "comunidad",
+  ],
+  operario: [
+    "inicio",
+    "animales",
+    "produccion",
+    "reproduccion",
+    "sanidad",
+    "configuracion",
+    "noticias",
+    "capacitacion",
+  ],
+  tecnico: [
+    "inicio",
+    "animales",
+    "expediente",
+    "trazabilidad",
+    "produccion",
+    "reproduccion",
+    "sanidad",
+    "pasturas",
+    "asistencia",
+    "configuracion",
+    "noticias",
+    "capacitacion",
+    "comunidad",
+  ],
+};
+
+/** Botones fijos de la barra inferior del celular, según el rol. */
+export const ROLE_TABS: Partial<Record<Role, ModuleKey[]>> = {
+  mayordomo: ["inicio", "animales", "produccion", "pasturas"],
+  veterinario: ["inicio", "sanidad", "reproduccion", "animales"],
+  operario: ["inicio", "produccion", "animales", "sanidad"],
+  tecnico: ["inicio", "expediente", "animales", "asistencia"],
+};
+
 export const canSeeModule = (k: ModuleKey, role: Role | null): boolean => {
+  const allowed = role ? ROLE_MODULES[role] : undefined;
+  if (allowed && !allowed.includes(k)) return false;
   const need = REQUIRES[k];
   return !need || (role !== null && can(role, need));
 };

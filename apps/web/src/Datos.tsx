@@ -97,8 +97,11 @@ export function ConsentGate() {
   );
 }
 
+/** Las autorizaciones sobre la finca solo las decide quien la administra. */
+const ownsData = (role: string | null) => role === "propietario" || role === "admin_entidad";
+
 function ConsentDialog({ onSaved }: { onSaved(s: DataConsentState): void }) {
-  const { logout } = useApp();
+  const { logout, role } = useApp();
   const ref = useRef<HTMLDialogElement>(null);
   const [sectorAnalysis, setSector] = useState(false);
   const [shareTechnical, setShare] = useState(false);
@@ -169,25 +172,27 @@ function ConsentDialog({ onSaved }: { onSaved(s: DataConsentState): void }) {
           </div>
         </dl>
 
-        <fieldset className="consent-opts">
-          <legend>Opcional: marque solo si está de acuerdo</legend>
-          <label className="chk-row">
-            <input
-              type="checkbox"
-              checked={sectorAnalysis}
-              onChange={(e) => setSector(e.target.checked)}
-            />
-            <span>{OPTIONS.sectorAnalysis}</span>
-          </label>
-          <label className="chk-row">
-            <input
-              type="checkbox"
-              checked={shareTechnical}
-              onChange={(e) => setShare(e.target.checked)}
-            />
-            <span>{OPTIONS.shareTechnical}</span>
-          </label>
-        </fieldset>
+        {ownsData(role) && (
+          <fieldset className="consent-opts">
+            <legend>Opcional: marque solo si está de acuerdo</legend>
+            <label className="chk-row">
+              <input
+                type="checkbox"
+                checked={sectorAnalysis}
+                onChange={(e) => setSector(e.target.checked)}
+              />
+              <span>{OPTIONS.sectorAnalysis}</span>
+            </label>
+            <label className="chk-row">
+              <input
+                type="checkbox"
+                checked={shareTechnical}
+                onChange={(e) => setShare(e.target.checked)}
+              />
+              <span>{OPTIONS.shareTechnical}</span>
+            </label>
+          </fieldset>
+        )}
 
         <PolicyLinks />
         {error && (
@@ -226,7 +231,7 @@ const STATUS_LABEL: Record<DataRequestDto["status"], string> = {
 
 /** Configuración → Mis datos: autorizaciones, copia de los datos y solicitudes. */
 export function MisDatosCard() {
-  const { session, online, notify } = useApp();
+  const { session, online, notify, role } = useApp();
   const userId = session?.userId;
   const [state, setState] = useState<DataConsentState | null>(() => readCache(userId));
   const [requests, setRequests] = useState<DataRequestDto[] | null>(null);
@@ -306,7 +311,7 @@ export function MisDatosCard() {
         sub="Usted decide quién ve la información de su finca."
       />
       {!online && <p className="hint">Necesita conexión para ver o cambiar sus autorizaciones.</p>}
-      {c && (
+      {c && ownsData(role) && (
         <>
           <p className="hint">
             Autorizó el tratamiento de sus datos el {fecha(c.acceptedAt.slice(0, 10))} (texto{" "}

@@ -16,7 +16,14 @@ export type AnimalStatus = z.infer<typeof AnimalStatus>;
 export const EntryReason = z.enum(["inventario_inicial", "compra", "nacimiento", "reingreso"]);
 export type EntryReason = z.infer<typeof EntryReason>;
 
-export const Role = z.enum(["admin_entidad", "propietario", "operario", "tecnico"]);
+export const Role = z.enum([
+  "admin_entidad",
+  "propietario",
+  "mayordomo",
+  "operario",
+  "veterinario",
+  "tecnico",
+]);
 export type Role = z.infer<typeof Role>;
 
 const isoDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Fecha con formato AAAA-MM-DD");
@@ -421,7 +428,13 @@ export const RegisterInvitedRequest = z.object({
 export type RegisterInvitedRequest = z.infer<typeof RegisterInvitedRequest>;
 
 /** Quién puede ser invitado. El propietario no se invita: es quien crea la cuenta. */
-export const InviteRole = z.enum(["operario", "tecnico", "admin_entidad"]);
+export const InviteRole = z.enum([
+  "operario",
+  "mayordomo",
+  "veterinario",
+  "tecnico",
+  "admin_entidad",
+]);
 export type InviteRole = z.infer<typeof InviteRole>;
 
 export const InvitationCreate = z.object({
@@ -728,6 +741,8 @@ export type FarmUpdate = z.input<typeof FarmUpdate>;
 
 /** Cuenta de muestra que se puede elegir en la pantalla de ingreso (solo si el servidor lo permite). */
 export interface DemoUserDto {
+  /** Encabezado bajo el que se muestra en el ingreso. */
+  group?: string;
   key: string;
   label: string;
   description: string;

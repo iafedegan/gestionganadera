@@ -4,6 +4,7 @@ import { type Membership, hashPassword, sha256 } from "./auth.js";
 import type { Db, Q } from "./db.js";
 import {
   type DemoFarmSpec,
+  type DemoRoleSpec,
   type DemoSpec,
   type DemoStaffSpec,
   buildHerd,
@@ -469,6 +470,41 @@ export async function ensureDemoStaff(db: Db, spec: DemoStaffSpec): Promise<{ us
        ON CONFLICT (user_id) DO UPDATE SET tecnigan = excluded.tecnigan, departments = excluded.departments, active = true`,
       [userId, spec.tecnigan, spec.departments],
     );
+    return { userId: userId as string };
+  });
+}
+
+/** Crea (una vez) la persona del equipo con ese rol en la ganadería de muestra completa. */
+export async function ensureDemoRole(
+  db: Db,
+  org: DemoSpec,
+  spec: DemoRoleSpec,
+): Promise<{ userId: string }> {
+  const { orgId } = await ensureDemo(db, org);
+  const unusable = await hashPassword(randomBytes(24).toString("hex"));
+  return db.admin(async (q) => {
+    await q("SELECT pg_advisory_xact_lock($1)", [LOCK]);
+    const [found] = await q<{ id: string }>("SELECT id FROM app_user WHERE email = $1", [
+      spec.email,
+    ]);
+    const userId =
+      found?.id ??
+      (
+        await q<{ id: string }>(
+          "INSERT INTO app_user (email, display_name, password_hash) VALUES ($1,$2,$3) RETURNING id",
+          [spec.email, spec.displayName, unusable],
+        )
+      )[0]?.id;
+    const [m] = await q("SELECT 1 FROM membership WHERE user_id = $1 AND organization_id = $2", [
+      userId,
+      orgId,
+    ]);
+    if (!m)
+      await q("INSERT INTO membership (user_id, organization_id, role) VALUES ($1,$2,$3)", [
+        userId,
+        orgId,
+        spec.role,
+      ]);
     return { userId: userId as string };
   });
 }

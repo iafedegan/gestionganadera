@@ -200,3 +200,18 @@ describe("eventos del animal", () => {
     ).toBe(true);
   });
 });
+
+describe("permisos por rol", () => {
+  it("ni el mayordomo, ni el veterinario, ni el operario ven la economía ni administran el equipo", async () => {
+    const { can } = await import("../src/index");
+    for (const r of ["mayordomo", "veterinario", "operario", "tecnico"] as const) {
+      expect(can(r, "economy.read")).toBe(false);
+      expect(can(r, "team.manage")).toBe(false);
+      expect(can(r, "farm.write")).toBe(false);
+      expect(can(r, "event.write")).toBe(true);
+    }
+    expect(can("mayordomo", "animal.write")).toBe(true);
+    expect(can("veterinario", "animal.write")).toBe(false);
+    expect(can("operario", "supply.write")).toBe(false);
+  });
+});

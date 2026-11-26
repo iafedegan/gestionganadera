@@ -37,6 +37,11 @@ describe("cuentas de muestra", () => {
     expect(res.statusCode).toBe(200);
     const list = res.json() as { key: string; label: string; description: string }[];
     expect(list.map((u) => u.key)).toEqual([
+      "rol_admin",
+      "rol_mayordomo",
+      "rol_veterinario",
+      "rol_operario",
+      "rol_tecnico",
       "sin_datos",
       "pequeno",
       "mediano",
@@ -125,6 +130,27 @@ describe("cuentas de muestra", () => {
       ),
     );
     expect(Number(m?.n)).toBe(1);
+  });
+
+  it("cada perfil por rol entra a la ganadería completa con su rol, sin duplicarse", async () => {
+    const roles = {
+      rol_admin: "admin_entidad",
+      rol_mayordomo: "mayordomo",
+      rol_veterinario: "veterinario",
+      rol_operario: "operario",
+      rol_tecnico: "tecnico",
+    };
+    const orgs = new Set<string>();
+    for (const [key, role] of Object.entries(roles)) {
+      const res = await enter(on, key);
+      expect(res.statusCode).toBe(200);
+      const m = res.json().memberships;
+      expect(m).toHaveLength(1);
+      expect(m[0].role).toBe(role);
+      orgs.add(m[0].organizationId);
+      expect((await enter(on, key)).json().memberships).toHaveLength(1);
+    }
+    expect(orgs.size).toBe(1);
   });
 
   it("nadie puede iniciar sesión con contraseña en una cuenta de muestra", async () => {

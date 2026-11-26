@@ -170,6 +170,18 @@ const MATRIX: Record<Role, readonly Permission[]> = {
     "audit.read",
     "team.manage",
   ],
+  // Mayordomo (jefe de finca): dirige el trabajo diario, registra animales y maneja la bodega.
+  // No ve la economía, no cambia los datos de la finca ni administra el equipo.
+  mayordomo: [
+    "farm.read",
+    "animal.read",
+    "animal.write",
+    "event.write",
+    "supply.write",
+    "stock.write",
+  ],
+  // Veterinario: historia clínica, reproducción y tratamientos; descuenta medicamentos de bodega.
+  veterinario: ["farm.read", "animal.read", "event.write", "stock.write"],
   // TDR: operario con consulta mínima y captura de eventos autorizados; sin administración.
   // Puede recibir y consumir insumos en bodega, pero no crear el catálogo ni ver costos.
   operario: ["farm.read", "animal.read", "event.write", "stock.write"],
@@ -183,10 +195,12 @@ export function can(role: Role, permission: Permission): boolean {
 
 /** Etiqueta legible de cada rol para la interfaz. */
 export const ROLE_LABEL: Record<Role, string> = {
-  admin_entidad: "Administrador de entidad",
-  propietario: "Propietario o administrador de finca",
-  operario: "Operario",
-  tecnico: "Técnico o asesor",
+  admin_entidad: "Administrador de la finca",
+  propietario: "Propietario",
+  mayordomo: "Mayordomo (jefe de finca)",
+  operario: "Operario o vaquero",
+  veterinario: "Veterinario",
+  tecnico: "Asesor técnico",
 };
 
 /* ───────────── Insumos y existencias (ERP 1) ───────────── */

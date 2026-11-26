@@ -66,8 +66,15 @@ import {
 } from "./community.js";
 import { addRequest, exportData, getConsent, listRequests, saveConsent } from "./datos.js";
 import type { Db } from "./db.js";
-import { DemoRateLimit, ensureDemo, ensureDemoStaff } from "./demo.js";
-import { DEMO_SPECS, DEMO_STAFF, demoSpec, demoStaffSpec } from "./demoData.js";
+import { DemoRateLimit, ensureDemo, ensureDemoRole, ensureDemoStaff } from "./demo.js";
+import {
+  DEMO_ROLES,
+  DEMO_SPECS,
+  DEMO_STAFF,
+  demoRoleSpec,
+  demoSpec,
+  demoStaffSpec,
+} from "./demoData.js";
 import { type Aula, AulaError, type Ecosistema, type KnowledgeHit } from "./ecosistema.js";
 import {
   type Fail,
@@ -234,11 +241,13 @@ export async function buildApp(opts: AppOptions): Promise<FastifyInstance> {
   app.get("/v1/demo/users", async (_req, reply) => {
     if (!opts.demo)
       return reply.code(404).send({ error: "NO_ENCONTRADO", message: "No disponible." });
-    return [...DEMO_SPECS, ...DEMO_STAFF].map(({ key, label, description }) => ({
-      key,
-      label,
-      description,
-    }));
+    const list = (items: { key: string; label: string; description: string }[], group: string) =>
+      items.map(({ key, label, description }) => ({ key, label, description, group }));
+    return [
+      ...list(DEMO_ROLES, "Por rol en la finca"),
+      ...list(DEMO_SPECS, "Propietario, según su ganadería"),
+      ...list(DEMO_STAFF, "Gremio"),
+    ];
   });
 
   app.post("/v1/demo/login", async (req, reply) => {
@@ -247,7 +256,8 @@ export async function buildApp(opts: AppOptions): Promise<FastifyInstance> {
     const body = DemoLoginRequest.safeParse(req.body);
     const spec = body.success ? demoSpec(body.data.key) : undefined;
     const staffSpec = body.success ? demoStaffSpec(body.data.key) : undefined;
-    if (!spec && !staffSpec)
+    const roleSpec = body.success ? demoRoleSpec(body.data.key) : undefined;
+    if (!spec && !staffSpec && !roleSpec)
       return reply
         .code(400)
         .send({ error: "VALIDACION", message: "Esa cuenta de muestra no existe." });
@@ -260,7 +270,9 @@ export async function buildApp(opts: AppOptions): Promise<FastifyInstance> {
     try {
       const { userId } = spec
         ? await ensureDemo(db, spec)
-        : await ensureDemoStaff(db, staffSpec as NonNullable<typeof staffSpec>);
+        : roleSpec
+          ? await ensureDemoRole(db, demoSpec("completo") as NonNullable<typeof spec>, roleSpec)
+          : await ensureDemoStaff(db, staffSpec as NonNullable<typeof staffSpec>);
       const s = await openDemoSession(db, userId, req.headers["user-agent"]);
       reply.setCookie(COOKIE, s.token, {
         httpOnly: true,

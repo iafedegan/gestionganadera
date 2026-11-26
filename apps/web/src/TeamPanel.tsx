@@ -2,6 +2,7 @@ import type { InvitationDto, InviteRole, Role, TeamDto } from "@ganaderia/contra
 import { can } from "@ganaderia/domain";
 import {
   Check,
+  ClipboardCheck,
   Copy,
   HardHat,
   Share2,
@@ -20,22 +21,36 @@ import { useApp } from "./state";
 const ROLE_NAME: Record<Role, string> = {
   propietario: "Propietario",
   admin_entidad: "Administrador",
-  operario: "Empleado",
-  tecnico: "Veterinario o asesor",
+  mayordomo: "Mayordomo",
+  operario: "Operario",
+  veterinario: "Veterinario",
+  tecnico: "Asesor técnico",
 };
 
 const WHO: { role: InviteRole; icon: typeof HardHat; title: string; text: string }[] = [
   {
     role: "operario",
     icon: HardHat,
-    title: "Un empleado",
-    text: "Mayordomo, ordeñador o vaquero. Registra animales, eventos del día y la bodega. No ve costos.",
+    title: "Un operario",
+    text: "Ordeñador o vaquero. Registra ordeños, pesajes y novedades del día. No ve costos ni administra.",
+  },
+  {
+    role: "mayordomo",
+    icon: Users,
+    title: "El mayordomo",
+    text: "Jefe de finca: registra animales y eventos, maneja potreros e insumos. No ve la economía.",
+  },
+  {
+    role: "veterinario",
+    icon: Stethoscope,
+    title: "Mi veterinario",
+    text: "Historia clínica, reproducción y tratamientos. Sin acceso a la economía y por el tiempo que usted decida.",
   },
   {
     role: "tecnico",
-    icon: Stethoscope,
-    title: "Mi veterinario o asesor",
-    text: "Ve la hoja de vida, la historia clínica y la reproducción, y registra tratamientos. Sin acceso a la economía y por el tiempo que usted decida.",
+    icon: ClipboardCheck,
+    title: "Un asesor técnico",
+    text: "Zootecnista o agrónomo: consulta y acompaña, con el tiempo de acceso que usted decida.",
   },
   {
     role: "admin_entidad",
@@ -241,7 +256,7 @@ function InviteDialog(props: {
         role: who,
         label: label.trim(),
         ...(farmId ? { farmId } : {}),
-        ...(who === "tecnico" && days > 0 ? { accessDays: days } : {}),
+        ...((who === "tecnico" || who === "veterinario") && days > 0 ? { accessDays: days } : {}),
       });
       setDone({ code: r.code, role: who });
     } catch (e) {
@@ -312,7 +327,7 @@ function InviteDialog(props: {
                         value={label}
                         onChange={(e) => setLabel(e.target.value)}
                         placeholder={
-                          who === "tecnico" ? "Ej. Dra. Marcela Ruiz" : "Ej. Pedro Gómez"
+                          who === "veterinario" ? "Ej. Dra. Marcela Ruiz" : "Ej. Pedro Gómez"
                         }
                         autoComplete="off"
                       />
@@ -335,7 +350,7 @@ function InviteDialog(props: {
                       </label>
                     )}
                   </div>
-                  {who === "tecnico" && (
+                  {(who === "tecnico" || who === "veterinario") && (
                     <>
                       <p className="ob-label">¿Por cuánto tiempo tendrá acceso?</p>
                       <div className="ob-chips">
