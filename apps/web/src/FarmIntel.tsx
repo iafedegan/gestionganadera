@@ -11,7 +11,7 @@ import {
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { FarmDialog } from "./FarmForm";
-import { DashTile } from "./HomeStory";
+import { type DashState, DashTile } from "./HomeStory";
 import { useActiveFarm, useFarms } from "./animals";
 import { CardHead } from "./components";
 import { useHerdData } from "./herdData";
@@ -62,7 +62,14 @@ function Insights({ items }: { items: Insight[] }) {
  * «Su finca hoy»: el clima de los próximos 7 días y el suelo donde está el hato, con alertas
  * que anticipan estrés calórico, lluvias fuertes o sequía. Funciona sin señal con lo último guardado.
  */
-export function FarmIntel({ tile = false }: { tile?: boolean } = {}) {
+export function FarmIntel({
+  tile = false,
+  onState,
+}: {
+  tile?: boolean;
+  /** Avisa el semáforo del calor de hoy (para el resumen del Inicio). */
+  onState?(s: DashState): void;
+} = {}) {
   const { online } = useApp();
   const [open, setOpen] = useState(!tile);
   const farms = useFarms();
@@ -75,6 +82,13 @@ export function FarmIntel({ tile = false }: { tile?: boolean } = {}) {
   const lat = farm?.latitude ?? null;
   const lon = farm?.longitude ?? null;
   const [weather, setWeather] = useState<Weather | null>(null);
+  const todayThi = weather?.days[0]?.thi ?? null;
+  // biome-ignore lint/correctness/useExhaustiveDependencies: onState es estable para quien lo pasa
+  useEffect(() => {
+    if (todayThi === null) return;
+    const t = thiTone(todayThi);
+    onState?.(t === "ok" ? "ok" : t === "warn" ? "warn" : "bad");
+  }, [todayThi]);
   const [soil, setSoil] = useState<Soil | null>(null);
   const [loading, setLoading] = useState(false);
   const [editing, setEditing] = useState(false);
@@ -293,6 +307,16 @@ export function FarmIntel({ tile = false }: { tile?: boolean } = {}) {
           value={now ? `${Math.round(now.temp)}°` : "…"}
           note={today ? calorCorto(today.thi) : loading ? "Consultando…" : "Sin pronóstico"}
           state={tone === "ok" ? "ok" : tone === "warn" ? "warn" : tone === "bad" ? "bad" : "none"}
+          loading={!now}
+          viz={
+            today ? (
+              <span className="dt-heat" aria-hidden="true">
+                <i
+                  style={{ left: `${Math.min(Math.max(((today.thi - 60) / 35) * 100, 0), 100)}%` }}
+                />
+              </span>
+            ) : undefined
+          }
           onClick={() => setOpen(true)}
         />
         {open &&

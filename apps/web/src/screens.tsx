@@ -32,7 +32,7 @@ import { AlertsSheet, useAlerts } from "./Alerts";
 import { AssistantDialog } from "./Assistant";
 import { FarmIntel } from "./FarmIntel";
 import { FarmChip } from "./FarmPicker";
-import { HomeStory } from "./HomeStory";
+import { type DashState, HomeStory } from "./HomeStory";
 import { type PendingInvite, RegisterForm } from "./Onboarding";
 import { Pasture } from "./Pasture";
 import { ProfileWizard, useFarmProfile } from "./Profile";
@@ -881,7 +881,6 @@ const longDate = new Intl.DateTimeFormat("es-CO", {
   weekday: "long",
   day: "numeric",
   month: "long",
-  year: "numeric",
 });
 
 export function Home({
@@ -903,6 +902,7 @@ export function Home({
   const farmProfile = useFarmProfile();
   const [profileOpen, setProfileOpen] = useState<"edit" | "view" | null>(null);
   const [asking, setAsking] = useState(false);
+  const [weatherState, setWeatherState] = useState<DashState>("none");
   const savedProfile = farmProfile.dto?.profile ?? null;
   const profileDialog = profileOpen && (
     <ProfileWizard
@@ -1042,7 +1042,8 @@ export function Home({
         money={canSeeModule("economia", role) ? { count: monthMovs.length, balance } : null}
         alerts={alerts}
         onModule={onModule}
-        weather={<FarmIntel tile />}
+        weather={<FarmIntel tile onState={setWeatherState} />}
+        weatherState={weatherState}
         onAsk={() => setAsking(true)}
       />
       {asking && <AssistantDialog initial={null} onClose={() => setAsking(false)} />}

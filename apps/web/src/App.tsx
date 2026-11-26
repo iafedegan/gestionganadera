@@ -1,4 +1,5 @@
-import { type ReactNode, useEffect, useState } from "react";
+import { type ReactNode, useCallback, useEffect, useState } from "react";
+import { flushSync } from "react-dom";
 import { ActivosScreen } from "./Activos";
 import { ContabilidadScreen } from "./Contabilidad";
 import { ConsentGate } from "./Datos";
@@ -52,6 +53,15 @@ const SCREENS: Partial<Record<ModuleKey, (go: (m: ModuleKey) => void) => ReactNo
 export function App() {
   const { session, role, acceptInvitation, notify, syncNow, booting } = useApp();
   const [module, setModule] = useState<ModuleKey>("inicio");
+  /** Cambio de pantalla con transición suave del navegador (View Transitions), si la hay. */
+  const go = useCallback((m: ModuleKey) => {
+    const doc = document as Document & { startViewTransition?: (cb: () => void) => unknown };
+    if (!doc.startViewTransition || matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      setModule(m);
+      return;
+    }
+    doc.startViewTransition(() => flushSync(() => setModule(m)));
+  }, []);
   const [syncOpen, setSyncOpen] = useState(false);
   const setup = useSetup();
 
@@ -99,21 +109,17 @@ export function App() {
       <ConsentGate />
       <Shell
         module={shown}
-        onModule={setModule}
+        onModule={go}
         syncOpen={syncOpen}
         onSyncOpen={setSyncOpen}
         locked={locked}
       >
         {shown === "inicio" && !locked && role && HAS_ROLE_HOME.includes(role) ? (
-          <RoleHome onOpenSync={() => setSyncOpen(true)} onModule={setModule} />
+          <RoleHome onOpenSync={() => setSyncOpen(true)} onModule={go} />
         ) : shown === "inicio" ? (
-          <Home
-            onOpenSync={() => setSyncOpen(true)}
-            onModule={setModule}
-            setup={locked ? setup : null}
-          />
+          <Home onOpenSync={() => setSyncOpen(true)} onModule={go} setup={locked ? setup : null} />
         ) : (
-          (SCREENS[shown] ?? (() => <ModuleProto module={shown} />))(setModule)
+          (SCREENS[shown] ?? (() => <ModuleProto module={shown} />))(go)
         )}
       </Shell>
     </>
