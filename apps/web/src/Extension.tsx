@@ -308,6 +308,7 @@ export function ThreadDialog(props: {
 /** Lleva la consulta al Secretario Técnico. Si falta la autorización de compartir, la pide aquí. */
 export function EscalateDialog(props: {
   question?: string;
+  topic?: ExtensionTopic;
   aiAnswer?: string;
   onClose(): void;
   onSent?(): void;
@@ -316,7 +317,7 @@ export function EscalateDialog(props: {
   const farms = useFarms();
   const active = useActiveFarm();
   const ref = useRef<HTMLDialogElement>(null);
-  const [topic, setTopic] = useState<ExtensionTopic>("otro");
+  const [topic, setTopic] = useState<ExtensionTopic>(props.topic ?? "otro");
   const [question, setQuestion] = useState(props.question ?? "");
   const [needsShare, setNeedsShare] = useState(false);
   const [busy, setBusy] = useState(false);

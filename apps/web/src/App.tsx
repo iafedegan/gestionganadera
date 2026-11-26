@@ -14,6 +14,7 @@ import { ReproduccionScreen } from "./Reproduccion";
 import { SanidadScreen } from "./Sanidad";
 import { Splash } from "./Splash";
 import { StaffGate } from "./Tecnigan";
+import { TrazabilidadScreen } from "./Trazabilidad";
 import { VentasScreen } from "./Ventas";
 import { AnimalsScreen } from "./animals";
 import { isDemoOrg } from "./lib/scope";
@@ -27,6 +28,7 @@ import { SuppliesScreen } from "./supplies";
 
 const SCREENS: Partial<Record<ModuleKey, (go: (m: ModuleKey) => void) => ReactNode>> = {
   expediente: (go) => <ExpedienteScreen onModule={go} />,
+  trazabilidad: (go) => <TrazabilidadScreen onModule={go} />,
   animales: () => <AnimalsScreen />,
   compras: () => <SuppliesScreen />,
   configuracion: () => <SettingsScreen />,

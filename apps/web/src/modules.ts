@@ -28,6 +28,7 @@ import {
   Stethoscope,
   Store,
   Tractor,
+  Trees,
   TrendingUp,
   Users,
   UsersRound,
@@ -42,6 +43,7 @@ export type ModuleKey =
   | "inicio"
   | "animales"
   | "expediente"
+  | "trazabilidad"
   | "produccion"
   | "reproduccion"
   | "sanidad"
@@ -87,6 +89,7 @@ export const MODULES: ModuleDef[] = [
   { key: "inicio", label: "Inicio", short: "Inicio", icon: Home },
   { key: "animales", label: "Animales", short: "Animales", icon: PawPrint },
   { key: "expediente", label: "Expediente de la finca", short: "Expediente", icon: FolderOpen },
+  { key: "trazabilidad", label: "Trazabilidad y bosque", short: "Trazabilidad", icon: Trees },
   {
     key: "produccion",
     label: "Producción",

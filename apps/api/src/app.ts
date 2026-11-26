@@ -15,6 +15,7 @@ import {
   FarmProfile,
   FarmUpdate,
   FieldVerificationCreate,
+  ForestCheckRequest,
   InvitationCreate,
   LoginRequest,
   OnboardingRequest,
@@ -94,6 +95,7 @@ import {
   removeMember,
   revokeInvitation,
 } from "./team.js";
+import { latestChecks, runCheck } from "./trazabilidad.js";
 
 const COOKIE = "sid";
 
@@ -114,6 +116,8 @@ export interface AppOptions {
   appDir?: string;
   /** Permite entrar a las cuentas de muestra sin contraseña (selector de la pantalla de ingreso). */
   demo?: boolean;
+  /** Fuente de la capa de bosque (inyectable en pruebas). */
+  forestFetch?: typeof fetch;
   /** Llamada al modelo del asistente. Por defecto usa ANTHROPIC_API_KEY; en pruebas se inyecta. */
   ask?: AskFn | null;
   /**
@@ -966,6 +970,47 @@ export async function buildApp(opts: AppOptions): Promise<FastifyInstance> {
     if (acc.kind !== "staff") return fail(reply, { error: "SIN_ACCESO" });
     const r = await createVerification(db, a.user.id, b.data);
     return isFail(r) ? fail(reply, r) : reply.code(201).send(r);
+  });
+
+  /* ───── Trazabilidad libre de deforestación (Ley 2585 de 2026; Reglamento (UE) 2023/1115) ───── */
+
+  app.get("/v1/trazabilidad", { preHandler: requireSession }, async (req, reply) => {
+    const a = req.auth as NonNullable<FastifyRequest["auth"]>;
+    const q = orgQuery.safeParse(req.query);
+    if (!q.success) return bad(reply);
+    if (!isMember(a, q.data.organizationId)) return fail(reply, { error: "SIN_ACCESO" });
+    return { items: await latestChecks(db, q.data.organizationId) };
+  });
+
+  app.post("/v1/trazabilidad/bosque", { preHandler: requireSession }, async (req, reply) => {
+    const a = req.auth as NonNullable<FastifyRequest["auth"]>;
+    const b = ForestCheckRequest.safeParse(req.body);
+    if (!b.success) return bad(reply, "El lindero no es válido o está fuera de Colombia.");
+    if (!isMember(a, b.data.organizationId)) return fail(reply, { error: "SIN_ACCESO" });
+    try {
+      const r = await runCheck(
+        db,
+        a.user.id,
+        b.data,
+        opts.forestFetch ? { fetch: opts.forestFetch } : {},
+      );
+      if ("error" in r) {
+        if (r.error === "NO_EXISTE") return fail(reply, { error: "NO_EXISTE" });
+        if (r.error === "AREA")
+          return bad(reply, "El lindero es demasiado grande para revisarlo de una vez.");
+        return reply.code(429).send({
+          error: ErrorCodes.LIMITE_DIARIO,
+          message: "Ya hizo muchas revisiones hoy. Intente mañana.",
+        });
+      }
+      return reply.code(201).send(r);
+    } catch (err) {
+      reply.log.warn(err, "bosque");
+      return reply.code(502).send({
+        error: ErrorCodes.SERVICIO_EXTERNO,
+        message: "La capa de bosque de Global Forest Watch no respondió. Intente en un momento.",
+      });
+    }
   });
 
   /* ───── Comunidad de productores ───── */

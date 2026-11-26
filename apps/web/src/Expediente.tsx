@@ -15,6 +15,7 @@ import { CheckCircle2, ChevronRight, Circle, FolderOpen, Lock, ShieldCheck } fro
 import { type ReactNode, useEffect, useState } from "react";
 import { useExtension } from "./Extension";
 import { ProfileWizard, useFarmProfile } from "./Profile";
+import { useForestChecks } from "./Trazabilidad";
 import { useActiveFarm, useFarms } from "./animals";
 import { CardHead, PageHead } from "./components";
 import { MOV_SEED, type Mov } from "./herd";
@@ -85,6 +86,7 @@ export function ExpedienteScreen({ onModule }: { onModule(m: ModuleKey): void })
   const [movs] = useStore<Mov>("movs-eco", MOV_SEED);
   const [profileOpen, setProfileOpen] = useState(false);
   const ext = useExtension().data;
+  const forest = useForestChecks().items;
 
   const area = farm?.livestockAreaHa ?? farm?.totalAreaHa ?? profile?.areaHa ?? null;
 
@@ -258,6 +260,22 @@ export function ExpedienteScreen({ onModule }: { onModule(m: ModuleKey): void })
             label="Lindero dibujado en el mapa"
             note="Lo piden la Ley 2585 de 2026 y los compradores que exigen ganado libre de deforestación."
           />
+          {(() => {
+            const fc = forest.find((c) => c.farmId === farm.id);
+            return (
+              <Item
+                done={Boolean(fc && fc.lossAfterCutoffHa === 0)}
+                label={
+                  fc
+                    ? fc.lossAfterCutoffHa === 0
+                      ? `Sin pérdida de bosque desde 2021 (revisado el ${fecha(fc.checkedAt.slice(0, 10))})`
+                      : `${fc.lossAfterCutoffHa} ha de pérdida de bosque después de 2020: por revisar`
+                    : "Revisión satelital de bosque desde 2021"
+                }
+                note="En Trazabilidad y bosque."
+              />
+            );
+          })()}
         </Block>
         <Block title="Sistema productivo">
           <Item

@@ -396,11 +396,12 @@ async function addSupplies(db: Db, spec: DemoSpec, userId: string, orgId: string
     const f = spec.farms[0] as DemoFarmSpec;
     const dLat = 0.004;
     const dLng = 0.0045;
-    const ring = (a: number, b: number, c: number, d: number) => [
-      { lat: f.lat + a, lng: f.lng + b },
-      { lat: f.lat + a, lng: f.lng + d },
-      { lat: f.lat + c, lng: f.lng + d },
-      { lat: f.lat + c, lng: f.lng + b },
+    // [latitud, longitud], como lo exige FarmMapSavePayload.
+    const ring = (a: number, b: number, c: number, d: number): [number, number][] => [
+      [f.lat + a, f.lng + b],
+      [f.lat + a, f.lng + d],
+      [f.lat + c, f.lng + d],
+      [f.lat + c, f.lng + b],
     ];
     cmds.push(
       env("farm.map.save", {

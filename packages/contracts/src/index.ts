@@ -975,6 +975,37 @@ export interface StaffInboxDto {
   indicators: ExtensionIndicators;
 }
 
+/* ───── Trazabilidad libre de deforestación (Ley 2585 de 2026; Reglamento (UE) 2023/1115) ───── */
+
+export const ForestCheckRequest = z.object({
+  organizationId: z.string().uuid(),
+  farmId: z.string().uuid(),
+  /** Lindero [latitud, longitud]; se limita a Colombia y a fincas de hasta 200.000 ha. */
+  boundary: z
+    .array(z.tuple([z.number().min(-5).max(16), z.number().min(-82).max(-66)]))
+    .min(3)
+    .max(5000),
+});
+export type ForestCheckRequest = z.infer<typeof ForestCheckRequest>;
+
+export interface ForestCheckDto {
+  id: string;
+  farmId: string;
+  checkedAt: string;
+  checkedBy: string;
+  areaHa: number;
+  /** Pérdida de cobertura arbórea dentro del lindero después del 31-dic-2020. */
+  lossAfterCutoffHa: number;
+  lossBeforeCutoffHa: number;
+  /** Hectáreas por año desde 2021. */
+  byYear: Record<string, number>;
+  source: string;
+  version: string;
+  pixelHa: number;
+  /** Lindero usado en la revisión [latitud, longitud]. */
+  boundary: [number, number][];
+}
+
 /** Códigos de error de dominio (estables; la interfaz los traduce). */
 export const ErrorCodes = {
   TAG_DUPLICADO: "TAG_DUPLICADO",

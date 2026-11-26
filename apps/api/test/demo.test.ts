@@ -115,6 +115,18 @@ describe("cuentas de muestra", () => {
     expect(Number(rows[0]?.n)).toBe(1);
   });
 
+  it("la cuenta completa trae el lindero y los potreros de su primera finca", async () => {
+    expect((await enter(on, "completo")).statusCode).toBe(200);
+    const [m] = await db.admin((q) =>
+      q<{ n: string }>(
+        `SELECT count(DISTINCT fm.farm_id) AS n FROM farm_map fm JOIN farm f ON f.id = fm.farm_id
+          JOIN membership ms ON ms.organization_id = f.organization_id
+          JOIN app_user u ON u.id = ms.user_id WHERE u.email LIKE 'demo-completo%'`,
+      ),
+    );
+    expect(Number(m?.n)).toBe(1);
+  });
+
   it("nadie puede iniciar sesión con contraseña en una cuenta de muestra", async () => {
     await enter(on, "pequeno");
     for (const password of ["demo", "demo-pequeno", "123456", "Password1"]) {

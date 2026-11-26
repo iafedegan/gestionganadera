@@ -411,4 +411,5 @@ export function isDryOffDue(
 export * from "./diagnosis";
 export * from "./exportDocs";
 export * from "./expediente";
+export * from "./trazabilidad";
 export * from "./exportForms";

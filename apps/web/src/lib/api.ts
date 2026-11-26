@@ -24,6 +24,8 @@ import type {
   FarmUpdate,
   FieldVerificationCreate,
   FieldVerificationDto,
+  ForestCheckDto,
+  ForestCheckRequest,
   InvitationCreate,
   InvitationDto,
   InvitationPreview,
@@ -134,6 +136,14 @@ async function downloadMyData(): Promise<void> {
 }
 
 export const api = {
+  // Trazabilidad libre de deforestación: revisión del lindero con la capa de bosque.
+  forestChecks: (organizationId: string) =>
+    request<{ items: ForestCheckDto[] }>(
+      "GET",
+      `/v1/trazabilidad?organizationId=${organizationId}`,
+    ),
+  forestCheck: (input: ForestCheckRequest) =>
+    request<ForestCheckDto>("POST", "/v1/trazabilidad/bosque", input, { timeoutMs: 60_000 }),
   // Extensión híbrida: consultas al Secretario Técnico, recomendaciones y verificación en finca.
   extension: (organizationId: string) =>
     request<ExtensionSummaryDto>("GET", `/v1/extension?organizationId=${organizationId}`),
