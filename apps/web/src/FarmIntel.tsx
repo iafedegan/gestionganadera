@@ -27,6 +27,27 @@ import { useApp } from "./state";
 
 const TONE = { rojo: "al-rojo", ambar: "al-ambar", verde: "al-verde", azul: "al-azul" } as const;
 const thiTone = (v: number) => (v < 72 ? "ok" : v < 79 ? "warn" : "bad");
+/** El índice de temperatura y humedad dicho en palabras sencillas. */
+const calor = (thi: number) =>
+  thi < 72
+    ? "El ganado está cómodo con este clima."
+    : thi < 79
+      ? "Hace un calor algo pesado para el ganado."
+      : thi < 89
+        ? "Calor fuerte: dele sombra y agua al ganado."
+        : "Calor extremo: proteja al ganado con sombra y agua.";
+/** Lo que viene en la semana, en una frase (solo si cambia algo frente a hoy). */
+function weekNote(days: { date: string; thi: number; rain: number }[], todayThi: number) {
+  const rest = days.slice(1, 7);
+  const hot = rest.filter((d) => d.thi >= 79).length;
+  const heavy = rest.find((d) => d.rain >= 20);
+  if (heavy)
+    return `Se espera lluvia fuerte el ${new Date(`${heavy.date}T12:00:00`).toLocaleDateString("es-CO", { weekday: "long" })}.`;
+  if (hot > 0 && todayThi < 79)
+    return hot === 1 ? "Viene un día de mucho calor." : `Vienen ${hot} días de mucho calor.`;
+  if (rest.length > 0 && rest.every((d) => d.rain < 1)) return "No se espera lluvia en la semana.";
+  return "";
+}
 const day = (d: string, i: number) =>
   i === 0 ? "Hoy" : new Date(`${d}T12:00:00`).toLocaleDateString("es-CO", { weekday: "short" });
 
@@ -50,8 +71,9 @@ function Insights({ items }: { items: Insight[] }) {
  * «Su finca hoy»: el clima de los próximos 7 días y el suelo donde está el hato, con alertas
  * que anticipan estrés calórico, lluvias fuertes o sequía. Funciona sin señal con lo último guardado.
  */
-export function FarmIntel() {
+export function FarmIntel({ compact = false }: { compact?: boolean } = {}) {
   const { online } = useApp();
+  const [open, setOpen] = useState(!compact);
   const farms = useFarms();
   const herd = useHerdData();
   const active = useActiveFarm();
@@ -103,6 +125,42 @@ export function FarmIntel() {
   const sIns = soil ? soilInsights(soil) : null;
   const now = weather?.current;
   const today = weather?.days[0];
+
+  if (!open) {
+    const tip = weekNote(weather?.days ?? [], today?.thi ?? 0);
+    return (
+      <article className="card intel intel-mini">
+        <span className={`im-ic thi-${today ? thiTone(today.thi) : "ok"}`} aria-hidden="true">
+          {today && today.rain >= 5 ? <CloudRain size={28} /> : <Sun size={28} />}
+        </span>
+        <div className="im-text">
+          {now && today ? (
+            <>
+              <strong>
+                Hoy en {farm.name}: {Math.round(now.temp)}°,{" "}
+                {today.rain >= 1
+                  ? `${Math.round(today.rain)} mm de lluvia`
+                  : today.rainProb >= 40
+                    ? "puede llover"
+                    : "sin lluvia"}
+              </strong>
+              <p>
+                {calor(today.thi)}
+                {tip ? ` ${tip}` : ""}
+              </p>
+            </>
+          ) : (
+            <strong>
+              {loading ? "Consultando el clima…" : "Sin pronóstico guardado todavía."}
+            </strong>
+          )}
+        </div>
+        <button type="button" className="btn btn-ghost btn-sm" onClick={() => setOpen(true)}>
+          Ver la semana
+        </button>
+      </article>
+    );
+  }
 
   return (
     <article className="card intel">
