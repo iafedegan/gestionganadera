@@ -53,6 +53,7 @@ import {
   todayLocal,
 } from "./labels";
 import { scopedFarm, useStoredFarm } from "./lib/activeFarm";
+import { useIntent } from "./lib/intent";
 import {
   type AnimalDetail,
   type LocalAnimal,
@@ -116,6 +117,7 @@ export function AnimalsScreen() {
   const [rows, setRows] = useState<LocalAnimal[] | null>(null);
   const [selected, setSelected] = useState<string | null>(null);
   const [registering, setRegistering] = useState(false);
+  useIntent("animales", ["registrar"] as const, () => setRegistering(true));
   const [creatingFarm, setCreatingFarm] = useState(false);
   const [inv, setInv] = useState({ total: 0, bovino: 0, bufalino: 0 });
   const wide = useMedia("(min-width: 1440px)");

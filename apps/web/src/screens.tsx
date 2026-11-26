@@ -4,8 +4,6 @@ import {
   AlertTriangle,
   ArrowLeft,
   ArrowRight,
-  Baby,
-  Banknote,
   Bell,
   Building2,
   CalendarDays,
@@ -24,15 +22,13 @@ import {
   LogOut,
   Mail,
   Menu,
-  Milk,
   Package,
   PawPrint,
-  PlusCircle,
+  Plus,
   RefreshCw,
   Share,
   SquarePlus,
   Stethoscope,
-  Syringe,
   Wifi,
   WifiOff,
   X,
@@ -43,10 +39,11 @@ import { AssistantCard } from "./Assistant";
 import { NewsStrip } from "./Ecosistema";
 import { FarmIntel } from "./FarmIntel";
 import { FarmChip } from "./FarmPicker";
-import { HomeStory, type StoryAction } from "./HomeStory";
+import { HomeStory } from "./HomeStory";
 import { type PendingInvite, RegisterForm } from "./Onboarding";
 import { Pasture } from "./Pasture";
 import { DiagnosisView, ProfileWizard, useFarmProfile } from "./Profile";
+import { QuickSheet, quickFor } from "./QuickAdd";
 import { RegisterDialog, useActiveFarm, useFarms } from "./animals";
 import { art } from "./art";
 import { CardHead, PageHead } from "./components";
@@ -513,6 +510,7 @@ export function Shell(props: {
   const scrolled = useScrolled();
   const ptr = usePullToRefresh(() => syncNow().then(() => undefined), mobile);
   const moreSwipe = useSwipeDismiss<HTMLElement>(() => setMore(false));
+  const [quickOpen, setQuickOpen] = useState(false);
 
   // El menú "Más" solo existe en celular: si la ventana se ensancha, se cierra.
   useEffect(() => {
@@ -546,6 +544,11 @@ export function Shell(props: {
     }
     await logout();
   }
+
+  const tabs = ((role && ROLE_TABS[role]) || DEFAULT_TABS).filter(
+    (k) => !props.locked || SETUP_MODULES.includes(k),
+  );
+  const quick = props.locked ? [] : quickFor(role);
 
   function pick(m: ModuleKey) {
     props.onModule(m);
@@ -723,10 +726,40 @@ export function Shell(props: {
         </footer>
       </div>
 
-      <nav className="bottom-nav" aria-label="Módulos">
-        {((role && ROLE_TABS[role]) || DEFAULT_TABS)
-          .filter((k) => !props.locked || SETUP_MODULES.includes(k))
-          .map((k) => (
+      <nav className={quick.length ? "bottom-nav has-quick" : "bottom-nav"} aria-label="Módulos">
+        {tabs.slice(0, quick.length ? 2 : 4).map((k) => (
+          <button
+            key={k}
+            type="button"
+            className={k === props.module ? "tab active" : "tab"}
+            aria-current={k === props.module ? "page" : undefined}
+            onClick={() => {
+              haptic(8);
+              pick(k);
+            }}
+          >
+            <ModIcon k={k} size={22} />
+            <span>{moduleByKey(k).short}</span>
+          </button>
+        ))}
+        {quick.length > 0 && (
+          <button
+            type="button"
+            className="tab tab-quick"
+            aria-haspopup="dialog"
+            onClick={() => {
+              haptic(10);
+              setQuickOpen(true);
+            }}
+          >
+            <span className="tq-ring" aria-hidden="true">
+              <Plus size={28} strokeWidth={2.6} />
+            </span>
+            <span>Anotar</span>
+          </button>
+        )}
+        {quick.length > 0 &&
+          tabs.slice(2, 3).map((k) => (
             <button
               key={k}
               type="button"
@@ -746,6 +779,10 @@ export function Shell(props: {
           <span>Más</span>
         </button>
       </nav>
+
+      {quickOpen && (
+        <QuickSheet items={quick} onModule={pick} onClose={() => setQuickOpen(false)} />
+      )}
 
       {more && (
         <>
@@ -1007,39 +1044,6 @@ export function Home({
     );
   }
 
-  const actions: StoryAction[] = [
-    {
-      key: "produccion" as const,
-      label: "Ordeñé o pesé",
-      icon: Milk,
-      show: canEvents && canSeeModule("produccion", role),
-    },
-    {
-      key: "animales" as const,
-      label: "Llegó o nació un animal",
-      icon: PlusCircle,
-      show: canAnimals,
-    },
-    {
-      key: "sanidad" as const,
-      label: "Vacuné o traté un animal",
-      icon: Syringe,
-      show: canEvents && canSeeModule("sanidad", role),
-    },
-    {
-      key: "reproduccion" as const,
-      label: "Vi un celo, un servicio o un parto",
-      icon: Baby,
-      show: canEvents && canSeeModule("reproduccion", role),
-    },
-    {
-      key: "economia" as const,
-      label: "Gasté o vendí algo",
-      icon: Banknote,
-      show: canSeeModule("economia", role),
-    },
-  ].filter((x) => x.show);
-
   return (
     <HomeStory
       kicker={first ? `${greeting()}, ${first}` : greeting()}
@@ -1048,7 +1052,7 @@ export function Home({
       stats={stats}
       money={canSeeModule("economia", role) ? { count: monthMovs.length, balance } : null}
       alerts={alerts}
-      actions={actions}
+      quick={quickFor(role)}
       pending={counts.pendiente}
       syncing={syncing}
       onSync={() => void syncNow()}

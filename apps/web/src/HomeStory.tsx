@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import { type ReactNode, useState } from "react";
 import { type AlertItem, AlertsSheet } from "./Alerts";
+import { QuickGrid, type QuickItem } from "./QuickAdd";
 import { moneyM } from "./kit";
 import { num } from "./labels";
 import type { HomeStats } from "./lib/homeStats";
@@ -26,12 +27,6 @@ import type { ModuleKey } from "./modules";
 
 type State = "ok" | "warn" | "bad" | "none";
 
-export interface StoryAction {
-  key: ModuleKey;
-  label: string;
-  icon: LucideIcon;
-}
-
 export interface HomeStoryProps {
   kicker: string;
   dateText: string;
@@ -40,7 +35,8 @@ export interface HomeStoryProps {
   /** null si el rol no ve la economía. */
   money: { count: number; balance: number } | null;
   alerts: AlertItem[];
-  actions: StoryAction[];
+  /** Lo que se puede anotar (botón Anotar). */
+  quick: QuickItem[];
   pending: number;
   syncing: boolean;
   onSync(): void;
@@ -151,7 +147,7 @@ export function HomeStory(p: HomeStoryProps) {
         <p className="story-date">{p.dateText}</p>
       </header>
 
-      <Chapter n={1} title="Lo primero">
+      <Chapter n={1} title="Lo primero" className="ch-first">
         {top ? (
           <article className={`story-first sf-${top.tone}`}>
             <span className="sf-ic" aria-hidden="true">
@@ -190,7 +186,7 @@ export function HomeStory(p: HomeStoryProps) {
         )}
       </Chapter>
 
-      <Chapter n={2} title="Cómo va su finca">
+      <Chapter n={2} title="Cómo va su finca" className="ch-farm">
         <ul className="story-rows">
           <Row
             icon={PawPrint}
@@ -304,22 +300,10 @@ export function HomeStory(p: HomeStoryProps) {
         </ul>
       </Chapter>
 
-      {p.actions.length > 0 && (
-        <Chapter n={3} title="¿Qué pasó hoy en la finca?">
-          <p className="story-lead">Toque lo que hizo y anótelo en un momento.</p>
-          <div className="story-acts">
-            {p.actions.map((a) => (
-              <button
-                key={a.key}
-                type="button"
-                className="story-act"
-                onClick={() => p.onModule(a.key)}
-              >
-                <a.icon size={26} aria-hidden="true" />
-                <span>{a.label}</span>
-              </button>
-            ))}
-          </div>
+      {p.quick.length > 0 && (
+        <Chapter n={3} title="¿Qué pasó hoy en la finca?" className="ch-today">
+          <p className="story-lead">Toque lo que hizo y se abre el formulario listo para llenar.</p>
+          <QuickGrid items={p.quick} onModule={p.onModule} />
           {p.pending > 0 && (
             <p className="story-sync">
               <span>
@@ -341,11 +325,16 @@ export function HomeStory(p: HomeStoryProps) {
         </Chapter>
       )}
 
-      <Chapter n={p.actions.length > 0 ? 4 : 3} title="El tiempo y su ganado">
-        {p.weather}
-      </Chapter>
-
-      {p.assistant}
+      <div className="story-aside">
+        <Chapter
+          n={p.quick.length > 0 ? 4 : 3}
+          title="El tiempo y su ganado"
+          className="ch-weather"
+        >
+          {p.weather}
+        </Chapter>
+        {p.assistant}
+      </div>
 
       <button
         type="button"
@@ -353,7 +342,7 @@ export function HomeStory(p: HomeStoryProps) {
         aria-expanded={more}
         onClick={() => setMore((v) => !v)}
       >
-        {more ? "Mostrar menos" : "Más de su finca: diagnóstico, noticias y este celular"}
+        {more ? "Mostrar menos" : "Más de su finca: diagnóstico, noticias y este dispositivo"}
         <ChevronDown size={20} aria-hidden="true" className={more ? "rot" : ""} />
       </button>
       {more && <div className="story-more">{p.more}</div>}

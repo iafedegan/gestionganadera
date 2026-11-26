@@ -1802,3 +1802,493 @@
 .intel-mini {
   align-items: start;
 }
+
+/* ═════════════ Anotar: cuadrícula de lo que pasó en la finca ═════════════ */
+.quick-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+.quick {
+  --qt: var(--azul-t);
+  --qi: var(--azul-i);
+  display: grid;
+  justify-items: center;
+  align-content: start;
+  gap: 6px;
+  min-height: 112px;
+  padding: 14px 8px 12px;
+  border: 1px solid color-mix(in srgb, var(--qi) 18%, transparent);
+  border-radius: 18px;
+  background: var(--superficie, #fff);
+  color: var(--texto, #1b2a22);
+  font: inherit;
+  text-align: center;
+  cursor: pointer;
+  box-shadow: 0 1px 2px rgb(5 16 11 / 0.05);
+  transition: transform 140ms ease, box-shadow 140ms ease, background 140ms ease;
+  -webkit-tap-highlight-color: transparent;
+}
+.quick:active {
+  transform: scale(0.96);
+  background: var(--qt);
+}
+@media (hover: hover) {
+  .quick:hover {
+    box-shadow: 0 12px 26px -18px rgb(5 16 11 / 0.5);
+    transform: translateY(-2px);
+  }
+}
+.quick:focus-visible {
+  outline: 3px solid var(--azul, #0f6bc4);
+  outline-offset: 2px;
+}
+.q-ic {
+  display: grid;
+  place-items: center;
+  width: 50px;
+  height: 50px;
+  border-radius: 16px;
+  background: var(--qt);
+  color: var(--qi);
+}
+.quick strong {
+  font-size: 0.98rem;
+  line-height: 1.2;
+}
+.quick small {
+  color: var(--texto-suave, #5b6b63);
+  font-size: 0.8rem;
+  line-height: 1.25;
+}
+.q-verde {
+  --qt: var(--verde-t);
+  --qi: var(--verde-i);
+}
+.q-rojo {
+  --qt: #fde7e8;
+  --qi: #c62c38;
+}
+.q-ambar {
+  --qt: var(--ambar-t);
+  --qi: var(--ambar-i);
+}
+.q-violeta {
+  --qt: var(--violeta-t);
+  --qi: var(--violeta-i);
+}
+.quick-sheet {
+  max-height: 88vh;
+  overflow-y: auto;
+}
+.quick-sheet .drawer-head h2 {
+  font-size: 1.3rem;
+}
+.quick-lead {
+  margin: -4px 2px 14px;
+  color: var(--texto-suave, #5b6b63);
+}
+@media (max-width: 360px) {
+  .quick small {
+    display: none;
+  }
+  .quick {
+    min-height: 92px;
+  }
+}
+
+/* ═════════════ Barra inferior con el botón central «Anotar» ═════════════ */
+@media (max-width: 900px) {
+  .bottom-nav.has-quick {
+    overflow: visible;
+  }
+  .tab-quick {
+    position: relative;
+    color: var(--titulo, #0c4a30) !important;
+    font-weight: 700 !important;
+  }
+  .tq-ring {
+    display: grid;
+    place-items: center;
+    width: 58px;
+    height: 58px;
+    margin-top: -26px;
+    border-radius: 50%;
+    background: linear-gradient(145deg, #1f8a55, #0c4a30);
+    color: #fff;
+    box-shadow: 0 0 0 5px var(--lienzo, #f8faf7), 0 10px 22px -6px rgb(12 74 48 / 0.6);
+    transition: transform 140ms ease;
+  }
+  .tab-quick:active .tq-ring {
+    transform: scale(0.92);
+  }
+  .tab-quick .tq-ring svg {
+    width: 28px;
+    height: 28px;
+    color: #fff !important;
+  }
+  .tab-quick::before {
+    display: none !important;
+  }
+}
+
+/* ═════════════ Inicio: tres diseños ═════════════
+   Celular (< 600 px): una columna que se lee como un cuento (lo de arriba).
+   Tablet (600–900 px): banner, tarjetas de a dos y el clima junto al asistente.
+   PC (> 900 px): tablero; titular junto a «Lo primero», las cuatro cifras en fila,
+   «Anotar» junto al clima. */
+
+.story-aside {
+  display: grid;
+  gap: 16px;
+  align-content: start;
+}
+
+@media (min-width: 600px) {
+  .page-story {
+    max-width: 1320px;
+    grid-template-columns: repeat(12, minmax(0, 1fr));
+    gap: 24px;
+    align-items: start;
+  }
+  .page-story > * {
+    grid-column: 1 / -1;
+    min-width: 0;
+  }
+  /* Titular como banner verde. */
+  .story-hero {
+    position: relative;
+    overflow: hidden;
+    padding: 28px 30px;
+    border-radius: 24px;
+    background: radial-gradient(120% 140% at 100% 0%, rgb(201 162 39 / 0.28), transparent 55%),
+      linear-gradient(135deg, #0f5a3a 0%, #0c4a30 55%, #083a26 100%);
+    color: #fff;
+    box-shadow: 0 18px 40px -26px rgb(5 40 28 / 0.7);
+  }
+  .story-hero::after {
+    content: "";
+    position: absolute;
+    right: -40px;
+    bottom: -60px;
+    width: 220px;
+    height: 220px;
+    border-radius: 50%;
+    border: 36px solid rgb(255 255 255 / 0.06);
+  }
+  .story-hero h1 {
+    color: #fff;
+    font-size: clamp(1.9rem, 3vw, 2.6rem);
+  }
+  .story-kicker {
+    color: #e9cf7a;
+  }
+  .story-summary {
+    color: rgb(255 255 255 / 0.92);
+    max-width: 60ch;
+  }
+  .story-date {
+    color: rgb(255 255 255 / 0.7);
+  }
+
+  /* Cifras de la finca como tarjetas verticales. */
+  .story-rows {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 14px;
+  }
+  .story-rows > li {
+    display: flex;
+  }
+  .story-row {
+    height: 100%;
+    grid-template-columns: auto 1fr;
+    grid-template-areas:
+      "ic state"
+      "text text";
+    align-items: start;
+    gap: 14px;
+    padding: 18px;
+  }
+  .sr-ic {
+    grid-area: ic;
+  }
+  .sr-state {
+    grid-area: state;
+    justify-self: end;
+  }
+  .sr-text {
+    grid-area: text;
+  }
+  .sr-go {
+    display: none;
+  }
+  .sr-num {
+    font-size: 1.7rem;
+  }
+
+  .ch-weather .intel-mini {
+    height: 100%;
+  }
+}
+
+/* Tablet: el clima y el asistente lado a lado. */
+@media (min-width: 600px) and (max-width: 900px) {
+  .story-aside {
+    grid-template-columns: 1fr 1fr;
+    align-items: stretch;
+  }
+  .story-aside > .story-ch {
+    grid-template-rows: auto 1fr;
+  }
+  .story-aside > .asis-mini {
+    align-self: end;
+    height: calc(100% - 40px);
+    flex-direction: column;
+    align-items: flex-start;
+    justify-content: center;
+  }
+}
+
+/* PC: tablero. */
+@media (min-width: 901px) {
+  .page-story {
+    gap: 28px 24px;
+    padding-bottom: 24px;
+  }
+  .story-hero {
+    grid-column: 1 / span 7;
+    align-self: stretch;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    min-height: 236px;
+    padding: 32px 36px;
+  }
+  .ch-first {
+    grid-column: 8 / span 5;
+    align-self: stretch;
+    grid-template-rows: auto 1fr;
+  }
+  .ch-first .story-first {
+    height: 100%;
+    align-content: start;
+  }
+  .ch-first .sf-actions {
+    align-self: end;
+  }
+  .ch-farm {
+    grid-column: 1 / -1;
+  }
+  .ch-today {
+    grid-column: 1 / span 7;
+  }
+  .story-aside {
+    grid-column: 8 / span 5;
+  }
+  .story-more-btn {
+    grid-column: 4 / span 6;
+  }
+  .story-more {
+    grid-column: 1 / -1;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-items: start;
+  }
+  .story-more > .two,
+  .story-more > .dx-card {
+    grid-column: 1 / -1;
+  }
+  .story-h {
+    font-size: 1.1rem;
+  }
+}
+@media (min-width: 1100px) {
+  .story-rows {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+/* ═════════════ PC amplio: barra lateral siempre abierta, con nombres ═════════════
+   Entre 901 y 1279 px sigue plegada (se abre al pasar el mouse) para dar espacio. */
+@media (min-width: 1280px) and (hover: hover) {
+  .shell {
+    grid-template-columns: 284px minmax(0, 1fr);
+  }
+  .sidebar,
+  .sidebar:hover,
+  .sidebar:focus-within {
+    width: 284px;
+    box-shadow: none;
+  }
+  .sidebar .nav-label,
+  .sidebar .nav small,
+  .sidebar .nav-group,
+  .sidebar .sync-mini span {
+    opacity: 1;
+  }
+  .sidebar .sync-mini {
+    width: 100%;
+  }
+  .sidebar .sidebar-art-wrap {
+    height: 64px;
+  }
+  .sidebar .sidebar-art-wrap::after {
+    opacity: 1 !important;
+  }
+  .sidebar .sidebar-art {
+    opacity: 0 !important;
+  }
+}
+
+/* El logo de la barra lateral no se recorta aunque la lista de módulos sea larga. */
+@media (min-width: 901px) {
+  .sidebar .sidebar-art-wrap {
+    flex: none;
+    min-height: 64px;
+  }
+}
+
+/* ═════════════ Cifras de los módulos (kit-stats) en tres diseños ═════════════ */
+/* PC: columnas según cuántas cifras hay, para que ninguna quede sola en una fila. */
+@media (min-width: 901px) {
+  .kit-stats {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+  .kit-stats:has(> :nth-child(3):last-child),
+  .kit-stats:has(> :nth-child(6):last-child),
+  .kit-stats:has(> :nth-child(9):last-child) {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+  .kit-stats:has(> :nth-child(2):last-child) {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (min-width: 1280px) {
+  .kit-stats:has(> :nth-child(5):last-child) {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+  }
+}
+/* Tablet: de a dos o de a tres. */
+@media (min-width: 600px) and (max-width: 900px) {
+  .kit-stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .kit-stats:has(> :nth-child(3):last-child),
+  .kit-stats:has(> :nth-child(6):last-child),
+  .kit-stats:has(> :nth-child(9):last-child) {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+/* Celular: una lista agrupada, como los ajustes del teléfono: nombre a la izquierda,
+   cifra grande a la derecha. Ocupa la mitad del alto que los recuadros. */
+@media (max-width: 599px) {
+  .page .kit-stats {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0;
+    padding: 0;
+    border-radius: 18px;
+    background: var(--superficie, #fff);
+    overflow: hidden;
+    box-shadow: 0 1px 3px rgb(16 40 28 / 0.06);
+  }
+  .page .kit-stats > .kit-stat {
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas:
+      "top value"
+      "meta value"
+      "goal value";
+    align-items: center;
+    column-gap: 12px;
+    row-gap: 2px;
+    padding: 12px 16px 12px 18px;
+    border-radius: 0;
+    box-shadow: none;
+    min-height: 64px;
+  }
+  .page .kit-stats > .kit-stat + .kit-stat {
+    border-top: 0.5px solid var(--borde, #e3e9e4);
+  }
+  .page .kit-stats .ks-top {
+    grid-area: top;
+  }
+  .page .kit-stats .ks-label {
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: var(--texto, #1b2a22);
+  }
+  .page .kit-stats .ks-icon {
+    width: 28px;
+    height: 28px;
+  }
+  .page .kit-stats .ks-value {
+    grid-area: value;
+    font-size: 1.35rem;
+    text-align: right;
+    white-space: nowrap;
+  }
+  .page .kit-stats .ks-meta {
+    grid-area: meta;
+    font-size: 0.82rem;
+  }
+  .page .kit-stats .ks-goal {
+    grid-area: goal;
+    justify-self: start;
+  }
+}
+
+/* ═════════════ Acciones del encabezado de los módulos ═════════════ */
+.pa-more {
+  display: none;
+}
+@media (max-width: 599px) {
+  /* Celular: la acción principal a lo ancho y «Otros registros» al lado. */
+  .page-head .page-actions.pa-many {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+  .page-head .page-actions.pa-many > :nth-child(n + 2):not(.pa-more) {
+    display: none;
+  }
+  .page-head .page-actions.pa-many > :first-child {
+    grid-column: auto;
+  }
+  .page-head .page-actions.pa-many > .pa-more {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    width: auto;
+    padding-inline: 14px;
+  }
+}
+.pa-count {
+  display: inline-grid;
+  place-items: center;
+  min-width: 22px;
+  height: 22px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--azul, #0f6bc4);
+  color: #fff;
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+.pa-sheet {
+  max-height: 80vh;
+  overflow-y: auto;
+}
+.pa-list {
+  display: grid;
+  gap: 8px;
+}
+.pa-list > .btn {
+  width: 100%;
+  min-height: 56px;
+  justify-content: flex-start;
+  padding-inline: 18px;
+  font-size: 1.05rem;
+  text-align: left;
+}
+
+.kit-alerts-more {
+  margin-top: 8px;
+  width: 100%;
+  min-height: 44px;
+}

@@ -250,25 +250,40 @@ export interface AlertItem {
   action?: { label: string; run(): void };
 }
 export function Alerts({ items, empty }: { items: AlertItem[]; empty?: string }) {
+  const [all, setAll] = useState(false);
   if (items.length === 0) return <p className="hint">{empty ?? "Sin alertas por ahora."}</p>;
+  // Las tres primeras bastan para saber qué hacer; el resto, a un toque.
+  const LIMIT = 3;
+  const shown = all || items.length <= LIMIT + 1 ? items : items.slice(0, LIMIT);
   return (
-    <ul className="kit-alerts">
-      {items.map((a, i) => (
-        // biome-ignore lint/suspicious/noArrayIndexKey: lista derivada sin identificador
-        <li key={i} className={`al-${a.tone}`}>
-          <span className="al-dot" />
-          <span className="al-text">
-            <strong>{a.title}</strong>
-            <small>{a.text}</small>
-          </span>
-          {a.action && (
-            <button type="button" className="btn btn-ghost btn-sm" onClick={a.action.run}>
-              {a.action.label}
-            </button>
-          )}
-        </li>
-      ))}
-    </ul>
+    <>
+      <ul className="kit-alerts">
+        {shown.map((a, i) => (
+          // biome-ignore lint/suspicious/noArrayIndexKey: lista derivada sin identificador
+          <li key={i} className={`al-${a.tone}`}>
+            <span className="al-dot" />
+            <span className="al-text">
+              <strong>{a.title}</strong>
+              <small>{a.text}</small>
+            </span>
+            {a.action && (
+              <button type="button" className="btn btn-ghost btn-sm" onClick={a.action.run}>
+                {a.action.label}
+              </button>
+            )}
+          </li>
+        ))}
+      </ul>
+      {shown.length < items.length && (
+        <button
+          type="button"
+          className="btn btn-ghost btn-sm kit-alerts-more"
+          onClick={() => setAll(true)}
+        >
+          Ver {items.length - shown.length} más
+        </button>
+      )}
+    </>
   );
 }
 

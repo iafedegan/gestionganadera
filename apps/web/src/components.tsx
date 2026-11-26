@@ -1,5 +1,16 @@
-import { type ReactNode, useEffect, useState } from "react";
+import { X } from "lucide-react";
+import { Children, Fragment, type ReactNode, isValidElement, useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import { sparkPath } from "./lib/homeStats";
+
+/** Hijos en una lista plana, abriendo los fragmentos (<>…</>). */
+function flatten(n: ReactNode): ReactNode[] {
+  return Children.toArray(n).flatMap((c) =>
+    isValidElement(c) && c.type === Fragment
+      ? flatten((c.props as { children?: ReactNode }).children)
+      : [c],
+  );
+}
 
 export function PageHead(props: {
   /** Solo se muestra en celular, como etiqueta sobre el título. */
@@ -10,6 +21,9 @@ export function PageHead(props: {
   icon?: ReactNode;
   actions?: ReactNode;
 }) {
+  const list = flatten(props.actions);
+  const many = list.length > 2;
+  const [more, setMore] = useState(false);
   return (
     <header className="page-head">
       <div className="ph-main">
@@ -20,7 +34,49 @@ export function PageHead(props: {
           {props.lead && <p className="lead">{props.lead}</p>}
         </div>
       </div>
-      {props.actions && <div className="page-actions">{props.actions}</div>}
+      {props.actions && (
+        <div className={many ? "page-actions pa-many" : "page-actions"}>
+          {list}
+          {/* En celular solo se ve la acción principal; las demás, en una hoja. */}
+          {many && (
+            <button type="button" className="btn btn-ghost pa-more" onClick={() => setMore(true)}>
+              Otros registros
+              <span className="pa-count">{list.length - 1}</span>
+            </button>
+          )}
+        </div>
+      )}
+      {more &&
+        createPortal(
+          <>
+            <button
+              type="button"
+              className="backdrop"
+              aria-label="Cerrar"
+              tabIndex={-1}
+              onClick={() => setMore(false)}
+            />
+            <aside className="sheet-panel pa-sheet" aria-label="Otros registros">
+              <span className="grabber" aria-hidden="true" />
+              <div className="drawer-head">
+                <h2>¿Qué quiere registrar?</h2>
+                <button
+                  type="button"
+                  className="icon-btn"
+                  aria-label="Cerrar"
+                  onClick={() => setMore(false)}
+                >
+                  <X size={20} />
+                </button>
+              </div>
+              {/* biome-ignore lint/a11y/useKeyWithClickEvents: cierra la hoja después de elegir */}
+              <div className="pa-list" onClick={() => setMore(false)}>
+                {list.slice(1)}
+              </div>
+            </aside>
+          </>,
+          document.body,
+        )}
     </header>
   );
 }

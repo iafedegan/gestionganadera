@@ -40,6 +40,7 @@ import {
   today,
   useStore,
 } from "./kit";
+import { useIntent } from "./lib/intent";
 import { useApp } from "./state";
 
 type Tab = "panel" | "hembras" | "agenda" | "indicadores" | "eventos" | "calculadora";
@@ -238,6 +239,7 @@ export function ReproduccionScreen() {
   const [tab, setTab] = useState<Tab>("panel");
   const [sp, setSp] = useState<SpeciesF>("todos");
   const [form, setForm] = useState<Kind | null>(null);
+  useIntent("reproduccion", ["celo", "servicio", "parto"] as const, setForm);
   const [ficha, setFicha] = useState<string | null>(null);
   const fichaRef = useRef<HTMLDialogElement>(null);
 

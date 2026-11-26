@@ -37,6 +37,7 @@ import {
   today,
   useStore,
 } from "./kit";
+import { useIntent } from "./lib/intent";
 import { useApp } from "./state";
 
 type Tab = "panel" | "ordeno" | "lactancias" | "calidad" | "crecimiento" | "destino";
@@ -100,6 +101,7 @@ export function ProduccionScreen() {
   const [tab, setTab] = useState<Tab>("panel");
   const [sp, setSp] = useState<SpeciesF>("todos");
   const [open, setOpen] = useState<"ordeno" | "calidad" | "peso" | null>(null);
+  useIntent("produccion", ["ordeno", "peso"] as const, setOpen);
   const [picked, setAnimal] = useState("");
   const animal = picked || (LACTATING[0]?.tag ?? "");
 

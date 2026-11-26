@@ -39,6 +39,7 @@ import {
   today,
   useStore,
 } from "./kit";
+import { useIntent } from "./lib/intent";
 import { useApp } from "./state";
 
 type Tab = "panel" | "eventos" | "retiros" | "calendario" | "mastitis" | "botiquin";
@@ -72,6 +73,7 @@ export function SanidadScreen() {
   const cmtTags = herd.lactating.map((a) => a.tag);
   const [tab, setTab] = useState<Tab>("panel");
   const [open, setOpen] = useState<"evento" | "cmt" | null>(null);
+  useIntent("sanidad", ["evento"] as const, setOpen);
   const [checked, setCheck] = useState("");
   const check = checked || (animalTags[0] ?? "");
 

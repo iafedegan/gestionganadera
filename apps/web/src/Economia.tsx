@@ -28,6 +28,7 @@ import {
   today,
   useStore,
 } from "./kit";
+import { useIntent } from "./lib/intent";
 import { useApp } from "./state";
 
 type Tab = "panel" | "movimientos" | "presupuesto" | "costos" | "flujo" | "indicadores";
@@ -63,6 +64,7 @@ export function EconomiaScreen() {
   const [movs, add, reset] = useStore<Mov>("movs-eco", MOV_SEED);
   const [tab, setTab] = useState<Tab>("panel");
   const [open, setOpen] = useState<"Ingreso" | "Egreso" | null>(null);
+  useIntent("economia", ["Ingreso", "Egreso"] as const, setOpen);
   const [tipoF, setTipoF] = useState<"Todos" | "Ingreso" | "Egreso">("Todos");
   const [esc, setEsc] = useState({ precio: 0, alimento: 0, litros: 0 });
 
