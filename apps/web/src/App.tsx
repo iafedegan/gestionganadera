@@ -1,11 +1,11 @@
 import { type ReactNode, useEffect, useState } from "react";
 import { ActivosScreen } from "./Activos";
-import { AsistenciaScreen } from "./Asistencia";
 import { ContabilidadScreen } from "./Contabilidad";
 import { ConsentGate } from "./Datos";
 import { EconomiaScreen } from "./Economia";
 import { CapacitacionScreen, ComunidadScreen, NoticiasScreen, TiendaScreen } from "./Ecosistema";
 import { ExpedienteScreen } from "./Expediente";
+import { ExtensionScreen } from "./Extension";
 import { OnboardingWizard } from "./Onboarding";
 import { PasturasScreen } from "./Pasturas";
 import { PersonalScreen } from "./Personal";
@@ -13,6 +13,7 @@ import { ProduccionScreen } from "./Produccion";
 import { ReproduccionScreen } from "./Reproduccion";
 import { SanidadScreen } from "./Sanidad";
 import { Splash } from "./Splash";
+import { StaffGate } from "./Tecnigan";
 import { VentasScreen } from "./Ventas";
 import { AnimalsScreen } from "./animals";
 import { isDemoOrg } from "./lib/scope";
@@ -34,7 +35,7 @@ const SCREENS: Partial<Record<ModuleKey, (go: (m: ModuleKey) => void) => ReactNo
   sanidad: () => <SanidadScreen />,
   pasturas: () => <PasturasScreen />,
   economia: () => <EconomiaScreen />,
-  asistencia: () => <AsistenciaScreen />,
+  asistencia: () => <ExtensionScreen />,
   ventas: () => <VentasScreen />,
   personal: () => <PersonalScreen />,
   activos: () => <ActivosScreen />,
@@ -78,6 +79,8 @@ export function App() {
   if (booting) return <Splash />;
   if (!session) return <Login />;
   if (session.onboardingPending) return <OnboardingWizard />;
+  // Sin ganaderías: personal del gremio (Secretario Técnico) o una cuenta aún sin invitación.
+  if (session.memberships.length === 0) return <StaffGate />;
 
   // Mientras falte la configuración mínima (finca, área, ubicación y animales) solo se abren
   // Inicio y los módulos que sirven para completarla. La cuenta demostrativa no se bloquea.

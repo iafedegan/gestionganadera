@@ -13,12 +13,13 @@ import {
 } from "@ganaderia/domain";
 import { CheckCircle2, ChevronRight, Circle, FolderOpen, Lock, ShieldCheck } from "lucide-react";
 import { type ReactNode, useEffect, useState } from "react";
+import { useExtension } from "./Extension";
 import { ProfileWizard, useFarmProfile } from "./Profile";
 import { useActiveFarm, useFarms } from "./animals";
 import { CardHead, PageHead } from "./components";
 import { MOV_SEED, type Mov } from "./herd";
 import { useStore } from "./kit";
-import { todayLocal } from "./labels";
+import { fecha, todayLocal } from "./labels";
 import { getElevation } from "./lib/farmIntel";
 import { type LocalFarmMap, type LocalHerdAnimal, localdb } from "./lib/localdb";
 import type { ModuleKey } from "./modules";
@@ -45,7 +46,7 @@ const FIX: Record<Requirement["key"], { go: ModuleKey | "perfil"; hint: string }
   },
   verified: {
     go: "asistencia",
-    hint: "Lo da la visita de verificación del técnico (llega con la extensión híbrida).",
+    hint: "Pida la visita al Secretario Técnico de su TECNIG@N desde Asistencia técnica.",
   },
 };
 
@@ -83,6 +84,7 @@ export function ExpedienteScreen({ onModule }: { onModule(m: ModuleKey): void })
   const [elevation, setElevation] = useState<number | null>(null);
   const [movs] = useStore<Mov>("movs-eco", MOV_SEED);
   const [profileOpen, setProfileOpen] = useState(false);
+  const ext = useExtension().data;
 
   const area = farm?.livestockAreaHa ?? farm?.totalAreaHa ?? profile?.areaHa ?? null;
 
@@ -148,8 +150,10 @@ export function ExpedienteScreen({ onModule }: { onModule(m: ModuleKey): void })
     paddocks,
     practices: Boolean(profile),
     indicators: known,
-    verified: false,
+    verified: Boolean(ext?.verifications.some((v) => v.farmId === farm.id)),
   });
+  const verification = ext?.verifications.find((v) => v.farmId === farm.id) ?? null;
+  const recos = (ext?.recommendations ?? []).filter((r) => !r.farmId || r.farmId === farm.id);
   const year = todayLocal().slice(0, 4);
   const movsYear = movs.filter((m) => m.fecha.startsWith(year)).length;
   const go = (r: Requirement) => {
@@ -192,7 +196,7 @@ export function ExpedienteScreen({ onModule }: { onModule(m: ModuleKey): void })
             <ul className="exp-next">
               {next.map((r) => (
                 <li key={r.key}>
-                  <button type="button" onClick={() => go(r)} disabled={r.key === "verified"}>
+                  <button type="button" onClick={() => go(r)}>
                     <span className="exp-next-ic">
                       {r.key === "verified" ? (
                         <Lock size={18} aria-hidden="true" />
@@ -204,7 +208,7 @@ export function ExpedienteScreen({ onModule }: { onModule(m: ModuleKey): void })
                       <strong>{r.label}</strong>
                       <small>{FIX[r.key].hint}</small>
                     </span>
-                    {r.key !== "verified" && <ChevronRight size={18} aria-hidden="true" />}
+                    <ChevronRight size={18} aria-hidden="true" />
                   </button>
                 </li>
               ))}
@@ -270,10 +274,23 @@ export function ExpedienteScreen({ onModule }: { onModule(m: ModuleKey): void })
         <Block title="Historial con el gremio">
           <Item done={Boolean(profile)} label="Diagnóstico de la finca" />
           <Item
-            done={false}
-            soon
-            label="Recomendaciones, visitas y su adopción"
-            note="Llega con la extensión híbrida."
+            done={recos.length > 0}
+            label={`Recomendaciones: ${num(recos.length)} · aplicadas ${num(
+              recos.filter((r) => r.status === "adoptada").length,
+            )} · verificadas ${num(recos.filter((r) => r.verifiedAt).length)}`}
+          />
+          <Item
+            done={Boolean(verification)}
+            label={
+              verification
+                ? `Línea base verificada en campo el ${fecha(verification.visitedOn)}`
+                : "Visita de verificación en campo"
+            }
+            note={
+              verification
+                ? `Por ${verification.verifierName}`
+                : "La hace el Secretario Técnico del TECNIG@N."
+            }
           />
         </Block>
         <Block title="Económico y ambiental">

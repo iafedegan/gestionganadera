@@ -786,6 +786,195 @@ export interface DataRequestDto {
   createdAt: string;
 }
 
+/* ───── Extensión híbrida con adopción verificada (Plan CTeI 2026–2030, §6.1.1) ───── */
+
+export const ExtensionTopic = z.enum([
+  "reproduccion",
+  "nutricion",
+  "sanidad",
+  "praderas",
+  "leche",
+  "gestion",
+  "ambiental",
+  "otro",
+]);
+export type ExtensionTopic = z.infer<typeof ExtensionTopic>;
+
+/** Indicador sectorial al que contribuye una recomendación (mismas claves del expediente). */
+export const SectorIndicator = z.enum([
+  "edadPrimerParto",
+  "intervaloPartos",
+  "natalidad",
+  "litrosVacaDia",
+  "gananciaDiaria",
+  "carga",
+]);
+export type SectorIndicator = z.infer<typeof SectorIndicator>;
+
+export const TechCaseCreate = z.object({
+  organizationId: z.string().uuid(),
+  farmId: z.string().uuid().nullable().optional(),
+  topic: ExtensionTopic,
+  question: z.string().trim().min(10, "Cuente su consulta con un poco más de detalle.").max(2000),
+  /** Respuesta que dio el asistente con IA (primer nivel), si la hubo. */
+  aiAnswer: z.string().trim().max(6000).optional(),
+});
+export type TechCaseCreate = z.infer<typeof TechCaseCreate>;
+
+export const TechMessageCreate = z.object({
+  body: z.string().trim().min(2, "Escriba su mensaje.").max(3000),
+});
+export type TechMessageCreate = z.infer<typeof TechMessageCreate>;
+
+export const RecommendationCreate = z.object({
+  organizationId: z.string().uuid(),
+  farmId: z.string().uuid().nullable().optional(),
+  caseId: z.string().uuid().nullable().optional(),
+  topic: ExtensionTopic,
+  title: z.string().trim().min(5, "Escriba la recomendación en una frase.").max(140),
+  detail: z.string().trim().max(2000).default(""),
+  indicator: SectorIndicator.nullable().optional(),
+  dueOn: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/)
+    .nullable()
+    .optional(),
+});
+export type RecommendationCreate = z.infer<typeof RecommendationCreate>;
+
+export const RecommendationStatus = z.enum(["pendiente", "en_curso", "adoptada", "descartada"]);
+export type RecommendationStatus = z.infer<typeof RecommendationStatus>;
+export const RecommendationUpdate = z.object({ status: RecommendationStatus });
+
+export const RecommendationVerify = z.object({
+  note: z.string().trim().max(1000).default(""),
+});
+
+export const FieldVerificationCreate = z.object({
+  organizationId: z.string().uuid(),
+  farmId: z.string().uuid(),
+  visitedOn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  note: z.string().trim().max(2000).default(""),
+});
+export type FieldVerificationCreate = z.infer<typeof FieldVerificationCreate>;
+
+export interface TechMessageDto {
+  id: string;
+  fromStaff: boolean;
+  authorName: string;
+  body: string;
+  createdAt: string;
+}
+
+export interface TechCaseDto {
+  id: string;
+  organizationId: string;
+  organizationName: string;
+  farmId: string | null;
+  topic: ExtensionTopic;
+  question: string;
+  aiAnswer: string | null;
+  status: "abierta" | "respondida" | "cerrada";
+  authorName: string;
+  messages: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface TechCaseThreadDto {
+  case: TechCaseDto;
+  messages: TechMessageDto[];
+}
+
+export interface RecommendationDto {
+  id: string;
+  organizationId: string;
+  organizationName: string;
+  farmId: string | null;
+  caseId: string | null;
+  fromStaff: boolean;
+  authorName: string;
+  topic: ExtensionTopic;
+  title: string;
+  detail: string;
+  indicator: SectorIndicator | null;
+  dueOn: string | null;
+  status: RecommendationStatus;
+  adoptedAt: string | null;
+  verifiedAt: string | null;
+  verificationNote: string | null;
+  createdAt: string;
+}
+
+export interface FieldVerificationDto {
+  id: string;
+  organizationId: string;
+  farmId: string;
+  visitedOn: string;
+  note: string;
+  verifierName: string;
+}
+
+/** Indicadores de la extensión (Plan CTeI, Tablas 16 y 22). */
+export interface ExtensionIndicators {
+  recommendations: number;
+  adopted: number;
+  verified: number;
+  /** Adoptadas y verificadas en finca sobre entregadas (meta del plan: 40 % o más). */
+  verifiedAdoptionRate: number | null;
+  /** Preguntas al asistente con IA en los últimos 12 meses. */
+  aiQuestions: number;
+  /** Consultas escaladas al segundo nivel en los últimos 12 meses. */
+  escalated: number;
+  /** Consultas resueltas en primer nivel, sin escalar (meta del plan: 80 % o más). */
+  firstLevelRate: number | null;
+  /** Respuestas del Secretario Técnico en los últimos 12 meses. */
+  secondLevelAttentions: number;
+}
+
+export interface ExtensionSummaryDto {
+  /** El dueño autorizó compartir el expediente con el Secretario Técnico. */
+  shares: boolean;
+  /** TECNIG@N que atiende su departamento, si lo hay en la plataforma. */
+  tecnigan: string | null;
+  cases: TechCaseDto[];
+  recommendations: RecommendationDto[];
+  verifications: FieldVerificationDto[];
+  indicators: ExtensionIndicators;
+}
+
+export interface StaffDto {
+  role: "secretario_tecnico";
+  tecnigan: string;
+  departments: string[];
+}
+
+export interface StaffFarmDto {
+  id: string;
+  name: string;
+  location: string | null;
+  areaHa: number | null;
+  focus: string | null;
+  animals: number;
+  verifiedOn: string | null;
+}
+
+export interface StaffOrgDto {
+  organizationId: string;
+  organizationName: string;
+  department: string | null;
+  municipality: string | null;
+  farms: StaffFarmDto[];
+}
+
+export interface StaffInboxDto {
+  staff: StaffDto;
+  cases: TechCaseDto[];
+  organizations: StaffOrgDto[];
+  recommendations: RecommendationDto[];
+  indicators: ExtensionIndicators;
+}
+
 /** Códigos de error de dominio (estables; la interfaz los traduce). */
 export const ErrorCodes = {
   TAG_DUPLICADO: "TAG_DUPLICADO",
@@ -812,6 +1001,9 @@ export const ErrorCodes = {
   PUBLICACION_NO_EXISTE: "PUBLICACION_NO_EXISTE",
   AULA_NO_EXISTE: "AULA_NO_EXISTE",
   AULA_SIN_INSCRIPCION: "AULA_SIN_INSCRIPCION",
+  COMPARTIR_REQUERIDO: "COMPARTIR_REQUERIDO",
+  SIN_ACCESO: "SIN_ACCESO",
+  NO_ENCONTRADO: "NO_ENCONTRADO",
 } as const;
 export type ErrorCode = (typeof ErrorCodes)[keyof typeof ErrorCodes];
 

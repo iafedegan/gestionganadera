@@ -16,11 +16,14 @@ import type {
   DataRequestDto,
   DataRequestInput,
   DemoUserDto,
+  ExtensionSummaryDto,
   FarmCreate,
   FarmDto,
   FarmProfileDto,
   FarmProfileInput,
   FarmUpdate,
+  FieldVerificationCreate,
+  FieldVerificationDto,
   InvitationCreate,
   InvitationDto,
   InvitationPreview,
@@ -29,13 +32,21 @@ import type {
   OnboardingRequest,
   PullResponse,
   PushResponse,
+  RecommendationCreate,
+  RecommendationDto,
+  RecommendationStatus,
   RegisterInvitedRequest,
   RegisterRequest,
   SessionDto,
+  StaffDto,
+  StaffInboxDto,
   StoreCatalogDto,
   StoreCategoryDto,
   StoreSearchDto,
   TeamDto,
+  TechCaseCreate,
+  TechCaseDto,
+  TechCaseThreadDto,
 } from "@ganaderia/contracts";
 
 /** Sin respuesta del servidor: no hay red o el servidor no está disponible. */
@@ -123,6 +134,26 @@ async function downloadMyData(): Promise<void> {
 }
 
 export const api = {
+  // Extensión híbrida: consultas al Secretario Técnico, recomendaciones y verificación en finca.
+  extension: (organizationId: string) =>
+    request<ExtensionSummaryDto>("GET", `/v1/extension?organizationId=${organizationId}`),
+  escalate: (input: TechCaseCreate) =>
+    request<TechCaseDto>("POST", "/v1/extension/consultas", input),
+  caseThread: (id: string) => request<TechCaseThreadDto>("GET", `/v1/extension/consultas/${id}`),
+  caseReply: (id: string, body: string) =>
+    request<TechCaseThreadDto>("POST", `/v1/extension/consultas/${id}/mensajes`, { body }),
+  caseClose: (id: string) =>
+    request<TechCaseThreadDto>("POST", `/v1/extension/consultas/${id}/cerrar`, {}),
+  recommend: (input: RecommendationCreate) =>
+    request<RecommendationDto>("POST", "/v1/extension/recomendaciones", input),
+  recoStatus: (id: string, status: RecommendationStatus) =>
+    request<RecommendationDto>("PATCH", `/v1/extension/recomendaciones/${id}`, { status }),
+  recoVerify: (id: string, note: string) =>
+    request<RecommendationDto>("POST", `/v1/extension/recomendaciones/${id}/verificar`, { note }),
+  staffMe: () => request<{ staff: StaffDto | null }>("GET", "/v1/gremio/yo"),
+  staffInbox: () => request<StaffInboxDto>("GET", "/v1/gremio/bandeja"),
+  fieldVerify: (input: FieldVerificationCreate) =>
+    request<FieldVerificationDto>("POST", "/v1/gremio/verificaciones", input),
   // Protocolo de datos del productor (consentimiento, copia de los datos, solicitudes).
   consent: () => request<DataConsentState>("GET", "/v1/me/consentimiento"),
   saveConsent: (input: DataConsentInput) =>

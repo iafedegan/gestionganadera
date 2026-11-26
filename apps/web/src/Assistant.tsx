@@ -1,6 +1,7 @@
 import type { AssistantRequest, KnowledgeSourceDto } from "@ganaderia/contracts";
 import { ArrowUp, BookOpen, Sparkles, Stethoscope, Trash2, X } from "lucide-react";
 import { type ReactNode, useEffect, useRef, useState } from "react";
+import { EscalateDialog } from "./Extension";
 import { useActiveFarm, useFarms } from "./animals";
 import { ApiError, NetworkError, api } from "./lib/api";
 import { getSoil, getWeather, texture, thi } from "./lib/farmIntel";
@@ -207,6 +208,7 @@ export function AssistantDialog(props: { initial: string | null; onClose(): void
   const [enabled, setEnabled] = useState<boolean | null>(null);
   const [remaining, setRemaining] = useState<number | null>(null);
   const sentInitial = useRef(false);
+  const [escalate, setEscalate] = useState<{ question: string; aiAnswer: string } | null>(null);
 
   useEffect(() => {
     ref.current?.showModal();
@@ -338,6 +340,19 @@ export function AssistantDialog(props: { initial: string | null; onClose(): void
             <div key={i} className={t.role === "user" ? "asis-msg me" : "asis-msg ai"}>
               {t.role === "user" ? <p>{t.text}</p> : <Rich text={t.text} />}
               {t.sources && t.sources.length > 0 && <Sources items={t.sources} />}
+              {t.role === "assistant" && i === turns.length - 1 && !busy && (
+                // Segundo nivel de la extensión: si la respuesta no basta, la consulta pasa al técnico.
+                <button
+                  type="button"
+                  className="asis-escalate"
+                  disabled={!online}
+                  onClick={() =>
+                    setEscalate({ question: turns[i - 1]?.text ?? "", aiAnswer: t.text })
+                  }
+                >
+                  ¿No le basta? Consultar al Secretario Técnico
+                </button>
+              )}
             </div>
           ))}
 
@@ -395,6 +410,13 @@ export function AssistantDialog(props: { initial: string | null; onClose(): void
         </form>
         {remaining !== null && remaining <= 10 && (
           <p className="asis-quota">Quedan {remaining} preguntas hoy para su ganadería.</p>
+        )}
+        {escalate && (
+          <EscalateDialog
+            question={escalate.question}
+            aiAnswer={escalate.aiAnswer}
+            onClose={() => setEscalate(null)}
+          />
         )}
       </div>
     </dialog>

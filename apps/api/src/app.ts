@@ -14,12 +14,18 @@ import {
   FarmCreate,
   FarmProfile,
   FarmUpdate,
+  FieldVerificationCreate,
   InvitationCreate,
   LoginRequest,
   OnboardingRequest,
   PushRequest,
+  RecommendationCreate,
+  RecommendationUpdate,
+  RecommendationVerify,
   RegisterInvitedRequest,
   RegisterRequest,
+  TechCaseCreate,
+  TechMessageCreate,
 } from "@ganaderia/contracts";
 import { can } from "@ganaderia/domain";
 import Fastify, { type FastifyInstance, type FastifyReply, type FastifyRequest } from "fastify";
@@ -59,9 +65,26 @@ import {
 } from "./community.js";
 import { addRequest, exportData, getConsent, listRequests, saveConsent } from "./datos.js";
 import type { Db } from "./db.js";
-import { DemoRateLimit, ensureDemo } from "./demo.js";
-import { DEMO_SPECS, demoSpec } from "./demoData.js";
+import { DemoRateLimit, ensureDemo, ensureDemoStaff } from "./demo.js";
+import { DEMO_SPECS, DEMO_STAFF, demoSpec, demoStaffSpec } from "./demoData.js";
 import { type Aula, AulaError, type Ecosistema, type KnowledgeHit } from "./ecosistema.js";
+import {
+  type Fail,
+  accessTo,
+  addMessage,
+  caseOrg,
+  closeCase,
+  createCase,
+  createRecommendation,
+  createVerification,
+  getThread as getCaseThread,
+  getStaff,
+  orgSummary,
+  recoOrg,
+  setRecommendationStatus,
+  staffInbox,
+  verifyRecommendation,
+} from "./extension.js";
 import { createFarm, listFarms, pull, push, updateFarm } from "./sync.js";
 import {
   acceptInvitation,
@@ -207,7 +230,11 @@ export async function buildApp(opts: AppOptions): Promise<FastifyInstance> {
   app.get("/v1/demo/users", async (_req, reply) => {
     if (!opts.demo)
       return reply.code(404).send({ error: "NO_ENCONTRADO", message: "No disponible." });
-    return DEMO_SPECS.map(({ key, label, description }) => ({ key, label, description }));
+    return [...DEMO_SPECS, ...DEMO_STAFF].map(({ key, label, description }) => ({
+      key,
+      label,
+      description,
+    }));
   });
 
   app.post("/v1/demo/login", async (req, reply) => {
@@ -215,7 +242,8 @@ export async function buildApp(opts: AppOptions): Promise<FastifyInstance> {
       return reply.code(404).send({ error: "NO_ENCONTRADO", message: "No disponible." });
     const body = DemoLoginRequest.safeParse(req.body);
     const spec = body.success ? demoSpec(body.data.key) : undefined;
-    if (!spec)
+    const staffSpec = body.success ? demoStaffSpec(body.data.key) : undefined;
+    if (!spec && !staffSpec)
       return reply
         .code(400)
         .send({ error: "VALIDACION", message: "Esa cuenta de muestra no existe." });
@@ -226,7 +254,9 @@ export async function buildApp(opts: AppOptions): Promise<FastifyInstance> {
       });
     }
     try {
-      const { userId } = await ensureDemo(db, spec);
+      const { userId } = spec
+        ? await ensureDemo(db, spec)
+        : await ensureDemoStaff(db, staffSpec as NonNullable<typeof staffSpec>);
       const s = await openDemoSession(db, userId, req.headers["user-agent"]);
       reply.setCookie(COOKIE, s.token, {
         httpOnly: true,
@@ -765,6 +795,177 @@ export async function buildApp(opts: AppOptions): Promise<FastifyInstance> {
         message: "Ya envió varias solicitudes hoy. Le responderemos pronto.",
       });
     return reply.code(201).send(r);
+  });
+
+  /* ───── Extensión híbrida con adopción verificada (Plan CTeI 2026–2030, §6.1.1) ───── */
+
+  const FAIL: Record<Fail["error"], { code: number; error: string; message: string }> = {
+    SIN_ACCESO: {
+      code: 403,
+      error: ErrorCodes.SIN_ACCESO,
+      message: "No tiene acceso a esta ganadería.",
+    },
+    NO_EXISTE: { code: 404, error: ErrorCodes.NO_ENCONTRADO, message: "Ya no está disponible." },
+    COMPARTIR_REQUERIDO: {
+      code: 409,
+      error: ErrorCodes.COMPARTIR_REQUERIDO,
+      message:
+        "Para consultar al Secretario Técnico, autorice compartir el expediente de su finca.",
+    },
+    ESTADO: {
+      code: 409,
+      error: ErrorCodes.VALIDACION,
+      message: "La recomendación no está en un estado que permita ese cambio.",
+    },
+  };
+  const fail = (reply: FastifyReply, f: Fail) => {
+    const e = FAIL[f.error];
+    return reply.code(e.code).send({ error: e.error, message: e.message });
+  };
+  const isFail = (v: unknown): v is Fail =>
+    typeof v === "object" && v !== null && "error" in v && typeof (v as Fail).error === "string";
+  const bad = (reply: FastifyReply, message = "Datos inválidos.") =>
+    reply.code(400).send({ error: ErrorCodes.VALIDACION, message });
+  const isMember = (a: NonNullable<FastifyRequest["auth"]>, orgId: string) =>
+    a.memberships.some((m) => m.organizationId === orgId);
+
+  app.get("/v1/extension", { preHandler: requireSession }, async (req, reply) => {
+    const a = req.auth as NonNullable<FastifyRequest["auth"]>;
+    const q = orgQuery.safeParse(req.query);
+    if (!q.success) return bad(reply);
+    if (!isMember(a, q.data.organizationId)) return fail(reply, { error: "SIN_ACCESO" });
+    return orgSummary(db, q.data.organizationId);
+  });
+
+  app.post("/v1/extension/consultas", { preHandler: requireSession }, async (req, reply) => {
+    const a = req.auth as NonNullable<FastifyRequest["auth"]>;
+    const b = TechCaseCreate.safeParse(req.body);
+    if (!b.success) return bad(reply, b.error.issues[0]?.message);
+    if (!isMember(a, b.data.organizationId)) return fail(reply, { error: "SIN_ACCESO" });
+    const r = await createCase(db, a.user.id, b.data);
+    if ("error" in r && r.error === "LIMITE")
+      return reply.code(429).send({
+        error: ErrorCodes.LIMITE_DIARIO,
+        message: "Su ganadería ya envió muchas consultas hoy. Intente mañana.",
+      });
+    if (isFail(r)) return fail(reply, r);
+    return reply.code(201).send(r);
+  });
+
+  /** Acceso a la consulta: miembro de la ganadería o Secretario Técnico autorizado de su región. */
+  async function caseAccess(req: FastifyRequest, id: string) {
+    const a = req.auth as NonNullable<FastifyRequest["auth"]>;
+    const orgId = await caseOrg(db, id);
+    if (!orgId) return { error: "NO_EXISTE" } as Fail;
+    return accessTo(db, a.user, a.memberships, orgId);
+  }
+  const idParam2 = z.object({ id: z.string().uuid() });
+
+  app.get("/v1/extension/consultas/:id", { preHandler: requireSession }, async (req, reply) => {
+    const p = idParam2.safeParse(req.params);
+    if (!p.success) return bad(reply);
+    const acc = await caseAccess(req, p.data.id);
+    if (isFail(acc)) return fail(reply, acc);
+    return getCaseThread(db, p.data.id);
+  });
+
+  app.post(
+    "/v1/extension/consultas/:id/mensajes",
+    { preHandler: requireSession },
+    async (req, reply) => {
+      const a = req.auth as NonNullable<FastifyRequest["auth"]>;
+      const p = idParam2.safeParse(req.params);
+      const b = TechMessageCreate.safeParse(req.body);
+      if (!p.success || !b.success) return bad(reply, b.error?.issues[0]?.message);
+      const acc = await caseAccess(req, p.data.id);
+      if (isFail(acc)) return fail(reply, acc);
+      const r = await addMessage(db, p.data.id, a.user.id, acc.kind === "staff", b.data.body);
+      return isFail(r) ? fail(reply, r) : r;
+    },
+  );
+
+  app.post(
+    "/v1/extension/consultas/:id/cerrar",
+    { preHandler: requireSession },
+    async (req, reply) => {
+      const p = idParam2.safeParse(req.params);
+      if (!p.success) return bad(reply);
+      const acc = await caseAccess(req, p.data.id);
+      if (isFail(acc)) return fail(reply, acc);
+      await closeCase(db, p.data.id);
+      return getCaseThread(db, p.data.id);
+    },
+  );
+
+  app.post("/v1/extension/recomendaciones", { preHandler: requireSession }, async (req, reply) => {
+    const a = req.auth as NonNullable<FastifyRequest["auth"]>;
+    const b = RecommendationCreate.safeParse(req.body);
+    if (!b.success) return bad(reply, b.error.issues[0]?.message);
+    const acc = await accessTo(db, a.user, a.memberships, b.data.organizationId);
+    if (isFail(acc)) return fail(reply, acc);
+    // Las recomendaciones técnicas las entrega el Secretario Técnico.
+    if (acc.kind !== "staff") return fail(reply, { error: "SIN_ACCESO" });
+    const r = await createRecommendation(db, a.user.id, b.data);
+    return isFail(r) ? fail(reply, r) : reply.code(201).send(r);
+  });
+
+  app.patch(
+    "/v1/extension/recomendaciones/:id",
+    { preHandler: requireSession },
+    async (req, reply) => {
+      const a = req.auth as NonNullable<FastifyRequest["auth"]>;
+      const p = idParam2.safeParse(req.params);
+      const b = RecommendationUpdate.safeParse(req.body);
+      if (!p.success || !b.success) return bad(reply);
+      const orgId = await recoOrg(db, p.data.id);
+      if (!orgId) return fail(reply, { error: "NO_EXISTE" });
+      // El estado de adopción lo declara la ganadería, no el técnico.
+      if (!isMember(a, orgId)) return fail(reply, { error: "SIN_ACCESO" });
+      const r = await setRecommendationStatus(db, p.data.id, b.data.status);
+      return isFail(r) ? fail(reply, r) : r;
+    },
+  );
+
+  app.post(
+    "/v1/extension/recomendaciones/:id/verificar",
+    { preHandler: requireSession },
+    async (req, reply) => {
+      const a = req.auth as NonNullable<FastifyRequest["auth"]>;
+      const p = idParam2.safeParse(req.params);
+      const b = RecommendationVerify.safeParse(req.body ?? {});
+      if (!p.success || !b.success) return bad(reply);
+      const orgId = await recoOrg(db, p.data.id);
+      if (!orgId) return fail(reply, { error: "NO_EXISTE" });
+      const acc = await accessTo(db, a.user, a.memberships, orgId);
+      if (isFail(acc)) return fail(reply, acc);
+      // La verificación en finca la hace el técnico, nunca la misma ganadería.
+      if (acc.kind !== "staff") return fail(reply, { error: "SIN_ACCESO" });
+      const r = await verifyRecommendation(db, p.data.id, a.user.id, b.data.note);
+      return isFail(r) ? fail(reply, r) : r;
+    },
+  );
+
+  app.get("/v1/gremio/yo", { preHandler: requireSession }, async (req) => {
+    const a = req.auth as NonNullable<FastifyRequest["auth"]>;
+    return { staff: await getStaff(db, a.user.id) };
+  });
+
+  app.get("/v1/gremio/bandeja", { preHandler: requireSession }, async (req, reply) => {
+    const a = req.auth as NonNullable<FastifyRequest["auth"]>;
+    const staff = await getStaff(db, a.user.id);
+    if (!staff) return fail(reply, { error: "SIN_ACCESO" });
+    return staffInbox(db, staff);
+  });
+
+  app.post("/v1/gremio/verificaciones", { preHandler: requireSession }, async (req, reply) => {
+    const a = req.auth as NonNullable<FastifyRequest["auth"]>;
+    const b = FieldVerificationCreate.safeParse(req.body);
+    if (!b.success) return bad(reply);
+    const acc = await accessTo(db, a.user, a.memberships, b.data.organizationId);
+    if (isFail(acc)) return fail(reply, acc);
+    if (acc.kind !== "staff") return fail(reply, { error: "SIN_ACCESO" });
+    const r = await createVerification(db, a.user.id, b.data);
+    return isFail(r) ? fail(reply, r) : reply.code(201).send(r);
   });
 
   /* ───── Comunidad de productores ───── */

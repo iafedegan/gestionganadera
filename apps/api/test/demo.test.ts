@@ -32,7 +32,7 @@ describe("cuentas de muestra", () => {
     expect((await enter(off, "pequeno")).statusCode).toBe(404);
   });
 
-  it("lista los cinco perfiles sin datos sensibles", async () => {
+  it("lista los perfiles y el Secretario Técnico sin datos sensibles", async () => {
     const res = await on.inject({ method: "GET", url: "/v1/demo/users" });
     expect(res.statusCode).toBe(200);
     const list = res.json() as { key: string; label: string; description: string }[];
@@ -42,8 +42,24 @@ describe("cuentas de muestra", () => {
       "mediano",
       "grande",
       "completo",
+      "secretario",
     ]);
-    expect(JSON.stringify(list)).not.toContain("@");
+    // Ningún correo (el «@» de TECNIG@N es parte del nombre, no una dirección).
+    expect(JSON.stringify(list)).not.toMatch(/[\w.-]+@[\w-]+\.[\w.]+/);
+  });
+
+  it("el Secretario Técnico de muestra entra sin ganadería y con su región", async () => {
+    const res = await enter(on, "secretario");
+    expect(res.statusCode).toBe(200);
+    expect(res.json().memberships).toEqual([]);
+    const cookie = `sid=${res.cookies.find((c) => c.name === "sid")?.value}`;
+    const me = await on.inject({ url: "/v1/gremio/yo", headers: { cookie } });
+    expect(me.json().staff).toMatchObject({
+      tecnigan: "TECNIG@N de Córdoba",
+      departments: ["Córdoba"],
+    });
+    // Entrar de nuevo no duplica la cuenta.
+    expect((await enter(on, "secretario")).statusCode).toBe(200);
   });
 
   it("rechaza una cuenta que no existe", async () => {

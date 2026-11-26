@@ -1184,3 +1184,32 @@ export function buildHerd(spec: DemoSpec, today: string, seed = 7) {
 
   return { animals, events };
 }
+
+/**
+ * Personal del gremio de muestra: un Secretario Técnico Ganadero que atiende el segundo nivel de la
+ * extensión para las ganaderías de muestra de su región que autorizaron compartir su expediente.
+ */
+export interface DemoStaffSpec {
+  key: string;
+  label: string;
+  description: string;
+  email: string;
+  displayName: string;
+  tecnigan: string;
+  departments: string[];
+}
+
+export const DEMO_STAFF: DemoStaffSpec[] = [
+  {
+    key: "secretario",
+    label: "Secretario Técnico (TECNIG@N Córdoba)",
+    description:
+      "Segundo nivel de la extensión: consultas, recomendaciones y verificación en finca de las ganaderías de Córdoba.",
+    email: "demo-secretario@demo.ganaderia.local",
+    displayName: "Secretaría Técnica Córdoba (muestra)",
+    tecnigan: "TECNIG@N de Córdoba",
+    departments: ["Córdoba"],
+  },
+];
+
+export const demoStaffSpec = (key: string) => DEMO_STAFF.find((s) => s.key === key);

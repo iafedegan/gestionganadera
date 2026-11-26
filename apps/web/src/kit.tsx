@@ -79,7 +79,7 @@ export function useStore<T>(key: string, seed: T[]): [T[], (r: T) => void, () =>
 /* ───────────── Estructura ───────────── */
 
 export function Tabs<K extends string>(props: {
-  tabs: { key: K; label: string; badge?: number | string }[];
+  tabs: { key: K; label: string; badge?: number | string | undefined }[];
   value: K;
   onChange(k: K): void;
 }) {

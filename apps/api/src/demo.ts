@@ -2,7 +2,13 @@ import { randomBytes } from "node:crypto";
 import { uuidv7 } from "@ganaderia/domain";
 import { type Membership, hashPassword, sha256 } from "./auth.js";
 import type { Db, Q } from "./db.js";
-import { type DemoFarmSpec, type DemoSpec, buildHerd, demoProfile } from "./demoData.js";
+import {
+  type DemoFarmSpec,
+  type DemoSpec,
+  type DemoStaffSpec,
+  buildHerd,
+  demoProfile,
+} from "./demoData.js";
 import { push, todayIn } from "./sync.js";
 
 /**
@@ -440,6 +446,30 @@ export function ensureDemo(db: Db, spec: DemoSpec): Promise<{ userId: string; or
     });
   ready.set(spec.key, p);
   return p;
+}
+
+/** Crea (una vez) la cuenta del Secretario Técnico de muestra; no pertenece a ninguna ganadería. */
+export async function ensureDemoStaff(db: Db, spec: DemoStaffSpec): Promise<{ userId: string }> {
+  const unusable = await hashPassword(randomBytes(24).toString("hex"));
+  return db.admin(async (q) => {
+    const [found] = await q<{ id: string }>("SELECT id FROM app_user WHERE email = $1", [
+      spec.email,
+    ]);
+    const userId =
+      found?.id ??
+      (
+        await q<{ id: string }>(
+          "INSERT INTO app_user (email, display_name, password_hash) VALUES ($1,$2,$3) RETURNING id",
+          [spec.email, spec.displayName, unusable],
+        )
+      )[0]?.id;
+    await q(
+      `INSERT INTO gremio_staff (user_id, role, tecnigan, departments) VALUES ($1,'secretario_tecnico',$2,$3)
+       ON CONFLICT (user_id) DO UPDATE SET tecnigan = excluded.tecnigan, departments = excluded.departments, active = true`,
+      [userId, spec.tecnigan, spec.departments],
+    );
+    return { userId: userId as string };
+  });
 }
 
 /** Límite simple por IP: evita que alguien llene la base creando y entrando sin parar. */
