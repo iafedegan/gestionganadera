@@ -8,6 +8,7 @@ import {
   Dna,
   Droplets,
   FileText,
+  FolderOpen,
   GraduationCap,
   Home,
   Leaf,
@@ -40,6 +41,7 @@ import { type Permission, can } from "@ganaderia/domain";
 export type ModuleKey =
   | "inicio"
   | "animales"
+  | "expediente"
   | "produccion"
   | "reproduccion"
   | "sanidad"
@@ -84,6 +86,7 @@ export interface ModuleDef {
 export const MODULES: ModuleDef[] = [
   { key: "inicio", label: "Inicio", short: "Inicio", icon: Home },
   { key: "animales", label: "Animales", short: "Animales", icon: PawPrint },
+  { key: "expediente", label: "Expediente de la finca", short: "Expediente", icon: FolderOpen },
   {
     key: "produccion",
     label: "Producción",

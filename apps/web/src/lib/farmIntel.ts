@@ -63,6 +63,30 @@ export const thi = (t: number, rh: number) => 1.8 * t + 32 - (0.55 - 0.0055 * rh
 
 const num = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? v : 0);
 
+/**
+ * Altitud del punto (m s. n. m.), para el piso térmico de las referencias del sector. No cambia,
+ * así que se guarda para siempre; sin red y sin dato guardado devuelve null.
+ */
+export async function getElevation(lat: number, lon: number): Promise<number | null> {
+  const key = cacheKey("altura", lat, lon);
+  const cached = readCache<{ m: number }>(key);
+  if (cached && typeof cached.m === "number") return cached.m;
+  try {
+    const res = await fetch(
+      `https://api.open-meteo.com/v1/elevation?latitude=${lat.toFixed(4)}&longitude=${lon.toFixed(4)}`,
+      { signal: AbortSignal.timeout(10_000) },
+    );
+    if (!res.ok) return null;
+    const j = (await res.json()) as { elevation?: number[] };
+    const m = j.elevation?.[0];
+    if (typeof m !== "number" || !Number.isFinite(m)) return null;
+    writeCache(key, { m });
+    return m;
+  } catch {
+    return null;
+  }
+}
+
 /** Pronóstico de 7 días. Se refresca cada 3 horas; sin red devuelve el último guardado. */
 export async function getWeather(lat: number, lon: number, force = false): Promise<Weather | null> {
   const key = cacheKey("clima", lat, lon);

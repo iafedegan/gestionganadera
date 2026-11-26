@@ -2,8 +2,10 @@ import { type ReactNode, useEffect, useState } from "react";
 import { ActivosScreen } from "./Activos";
 import { AsistenciaScreen } from "./Asistencia";
 import { ContabilidadScreen } from "./Contabilidad";
+import { ConsentGate } from "./Datos";
 import { EconomiaScreen } from "./Economia";
 import { CapacitacionScreen, ComunidadScreen, NoticiasScreen, TiendaScreen } from "./Ecosistema";
+import { ExpedienteScreen } from "./Expediente";
 import { OnboardingWizard } from "./Onboarding";
 import { PasturasScreen } from "./Pasturas";
 import { PersonalScreen } from "./Personal";
@@ -22,7 +24,8 @@ import { SETUP_MODULES, useSetup } from "./setup";
 import { useApp } from "./state";
 import { SuppliesScreen } from "./supplies";
 
-const SCREENS: Partial<Record<ModuleKey, () => ReactNode>> = {
+const SCREENS: Partial<Record<ModuleKey, (go: (m: ModuleKey) => void) => ReactNode>> = {
+  expediente: (go) => <ExpedienteScreen onModule={go} />,
   animales: () => <AnimalsScreen />,
   compras: () => <SuppliesScreen />,
   configuracion: () => <SettingsScreen />,
@@ -85,22 +88,26 @@ export function App() {
     canSeeModule(module, role) && (!locked || SETUP_MODULES.includes(module)) ? module : "inicio";
 
   return (
-    <Shell
-      module={shown}
-      onModule={setModule}
-      syncOpen={syncOpen}
-      onSyncOpen={setSyncOpen}
-      locked={locked}
-    >
-      {shown === "inicio" ? (
-        <Home
-          onOpenSync={() => setSyncOpen(true)}
-          onModule={setModule}
-          setup={locked ? setup : null}
-        />
-      ) : (
-        (SCREENS[shown] ?? (() => <ModuleProto module={shown} />))()
-      )}
-    </Shell>
+    <>
+      {/* Protocolo de datos: la autorización se pide antes de seguir registrando. */}
+      <ConsentGate />
+      <Shell
+        module={shown}
+        onModule={setModule}
+        syncOpen={syncOpen}
+        onSyncOpen={setSyncOpen}
+        locked={locked}
+      >
+        {shown === "inicio" ? (
+          <Home
+            onOpenSync={() => setSyncOpen(true)}
+            onModule={setModule}
+            setup={locked ? setup : null}
+          />
+        ) : (
+          (SCREENS[shown] ?? (() => <ModuleProto module={shown} />))(setModule)
+        )}
+      </Shell>
+    </>
   );
 }

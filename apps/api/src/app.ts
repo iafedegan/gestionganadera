@@ -7,6 +7,8 @@ import {
   CommunityPostCreate,
   CommunityReplyCreate,
   CommunityTopic,
+  DataConsentInput,
+  DataRequestInput,
   DemoLoginRequest,
   ErrorCodes,
   FarmCreate,
@@ -55,6 +57,7 @@ import {
   listPosts,
   report as reportContent,
 } from "./community.js";
+import { addRequest, exportData, getConsent, listRequests, saveConsent } from "./datos.js";
 import type { Db } from "./db.js";
 import { DemoRateLimit, ensureDemo } from "./demo.js";
 import { DEMO_SPECS, demoSpec } from "./demoData.js";
@@ -713,6 +716,55 @@ export async function buildApp(opts: AppOptions): Promise<FastifyInstance> {
         .code(400)
         .send({ error: ErrorCodes.VALIDACION, message: "Escriba al menos dos letras." });
     return fromEco(reply, (e) => e.storeSearch(q.data.q));
+  });
+
+  /* ───── Protocolo de datos del productor (Plan CTeI 2026–2030, §6.2.6) ───── */
+
+  app.get("/v1/me/consentimiento", { preHandler: requireSession }, (req) => {
+    const a = req.auth as NonNullable<FastifyRequest["auth"]>;
+    return getConsent(db, a.user.id);
+  });
+  app.put("/v1/me/consentimiento", { preHandler: requireSession }, async (req, reply) => {
+    const a = req.auth as NonNullable<FastifyRequest["auth"]>;
+    const b = DataConsentInput.safeParse(req.body);
+    if (!b.success)
+      return reply.code(400).send({ error: ErrorCodes.VALIDACION, message: "Datos inválidos." });
+    const r = await saveConsent(db, a.user.id, b.data);
+    if ("error" in r)
+      return reply.code(409).send({
+        error: ErrorCodes.VALIDACION,
+        message: "El texto de autorización cambió. Recargue la aplicación y léalo de nuevo.",
+      });
+    return r;
+  });
+  app.get("/v1/me/datos", { preHandler: requireSession }, async (req, reply) => {
+    const a = req.auth as NonNullable<FastifyRequest["auth"]>;
+    const data = await exportData(db, a.user, a.memberships);
+    const day = new Date().toISOString().slice(0, 10);
+    return reply
+      .header("Content-Disposition", `attachment; filename="mis-datos-${day}.json"`)
+      .header("Cache-Control", "no-store")
+      .send(data);
+  });
+  app.get("/v1/me/solicitudes", { preHandler: requireSession }, async (req) => {
+    const a = req.auth as NonNullable<FastifyRequest["auth"]>;
+    return { items: await listRequests(db, a.user.id) };
+  });
+  app.post("/v1/me/solicitudes", { preHandler: requireSession }, async (req, reply) => {
+    const a = req.auth as NonNullable<FastifyRequest["auth"]>;
+    const b = DataRequestInput.safeParse(req.body);
+    if (!b.success)
+      return reply.code(400).send({
+        error: ErrorCodes.VALIDACION,
+        message: b.error.issues[0]?.message ?? "Datos inválidos.",
+      });
+    const r = await addRequest(db, a.user.id, b.data);
+    if ("error" in r)
+      return reply.code(429).send({
+        error: ErrorCodes.LIMITE_DIARIO,
+        message: "Ya envió varias solicitudes hoy. Le responderemos pronto.",
+      });
+    return reply.code(201).send(r);
   });
 
   /* ───── Comunidad de productores ───── */

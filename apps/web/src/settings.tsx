@@ -12,6 +12,7 @@ import {
   XCircle,
 } from "lucide-react";
 import { type ReactNode, useEffect, useRef, useState } from "react";
+import { MisDatosCard } from "./Datos";
 import { FarmsCard } from "./FarmForm";
 import { TeamPanel } from "./TeamPanel";
 import { CardHead, PageHead } from "./components";
@@ -157,6 +158,8 @@ export function SettingsScreen() {
       <FarmsCard />
 
       <TeamPanel />
+
+      <MisDatosCard />
 
       <div className="settings-grid">
         <article className="card">

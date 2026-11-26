@@ -11,6 +11,10 @@ import type {
   CommunityThreadDto,
   CommunityTopic,
   CourseDto,
+  DataConsentInput,
+  DataConsentState,
+  DataRequestDto,
+  DataRequestInput,
   DemoUserDto,
   FarmCreate,
   FarmDto,
@@ -90,7 +94,43 @@ async function request<T>(
   return json as T;
 }
 
+/** Descarga «Mis datos» como archivo JSON (lo arma el servidor; no pasa por la base local). */
+async function downloadMyData(): Promise<void> {
+  let res: Response;
+  try {
+    res = await fetch("/v1/me/datos", {
+      credentials: "same-origin",
+      headers: { "x-requested-with": "ganaderia" },
+      signal: AbortSignal.timeout(60_000),
+    });
+  } catch {
+    throw new NetworkError();
+  }
+  if (res.status >= 500) throw new NetworkError();
+  if (!res.ok)
+    throw new ApiError(res.status, "ERROR", "No se pudo preparar la copia de sus datos.");
+  const name =
+    /filename="([^"]+)"/.exec(res.headers.get("content-disposition") ?? "")?.[1] ??
+    "mis-datos.json";
+  const url = URL.createObjectURL(await res.blob());
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = name;
+  document.body.append(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 10_000);
+}
+
 export const api = {
+  // Protocolo de datos del productor (consentimiento, copia de los datos, solicitudes).
+  consent: () => request<DataConsentState>("GET", "/v1/me/consentimiento"),
+  saveConsent: (input: DataConsentInput) =>
+    request<DataConsentState>("PUT", "/v1/me/consentimiento", input),
+  downloadMyData,
+  dataRequests: () => request<{ items: DataRequestDto[] }>("GET", "/v1/me/solicitudes"),
+  addDataRequest: (input: DataRequestInput) =>
+    request<DataRequestDto>("POST", "/v1/me/solicitudes", input),
   login: (email: string, password: string, remember = false) =>
     request<SessionDto>("POST", "/v1/auth/login", { email, password, remember }),
   register: (input: RegisterRequest) => request<SessionDto>("POST", "/v1/auth/register", input),

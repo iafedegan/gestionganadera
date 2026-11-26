@@ -652,3 +652,296 @@
   margin: 0;
   font-size: 1.2rem;
 }
+
+/* ───── Protocolo de datos: autorización y «Mis datos» ───── */
+.consent-dialog .dialog-head {
+  gap: 10px;
+  color: var(--verde-i);
+}
+.consent-list {
+  display: grid;
+  gap: 12px;
+  margin: 0;
+}
+.consent-list dt {
+  font-weight: 700;
+}
+.consent-list dd {
+  margin: 2px 0 0;
+  color: var(--texto-suave);
+  line-height: 1.4;
+}
+.consent-opts {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 12px;
+  border: 1px solid var(--borde);
+  border-radius: 12px;
+}
+.consent-opts legend {
+  padding: 0 6px;
+  font-size: 0.85rem;
+  font-weight: 700;
+}
+.chk-row,
+.dialog-form .chk-row {
+  /* Texto a la izquierda e interruptor a la derecha, como en los ajustes del teléfono. */
+  display: flex;
+  flex-direction: row-reverse;
+  justify-content: space-between;
+  align-items: center;
+  gap: 14px;
+  min-height: 48px;
+  padding: 8px 0;
+  font-size: 0.95rem;
+  font-weight: 500;
+  color: var(--texto);
+  line-height: 1.35;
+  cursor: pointer;
+}
+.chk-row input[type="checkbox"],
+.dialog-form .chk-row input[type="checkbox"] {
+  flex: none;
+  margin: 0;
+}
+.policy-hint {
+  display: block;
+  line-height: 1.45;
+}
+.mis-datos {
+  display: grid;
+  gap: 12px;
+}
+.mis-datos .btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+.datos-form {
+  display: grid;
+  gap: 10px;
+}
+.datos-form label {
+  display: grid;
+  gap: 4px;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+.datos-form select,
+.datos-form textarea {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid var(--borde);
+  border-radius: 12px;
+  background: var(--superficie);
+  color: var(--texto);
+  font: inherit;
+  font-size: 16px;
+}
+.datos-reqs {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.datos-reqs li {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--borde);
+}
+.datos-reqs small {
+  color: var(--texto-suave);
+}
+
+/* ───── Expediente digital predial ───── */
+.exp-farm {
+  display: grid;
+  gap: 4px;
+  margin: 0 0 14px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--texto-suave);
+}
+.exp-farm select {
+  min-height: 48px;
+  padding: 0 12px;
+  border: 1px solid var(--borde);
+  border-radius: 12px;
+  background: var(--superficie);
+  color: var(--texto);
+  font: inherit;
+  font-size: 16px;
+  font-weight: 600;
+}
+.page-exp .card {
+  margin-bottom: 16px;
+}
+.exp-level {
+  display: grid;
+  gap: 10px;
+  padding: 18px;
+}
+.exp-level-k {
+  margin: 0;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--texto-suave);
+}
+.exp-level h2 {
+  margin: 0;
+  font-size: 1.3rem;
+}
+.exp-bar {
+  list-style: none;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+  margin: 4px 0;
+  padding: 0;
+}
+.exp-bar li {
+  display: grid;
+  gap: 4px;
+  text-align: center;
+}
+.exp-bar li span {
+  display: grid;
+  place-items: center;
+  height: 10px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--texto) 10%, transparent);
+  font-size: 0;
+}
+.exp-bar li.on span {
+  background: var(--verde-botella);
+}
+.exp-bar small {
+  font-size: 0.7rem;
+  color: var(--texto-suave);
+  line-height: 1.15;
+}
+.exp-bar li.on small {
+  color: var(--verde-i);
+  font-weight: 700;
+}
+.exp-next-t {
+  margin: 6px 0 0;
+  font-weight: 700;
+}
+.exp-next {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+}
+.exp-next button {
+  display: grid;
+  grid-template-columns: 26px 1fr auto;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 56px;
+  padding: 8px 2px;
+  border: 0;
+  border-bottom: 1px solid var(--borde);
+  background: none;
+  color: var(--texto);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.exp-next button:disabled {
+  cursor: default;
+  opacity: 0.75;
+}
+.exp-next strong,
+.exp-next small {
+  display: block;
+}
+.exp-next small {
+  color: var(--texto-suave);
+  font-size: 0.84rem;
+  line-height: 1.3;
+}
+.exp-next-ic {
+  color: var(--texto-suave);
+}
+.exp-rows {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.exp-row {
+  display: grid;
+  gap: 4px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--borde);
+}
+.exp-row-main {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 10px;
+}
+.exp-val {
+  font-size: 1.1rem;
+  font-weight: 800;
+  white-space: nowrap;
+}
+.exp-row small {
+  color: var(--texto-suave);
+  line-height: 1.35;
+}
+.exp-row.st-mejor .exp-val,
+.exp-row.st-mejor b {
+  color: var(--verde-i);
+}
+.exp-row.st-peor .exp-val,
+.exp-row.st-peor b {
+  color: #b45309;
+}
+.exp-row.st-sin_dato .exp-val {
+  color: var(--texto-suave);
+}
+.exp-block {
+  padding: 10px 0;
+  border-bottom: 1px solid var(--borde);
+}
+.exp-block h3 {
+  margin: 0 0 6px;
+  font-size: 0.95rem;
+}
+.exp-block ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 6px;
+}
+.exp-block li {
+  display: grid;
+  grid-template-columns: 22px 1fr;
+  gap: 8px;
+  align-items: start;
+  color: var(--texto);
+}
+.exp-block li svg {
+  margin-top: 1px;
+  color: var(--texto-suave);
+}
+.exp-block li.done svg {
+  color: var(--verde-botella);
+}
+.exp-block li.soon {
+  color: var(--texto-suave);
+}
+.exp-block li small {
+  display: block;
+  color: var(--texto-suave);
+  font-size: 0.8rem;
+}

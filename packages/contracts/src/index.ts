@@ -735,6 +735,57 @@ export interface DemoUserDto {
 export const DemoLoginRequest = z.object({ key: z.string().min(1).max(40) });
 export type DemoLoginRequest = z.infer<typeof DemoLoginRequest>;
 
+/* ───── Protocolo de datos del productor (Plan CTeI 2026–2030, §6.2.6) ───── */
+
+/** Versión vigente del texto de consentimiento. Si cambia, se vuelve a pedir. */
+export const DATA_CONSENT_VERSION = "2026-11";
+export const DATA_POLICY_URLS = {
+  fedegan:
+    "https://storage.googleapis.com/static-fedegan/publicaciones/Politica-Tratamiento-Proteccion-Datos-FEDEGAN.pdf",
+  fng: "https://storage.googleapis.com/static-fedegan/publicaciones/Politica-Tratamiento-de-proteccion-de-datos-personales-FNG.pdf",
+} as const;
+
+export const DataConsentInput = z.object({
+  version: z.string().min(1).max(20),
+  /** Uso agregado y anónimo para análisis sectorial (opcional). */
+  sectorAnalysis: z.boolean(),
+  /** Compartir el expediente con el equipo técnico del gremio (opcional). */
+  shareTechnical: z.boolean(),
+});
+export type DataConsentInput = z.infer<typeof DataConsentInput>;
+
+export interface DataConsentDto {
+  version: string;
+  sectorAnalysis: boolean;
+  shareTechnical: boolean;
+  acceptedAt: string;
+}
+
+export interface DataConsentState {
+  /** Versión que la app debe mostrar. */
+  currentVersion: string;
+  /** Último consentimiento dado; null si nunca lo ha dado. */
+  consent: DataConsentDto | null;
+  /** Hay que pedirlo (nunca lo dio o cambió la versión). */
+  required: boolean;
+}
+
+export const DataRequestKind = z.enum(["rectificacion", "supresion", "consulta"]);
+export type DataRequestKind = z.infer<typeof DataRequestKind>;
+export const DataRequestInput = z.object({
+  kind: DataRequestKind,
+  message: z.string().trim().min(10, "Cuéntenos qué dato y cómo debe quedar.").max(2000),
+});
+export type DataRequestInput = z.infer<typeof DataRequestInput>;
+
+export interface DataRequestDto {
+  id: string;
+  kind: DataRequestKind;
+  message: string;
+  status: "recibida" | "en_tramite" | "resuelta";
+  createdAt: string;
+}
+
 /** Códigos de error de dominio (estables; la interfaz los traduce). */
 export const ErrorCodes = {
   TAG_DUPLICADO: "TAG_DUPLICADO",
