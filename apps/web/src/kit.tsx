@@ -512,6 +512,9 @@ export function FormDialog(props: {
     if (props.open && !d.open) {
       setVals(init());
       d.showModal();
+      // En pantallas táctiles no se deja marcado el botón de cerrar al abrir.
+      if (matchMedia("(pointer: coarse)").matches)
+        (document.activeElement as HTMLElement | null)?.blur();
     }
     if (!props.open && d.open) d.close();
   }, [props.open]);

@@ -37,6 +37,7 @@ import {
   today,
   useStore,
 } from "./kit";
+import { fecha, todayLocal } from "./labels";
 import { useIntent } from "./lib/intent";
 import { useApp } from "./state";
 
@@ -120,31 +121,43 @@ export function ProduccionScreen() {
       .reduce((a, e) => a + e.litros, 0);
     return base + more;
   };
-  const last = hist.length - 1;
+  // Si hoy aún no se ha anotado el ordeño, se mira el último día con registros: así no
+  // aparece una caída falsa ni ceros antes de ordeñar.
+  let last = hist.length - 1;
+  while (last > 0 && day(last) === 0) last--;
+  if (day(last) === 0) last = hist.length - 1;
+  const isToday = last === hist.length - 1;
+  const lastDate = hist[last]?.fecha ?? todayLocal();
   const hoy = day(last);
   const sem = [0, 1, 2, 3, 4, 5, 6].reduce((a, k) => a + day(last - k), 0);
   const semPrev = [7, 8, 9, 10, 11, 12, 13].reduce((a, k) => a + day(last - k), 0);
   const delta = semPrev ? ((sem - semPrev) / semPrev) * 100 : 0;
   const mes = hist.reduce((_, __, i) => _ + day(i), 0);
-  const porVaca = sel.length ? hoy / sel.length : 0;
+  const milked = sel.filter(
+    (a) =>
+      (hist[last]?.litros[a.tag] ?? 0) > 0 ||
+      extra.some((e) => e.fecha === lastDate && e.tag === a.tag),
+  ).length;
+  const porVaca = milked ? hoy / milked : 0;
   const isBuf = (t: string) => herd.speciesOf(t) === "bufalino";
 
   const rows = sel.map((a) => {
     const h = hist.map((d) => d.litros[a.tag] ?? 0);
     const hoyL = h[last] ?? 0;
-    const prom7 = h.slice(-8, -1).reduce((x, y) => x + y, 0) / 7;
+    const prom7 = h.slice(Math.max(0, last - 7), last).reduce((x, y) => x + y, 0) / 7;
     const rep = repState(a, repEvents);
     return {
       a,
       hoyL,
       prom7,
-      cambio: prom7 ? ((hoyL - prom7) / prom7) * 100 : 0,
+      cambio: hoyL && prom7 ? ((hoyL - prom7) / prom7) * 100 : 0,
       del: rep.del,
       status: rep.status,
       proy: a.milk * 1.06 * PARAMS[a.species].lactanciaDias,
     };
   });
-  const caidas = rows.filter((r) => r.cambio < -10);
+  // Solo cuenta como baja un animal que sí se ordeñó ese día.
+  const caidas = rows.filter((r) => r.hoyL > 0 && r.cambio < -10);
 
   const labels = hist.map((d) =>
     new Date(`${d.fecha}T12:00:00`).toLocaleDateString("es-CO", { day: "2-digit", month: "short" }),
@@ -317,9 +330,9 @@ export function ProduccionScreen() {
             <Stat
               tone="azul"
               icon={<Milk size={18} />}
-              label="Leche de hoy"
+              label={isToday ? "Leche de hoy" : "Último ordeño"}
               value={`${num(hoy, 0)} L`}
-              meta={`${sel.length} animales en ordeño`}
+              meta={`${milked} animales ordeñados${isToday ? "" : ` · ${fecha(lastDate)}`}`}
             />
             <Stat
               tone="verde"
@@ -349,8 +362,8 @@ export function ProduccionScreen() {
               tone="ambar"
               icon={<TestTube size={18} />}
               label="Grasa (último control)"
-              value={`${num(quality[0]?.grasa ?? 0)} %`}
-              meta="Tanque de bovinos"
+              value={quality[0] ? `${num(quality[0].grasa)} %` : "—"}
+              meta={quality[0] ? "Tanque de bovinos" : "Sin controles todavía"}
             />
             <Stat
               tone="rojo"
@@ -390,7 +403,10 @@ export function ProduccionScreen() {
             />
           </Panel>
           <div className="kit-grid2">
-            <Panel title="Mayores productoras de hoy" sub="Litros del último ordeño">
+            <Panel
+              title={isToday ? "Mayores productoras de hoy" : "Mayores productoras"}
+              sub="Litros del último ordeño"
+            >
               <BarChart
                 labels={top.map((r) => r.a.tag.replace("BOV-", "B").replace("BUF-", "U"))}
                 series={[

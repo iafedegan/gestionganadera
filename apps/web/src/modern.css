@@ -1,0 +1,522 @@
+/*
+ * Estilo moderno para todas las pantallas. Trabaja sobre las piezas compartidas (encabezado,
+ * secciones, tarjetas, tablas, formularios, hojas y hoja de vida), así que cada módulo lo
+ * recibe sin cambios propios. Se carga después de movil.css.
+ */
+
+/* ───────────── Tarjetas, botones y campos (todas las pantallas) ───────────── */
+.card,
+.kit-panel,
+.table-card {
+  border-radius: 20px;
+}
+.btn {
+  border-radius: 14px;
+  font-weight: 700;
+}
+.btn-primary {
+  background: linear-gradient(145deg, #1f8a55, #0c4a30);
+  border-color: transparent;
+  color: #fff;
+  box-shadow: 0 10px 20px -12px rgb(12 74 48 / 0.75);
+}
+.btn-primary:hover:not(:disabled) {
+  background: linear-gradient(145deg, #239a60, #0e5536);
+}
+.btn-ghost {
+  background: #eef3f0;
+  border-color: transparent;
+  color: var(--titulo, #0c4a30);
+}
+.banner {
+  border-radius: 16px;
+  border: 0;
+}
+.empty-state {
+  border-radius: 18px;
+}
+.empty-state > svg {
+  box-sizing: content-box;
+  padding: 16px;
+  border-radius: 22px;
+  background: var(--verde-t);
+  color: var(--verde-i);
+}
+.content :is(input:not([type="checkbox"], [type="radio"], [type="range"]), select, textarea),
+.dialog :is(input:not([type="checkbox"], [type="radio"], [type="range"]), select, textarea) {
+  border-radius: 14px;
+}
+
+/* ───────────── Pestañas y filtros de especie ───────────── */
+.kit-seg {
+  border-radius: 16px;
+  background: #e8eeea;
+  padding: 4px;
+}
+.kit-seg button {
+  border-radius: 12px;
+  font-weight: 700;
+  transition: background 200ms ease, transform 300ms cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.kit-seg button.on {
+  background: #fff;
+  color: var(--titulo, #0c4a30);
+  box-shadow: 0 3px 10px -4px rgb(5 16 11 / 0.3);
+}
+.kit-seg button:active {
+  transform: scale(0.94);
+}
+.kit-tab {
+  border-radius: 999px;
+  font-weight: 700;
+}
+.kit-tab.on {
+  background: linear-gradient(145deg, #1f8a55, #0c4a30);
+  color: #fff;
+}
+.kit-badge {
+  border-radius: 999px;
+}
+
+/* ───────────── Paneles con listas y gráficas ───────────── */
+.kit-panel .ch-icon,
+.card .ch-icon {
+  border-radius: 14px;
+  background: var(--verde-t);
+  color: var(--verde-i);
+}
+.kit-alerts li {
+  border-radius: 16px;
+  transition: transform 300ms cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.kit-alerts li:active {
+  transform: scale(0.98);
+}
+.kbadge {
+  border-radius: 999px;
+  font-weight: 700;
+}
+.kp-track,
+.plan-bar {
+  border-radius: 999px;
+  overflow: hidden;
+}
+.kt-search input {
+  min-height: 46px;
+}
+
+/* ───────────── Hoja de vida del animal ───────────── */
+.sheet-title h2 {
+  font-size: 1.25rem;
+  font-weight: 800;
+  color: var(--titulo, #0c4a30);
+}
+.sheet-hero {
+  position: relative;
+  padding: 14px;
+  border-radius: 22px;
+  background: radial-gradient(120% 130% at 100% 0%, rgb(201 162 39 / 0.3), transparent 55%),
+    linear-gradient(135deg, #136b45, #0c4a30 60%, #08331f);
+  color: #fff;
+  box-shadow: 0 18px 34px -22px rgb(8 51 31 / 0.85);
+}
+.sheet-hero .photo {
+  border: 3px solid rgb(255 255 255 / 0.9);
+  border-radius: 20px;
+  background: #fff;
+}
+.sheet-hero .card-label,
+.sheet-hero .facts dt {
+  color: rgb(255 255 255 / 0.72);
+}
+.sheet-hero .sheet-tag,
+.sheet-hero .facts dd {
+  color: #fff;
+}
+.sheet-hero .sheet-tag {
+  font-size: 2rem;
+  font-weight: 800;
+  line-height: 1.1;
+}
+.sheet-hero .facts {
+  gap: 6px;
+}
+.sheet-hero .facts > div {
+  padding: 7px 10px;
+  border-radius: 12px;
+  background: rgb(255 255 255 / 0.12);
+}
+.sheet-hero .facts dd {
+  font-weight: 700;
+}
+.hist-title {
+  font-size: 1.05rem;
+  font-weight: 800;
+  color: var(--titulo, #0c4a30);
+}
+/* Las secciones de la historia se ven todas: nada se esconde a un lado. */
+.sheet-drawer .tabs,
+.sheet .tabs {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(104px, 1fr));
+  gap: 8px;
+  overflow: visible;
+  border: 0;
+  mask-image: none;
+  -webkit-mask-image: none;
+}
+.sheet-drawer .tab-btn,
+.sheet .tab-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  min-height: 66px;
+  padding: 8px 4px;
+  border: 1px solid var(--borde, #e3e9e4);
+  border-radius: 18px;
+  background: #fff;
+  color: var(--texto, #1b2a22);
+  font-size: 0.78rem;
+  font-weight: 700;
+  white-space: normal;
+  text-align: center;
+  line-height: 1.15;
+  transition: transform 300ms cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.sheet-drawer .tab-btn svg,
+.sheet .tab-btn svg {
+  width: 22px;
+  height: 22px;
+  color: var(--verde-i);
+}
+.sheet-drawer .tab-btn.active,
+.sheet .tab-btn.active {
+  border-color: transparent;
+  background: linear-gradient(145deg, #1f8a55, #0c4a30);
+  color: #fff;
+}
+.sheet-drawer .tab-btn.active svg,
+.sheet .tab-btn.active svg {
+  color: #fff;
+}
+.sheet-drawer .tab-btn:active,
+.sheet .tab-btn:active {
+  transform: scale(0.94);
+}
+.timeline {
+  gap: 10px;
+}
+.timeline li > div {
+  flex: 1;
+  padding: 12px 14px;
+  border: 1px solid var(--borde, #e3e9e4);
+  border-radius: 18px;
+  background: #fff;
+  box-shadow: 0 1px 3px rgb(16 40 28 / 0.05);
+}
+.timeline li > div > strong {
+  display: block;
+  line-height: 1.3;
+}
+.tl-dot {
+  border-radius: 12px;
+  background: var(--verde-t);
+  color: var(--verde-i);
+}
+.hist-fact {
+  border-radius: 18px;
+}
+
+/* ───────────── Formularios en diálogo ───────────── */
+.dialog-form .dialog-body {
+  background: #f1f5f2;
+}
+.dialog-form .fsec {
+  border: 1px solid var(--borde, #e3e9e4);
+  border-radius: 22px;
+  background: #fff;
+  box-shadow: 0 1px 3px rgb(16 40 28 / 0.05);
+}
+.dialog-form .fsec > .hint {
+  display: flex;
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: var(--verde-t);
+  color: #1d5c3b;
+  line-height: 1.4;
+}
+.dialog-form label {
+  font-weight: 700;
+  color: var(--texto, #1b2a22);
+}
+.dialog-form label :is(input:not([type="checkbox"], [type="radio"]), select, textarea) {
+  min-height: 52px;
+  border: 1.5px solid #dde6df;
+  background-color: #f8faf8;
+  font-weight: 500;
+  transition: border-color 160ms ease, box-shadow 160ms ease, background-color 160ms ease;
+}
+.dialog-form label :is(input, select, textarea):focus {
+  border-color: #1f8a55;
+  background-color: #fff;
+  box-shadow: 0 0 0 4px rgb(31 138 85 / 0.18);
+  outline: none;
+}
+.dialog-form .voice-field :is(input, select, textarea) {
+  border-color: #0f6bc4;
+  box-shadow: 0 0 0 4px rgb(15 107 196 / 0.18);
+}
+
+@media (max-width: 900px) {
+  /* Encabezado de cada módulo: una portada verde con su ícono. */
+  .page > .page-head {
+    position: relative;
+    overflow: hidden;
+    isolation: isolate;
+    display: block;
+    margin: 0 0 14px;
+    padding: 18px 16px 16px;
+    border-radius: 24px;
+    background: radial-gradient(120% 120% at 100% 0%, rgb(201 162 39 / 0.34), transparent 55%),
+      linear-gradient(135deg, #136b45, #0c4a30 60%, #08331f);
+    color: #fff;
+    box-shadow: 0 18px 34px -22px rgb(8 51 31 / 0.85);
+    animation: dash-rise 460ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  }
+  .page > .page-head::after {
+    content: "";
+    position: absolute;
+    z-index: -1;
+    right: -46px;
+    top: -46px;
+    width: 150px;
+    height: 150px;
+    border: 26px solid rgb(255 255 255 / 0.07);
+    border-radius: 50%;
+  }
+  .page > .page-head .ph-main {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .page > .page-head .ph-icon {
+    flex: none;
+    display: grid;
+    place-items: center;
+    width: 52px;
+    height: 52px;
+    border-radius: 18px;
+    background: rgb(255 255 255 / 0.16);
+    box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.22);
+    color: #fff;
+  }
+  .page > .page-head .ph-icon svg {
+    width: 28px;
+    height: 28px;
+  }
+  .page > .page-head .kicker {
+    display: none;
+  }
+  .page > .page-head h1 {
+    margin: 0;
+    color: #fff;
+    font-size: 1.45rem;
+    font-weight: 800;
+    line-height: 1.15;
+    letter-spacing: -0.015em;
+  }
+  .page > .page-head .lead {
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    margin: 4px 0 0;
+    color: rgb(255 255 255 / 0.8);
+    font-size: 0.84rem;
+    line-height: 1.35;
+  }
+  .page > .page-head .page-actions {
+    margin-top: 14px;
+  }
+  .page > .page-head .page-actions .btn {
+    background: rgb(255 255 255 / 0.15);
+    box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.25);
+    color: #fff;
+  }
+  .page > .page-head .page-actions > .btn-primary:first-child {
+    background: #fff;
+    box-shadow: 0 10px 20px -12px rgb(0 0 0 / 0.5);
+    color: #0c4a30;
+  }
+  .page > .page-head .pa-count {
+    background: #e9cf7a;
+    color: #3b2f05;
+  }
+  .page > .page-head .qr-chip {
+    display: none;
+  }
+
+  .kit-tabpick {
+    border-radius: 18px;
+  }
+  .card,
+  .kit-panel,
+  .table-card {
+    border: 1px solid var(--borde, #e3e9e4);
+    box-shadow: 0 1px 3px rgb(16 40 28 / 0.05);
+  }
+
+  /* Tablas como tarjetas. */
+  .ptable-wrap .ptable tbody {
+    display: grid;
+    gap: 10px;
+  }
+  .ptable-wrap .ptable tr {
+    margin: 0;
+    padding: 12px 14px;
+    border: 1px solid var(--borde, #e3e9e4);
+    border-radius: 18px;
+    background: #fff;
+    box-shadow: 0 1px 3px rgb(16 40 28 / 0.05);
+    transition: transform 300ms cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+  .ptable-wrap .ptable tr.clickable:active {
+    transform: scale(0.97);
+  }
+  .ptable-wrap .ptable td {
+    border: 0;
+  }
+  .ptable-wrap .ptable td:first-child {
+    padding-bottom: 6px;
+    margin-bottom: 4px;
+    border-bottom: 1px dashed var(--borde, #e3e9e4);
+    font-size: 1.05rem;
+    font-weight: 800;
+  }
+
+  /* Formularios: cabecera verde y botón principal grande. */
+  .dialog.dialog-form .dialog-head {
+    border: 0;
+    border-radius: 0 0 24px 24px;
+    background: linear-gradient(135deg, #136b45, #0c4a30 60%, #08331f);
+    color: #fff;
+    padding-bottom: 14px;
+  }
+  .dialog.dialog-form .dialog-head h2 {
+    color: #fff;
+    font-weight: 800;
+  }
+  .dialog.dialog-form .dialog-head .icon-btn {
+    border: 0;
+    border-radius: 14px;
+    background: rgb(255 255 255 / 0.18);
+    color: #fff;
+  }
+  .dialog.dialog-form .dialog-actions {
+    border: 0;
+    border-radius: 24px 24px 0 0;
+    background: #fff;
+    box-shadow: 0 -10px 26px -18px rgb(5 16 11 / 0.45);
+  }
+  .dialog.dialog-form .dialog-actions .btn {
+    min-height: 54px;
+    border-radius: 18px;
+    font-size: 1.05rem;
+  }
+
+  /* Hoja de vida y hojas inferiores. */
+  .drawer.sheet-drawer,
+  .sheet-panel {
+    border-radius: 28px 28px 0 0;
+  }
+  .drawer.sheet-drawer {
+    background: #f4f7f5;
+    animation: sheet-spring 460ms cubic-bezier(0.32, 0.72, 0, 1) both;
+  }
+  .sheet-drawer .drawer-close {
+    border-radius: 14px;
+    background: #e6ede8;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .page > .page-head,
+  .drawer.sheet-drawer {
+    animation: none !important;
+  }
+}
+
+/* Más peso que los estilos del celular (ios.css) para campos y botón principal. */
+.dialog.dialog-form
+  .dialog-body
+  label
+  :is(input:not([type="checkbox"], [type="radio"]), select, textarea) {
+  min-height: 52px;
+  border: 1.5px solid #dde6df;
+  background-color: #f8faf8;
+}
+.dialog.dialog-form
+  .dialog-body
+  label
+  :is(input:not([type="checkbox"], [type="radio"]), select, textarea):focus {
+  border-color: #1f8a55;
+  background-color: #fff;
+  box-shadow: 0 0 0 4px rgb(31 138 85 / 0.18);
+}
+.dialog.dialog-form .dialog-body label {
+  color: var(--texto, #1b2a22);
+}
+.shell .btn.btn-primary,
+.dialog .btn.btn-primary,
+.sheet-panel .btn.btn-primary {
+  background: linear-gradient(145deg, #1f8a55, #0c4a30);
+  color: #fff;
+}
+@media (max-width: 900px) {
+  .shell .page > .page-head .page-actions > .btn.btn-primary:first-child {
+    background: #fff;
+    color: #0c4a30;
+  }
+}
+
+@media (max-width: 900px) {
+  /* Compras: las acciones ya están en el encabezado. */
+  .page .quick-actions {
+    display: none;
+  }
+  .shell .page > .page-head .page-actions > a {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    grid-column: 1 / -1;
+    min-height: 48px;
+    border-radius: 14px;
+    background: #fff;
+    color: #0c4a30;
+    font-weight: 700;
+    text-decoration: none;
+  }
+  .shell .page > .page-head .page-actions > a:nth-child(2):last-child,
+  .shell .page > .page-head .page-actions > a:nth-child(1):nth-last-child(2) {
+    grid-column: auto;
+  }
+}
+
+/* PC: el mismo verde en la barra lateral y en el ícono del encabezado. */
+@media (min-width: 901px) {
+  .shell .sidebar .nav.active {
+    background: linear-gradient(145deg, #1f8a55, #0c4a30);
+    color: #fff;
+  }
+  .shell .sidebar .nav.active svg {
+    color: #fff;
+  }
+  .shell .page-head .ph-icon {
+    border-radius: 18px;
+    background: linear-gradient(145deg, #1f8a55, #0c4a30);
+    color: #fff;
+  }
+}

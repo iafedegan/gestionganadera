@@ -11,6 +11,7 @@ import { AppProvider } from "./state";
 import "./styles.css";
 import "./ios.css";
 import "./movil.css";
+import "./modern.css";
 
 registerSW({ immediate: true });
 
