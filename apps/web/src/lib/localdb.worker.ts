@@ -338,6 +338,9 @@ async function openDb(userId: string): Promise<void> {
       });
   }
   const pool = await poolPromise;
+  // El almacén tiene cupos fijos (6 por defecto) y cada cuenta usada en este dispositivo ocupa su
+  // base y su diario: se reservan cupos libres antes de abrir para que nunca se llene.
+  await pool.reserveMinimumCapacity(pool.getFileCount() + 6);
   db = new pool.OpfsSAHPoolDb(`/ganaderia-${userId}.db`);
   migrate(db);
   currentUser = userId;
