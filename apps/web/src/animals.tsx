@@ -35,8 +35,9 @@ import {
   Weight,
   X,
 } from "lucide-react";
-import { type FormEvent, type ReactNode, useEffect, useRef, useState } from "react";
+import { type FormEvent, type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { ClinicalHistory, MilkHistory, ReproductiveHistory, WeightHistory } from "./AnimalHistory";
+import { AnimalList, HerdSummary, QuickViews } from "./AnimalList";
 import { FarmDialog } from "./FarmForm";
 import { VoiceAssistant } from "./VoiceAssistant";
 import { art } from "./art";
@@ -53,6 +54,7 @@ import {
   todayLocal,
 } from "./labels";
 import { scopedFarm, useStoredFarm } from "./lib/activeFarm";
+import { type Flag, animalInfo } from "./lib/animalTags";
 import { useIntent } from "./lib/intent";
 import {
   type AnimalDetail,
@@ -119,7 +121,9 @@ export function AnimalsScreen() {
   const [registering, setRegistering] = useState(false);
   useIntent("animales", ["registrar"] as const, () => setRegistering(true));
   const [creatingFarm, setCreatingFarm] = useState(false);
-  const [inv, setInv] = useState({ total: 0, bovino: 0, bufalino: 0 });
+  const [herd, setHerd] = useState<LocalHerdAnimal[]>([]);
+  const [events, setEvents] = useState<LocalAnimalEvent[]>([]);
+  const [view, setView] = useState<Flag | "">("");
   const wide = useMedia("(min-width: 1440px)");
   const mobile = useMedia("(max-width: 900px)");
   const [filtersOpen, setFiltersOpen] = useState(false);
@@ -136,78 +140,84 @@ export function AnimalsScreen() {
         ...(farmId ? { farmId } : {}),
       })
       .then(setRows);
-    if (active) {
-      // Totales de la finca activa de la barra superior.
-      void localdb.herdAnimals(orgId).then((all) => {
-        const herd = all.filter((a) => a.farmId === active);
-        setInv({
-          total: herd.length,
-          bovino: herd.filter((a) => a.species === "bovino").length,
-          bufalino: herd.filter((a) => a.species === "bufalino").length,
-        });
-      });
-    } else void localdb.counts(orgId).then(setInv);
-  }, [orgId, q, species, category, farmId, active, dataVersion]);
+  }, [orgId, q, species, category, farmId, dataVersion]);
+
+  // biome-ignore lint/correctness/useExhaustiveDependencies: dataVersion fuerza la relectura
+  useEffect(() => {
+    void localdb.herdAnimals(orgId).then(setHerd);
+    void localdb.listAnimalEvents(orgId).then(setEvents);
+  }, [orgId, dataVersion]);
 
   const farmName = (id: string) => farms.find((f) => f.id === id)?.name ?? "—";
   const canRegister = role !== null && can(role, "animal.write");
   const canCreateFarm = role !== null && can(role, "farm.write");
-  const filtered = Boolean(q || species || category || farmId);
+  const info = useMemo(() => animalInfo(events, todayLocal()), [events]);
+  const births = useMemo(() => new Map(herd.map((a) => [a.id, a.birthDate])), [herd]);
+  const farmHerd = farmId ? herd.filter((a) => a.farmId === farmId) : herd;
+  const flagCounts: Record<Flag, number> = { retiro: 0, palpar: 0, prenada: 0, ordeno: 0 };
+  for (const a of farmHerd) {
+    if ((species && a.species !== species) || (category && a.category !== category)) continue;
+    for (const f of info.get(a.id)?.flags ?? []) flagCounts[f]++;
+  }
+  const shown =
+    rows && view
+      ? rows.filter((r) => r.status === "activo" && info.get(r.id)?.flags.includes(view))
+      : rows;
+  const clearFilters = () => {
+    setQ("");
+    setSpecies("");
+    setCategory("");
+    setFarmId("");
+    setView("");
+  };
+  const filtered = Boolean(q || species || category || farmId || view);
   const activeFilters = [species, category, farmId].filter(Boolean).length;
   const source = `Fuente: registros de este dispositivo${lastSync ? "" : " · aún sin sincronizar"}`;
 
   return (
     <section className="page">
-      <PageHead
-        kicker="Animales"
-        icon={<PawPrint size={30} aria-hidden="true" />}
-        title="Animales e inventario del hato"
-        lead="Registro e inventario del hato, con historial individual y control de movimientos."
-        actions={
-          <span className="qr-chip">
-            <QrCode size={26} aria-hidden="true" />
-            <span>
-              <strong>Lectura QR o RFID</strong>
-              <small>cuando esté disponible</small>
+      {mobile ? (
+        <header className="herd-head">
+          <div>
+            <h1>Su hato</h1>
+            <p>Toque un animal para ver su hoja de vida.</p>
+          </div>
+          {canRegister && farms.length > 0 && (
+            <button type="button" className="herd-new" onClick={() => setRegistering(true)}>
+              <PlusCircle size={20} aria-hidden="true" /> Nuevo
+            </button>
+          )}
+        </header>
+      ) : (
+        <PageHead
+          kicker="Animales"
+          icon={<PawPrint size={30} aria-hidden="true" />}
+          title="Animales e inventario del hato"
+          lead="Registro e inventario del hato, con historial individual y control de movimientos."
+          actions={
+            <span className="qr-chip">
+              <QrCode size={26} aria-hidden="true" />
+              <span>
+                <strong>Lectura QR o RFID</strong>
+                <small>cuando esté disponible</small>
+              </span>
             </span>
-          </span>
-        }
+          }
+        />
+      )}
+
+      <HerdSummary
+        herd={farmHerd}
+        species={species}
+        category={category}
+        onSpecies={(v) => {
+          setSpecies(v);
+          setCategory("");
+        }}
+        onCategory={setCategory}
+        pending={counts.pendiente}
       />
-
-      <section className="statstrip" aria-label="Resumen del inventario">
-        <div>
-          <strong>{num(inv.total)}</strong>
-          <span>Activos</span>
-        </div>
-        <div>
-          <strong>{num(inv.bovino)}</strong>
-          <span>Bovinos</span>
-        </div>
-        <div>
-          <strong>{num(inv.bufalino)}</strong>
-          <span>Bufalinos</span>
-        </div>
-      </section>
-
-      <div className="summary-chips" aria-label="Resumen del inventario">
-        <span className="sc">
-          <Weight size={16} aria-hidden="true" /> Inventario activo{" "}
-          <strong>{num(inv.total)}</strong>
-        </span>
-        <span className="sc">
-          <SpeciesBadge species="bovino" size={22} /> Bovinos <strong>{num(inv.bovino)}</strong>
-        </span>
-        <span className="sc">
-          <SpeciesBadge species="bufalino" size={22} /> Bufalinos{" "}
-          <strong>{num(inv.bufalino)}</strong>
-        </span>
-        {counts.pendiente > 0 && (
-          <span className="sc sc-warn">
-            <CloudOff size={16} aria-hidden="true" /> {counts.pendiente} sin enviar
-          </span>
-        )}
-        <small className="sc-src">{source}</small>
-      </div>
+      <QuickViews counts={flagCounts} value={view} onChange={setView} />
 
       {farms.length === 0 && (
         <div className="banner banner-info">
@@ -229,13 +239,13 @@ export function AnimalsScreen() {
         </div>
       )}
 
-      <div className="card filters">
+      <div className={mobile ? "herd-search" : "card filters"}>
         <label className="search grow">
           <span className="sr-only">Buscar por identificación</span>
           <Search size={18} aria-hidden="true" />
           <input
             type="search"
-            placeholder="Buscar por arete o identificación"
+            placeholder={mobile ? "Buscar por arete" : "Buscar por arete o identificación"}
             value={q}
             onChange={(e) => setQ(e.target.value)}
           />
@@ -317,14 +327,14 @@ export function AnimalsScreen() {
       </div>
 
       <div className={wide ? "split" : undefined}>
-        <div className="card table-card">
-          {rows === null ? (
+        <div className={mobile ? "herd-results" : "card table-card"}>
+          {shown === null ? (
             <div className="skeleton-list" aria-busy="true">
               <span />
               <span />
               <span />
             </div>
-          ) : rows.length === 0 ? (
+          ) : shown.length === 0 ? (
             <div className="empty-state">
               <Search size={28} aria-hidden="true" />
               <p>
@@ -332,6 +342,11 @@ export function AnimalsScreen() {
                   ? "Ningún animal coincide con los filtros."
                   : "Todavía no hay animales registrados."}
               </p>
+              {filtered && (
+                <button type="button" className="btn btn-ghost" onClick={clearFilters}>
+                  Quitar filtros
+                </button>
+              )}
               {!filtered && canRegister && farms.length > 0 && (
                 <button
                   type="button"
@@ -342,6 +357,17 @@ export function AnimalsScreen() {
                 </button>
               )}
             </div>
+          ) : mobile ? (
+            <AnimalList
+              key={`${q}|${species}|${category}|${farmId}|${view}`}
+              rows={shown}
+              info={info}
+              births={births}
+              farmName={farmName}
+              grouped={!farmId && farms.length > 1}
+              selected={selected}
+              onSelect={setSelected}
+            />
           ) : (
             <table>
               <caption className="sr-only">Animales</caption>
@@ -355,7 +381,7 @@ export function AnimalsScreen() {
                 </tr>
               </thead>
               <tbody>
-                {rows.map((r) => (
+                {shown.map((r) => (
                   <tr key={r.id} className={r.id === selected ? "selected" : ""}>
                     <th scope="row">
                       <button type="button" className="row-btn" onClick={() => setSelected(r.id)}>
@@ -414,12 +440,7 @@ export function AnimalsScreen() {
         )}
       </div>
 
-      {mobile && canRegister && farms.length > 0 && (
-        <button type="button" className="fab" onClick={() => setRegistering(true)}>
-          <PlusCircle size={22} aria-hidden="true" />
-          <span>Registrar</span>
-        </button>
-      )}
+      <p className="herd-source">{source}</p>
 
       {mobile && filtersOpen && (
         <>

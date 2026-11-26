@@ -27,7 +27,14 @@ import {
   WifiOff,
   X,
 } from "lucide-react";
-import { type CSSProperties, type FormEvent, type ReactNode, useEffect, useState } from "react";
+import {
+  type CSSProperties,
+  type FormEvent,
+  type MouseEvent,
+  type ReactNode,
+  useEffect,
+  useState,
+} from "react";
 import { AlertsSheet, useAlerts } from "./Alerts";
 import { AssistantDialog } from "./Assistant";
 import { FarmIntel } from "./FarmIntel";
@@ -473,6 +480,13 @@ function NavList(props: {
 
 const DEFAULT_TABS: ModuleKey[] = ["inicio", "animales", "produccion", "reproduccion"];
 
+/** Toque en la barra inferior: vibra y suelta el foco para no dejar el recuadro marcado.
+    Con teclado (detail 0) el foco se conserva. */
+function tapped(e: MouseEvent<HTMLButtonElement>) {
+  haptic(8);
+  if (e.detail > 0) e.currentTarget.blur();
+}
+
 export function Shell(props: {
   module: ModuleKey;
   onModule(m: ModuleKey): void;
@@ -725,8 +739,8 @@ export function Shell(props: {
             type="button"
             className={k === props.module ? "tab active" : "tab"}
             aria-current={k === props.module ? "page" : undefined}
-            onClick={() => {
-              haptic(8);
+            onClick={(e) => {
+              tapped(e);
               pick(k);
             }}
           >
@@ -757,8 +771,8 @@ export function Shell(props: {
               type="button"
               className={k === props.module ? "tab active" : "tab"}
               aria-current={k === props.module ? "page" : undefined}
-              onClick={() => {
-                haptic(8);
+              onClick={(e) => {
+                tapped(e);
                 pick(k);
               }}
             >
