@@ -171,6 +171,7 @@ async function toDto(
     id: r.id,
     organizationId: orgId,
     authorId: r.created_by,
+    ackById: r.ack_by,
     organizationName: memberships.find((m) => m.organizationId === orgId)?.organizationName ?? "",
     messageCount: await messageCount(q, r.id),
     lastMessage: await lastMessage(q, r.id, userId),

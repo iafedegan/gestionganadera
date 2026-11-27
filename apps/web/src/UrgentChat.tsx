@@ -1,6 +1,6 @@
-import type { UrgentMessageDto } from "@ganaderia/contracts";
+import type { UrgentAlertDto, UrgentMessageDto } from "@ganaderia/contracts";
 import { ArrowUp, Camera, ClipboardList, Phone, X } from "lucide-react";
-import { Fragment, useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { UrgentRecordSheet } from "./UrgentRecord";
 import { fechaHora } from "./labels";
@@ -16,47 +16,87 @@ import { useApp } from "./state";
  */
 
 const EVERY = 4_000;
+const GENERAL = "general";
 
 export function UrgentChat({
   thread,
   onClose,
   onAttend,
+  subtitle,
 }: {
   thread: Thread;
   onClose(): void;
   /** El veterinario lee antes de confirmar y confirma desde aquí. */
   onAttend?(): void;
+  /** Papel y ganadería de la persona. */
+  subtitle?: string;
 }) {
   const { online } = useApp();
   const ref = useRef<HTMLDialogElement>(null);
   const list = useRef<HTMLDivElement>(null);
   const file = useRef<HTMLInputElement>(null);
   const [messages, setMessages] = useState<Record<string, UrgentMessageDto[]>>({});
+  const [direct, setDirect] = useState<UrgentMessageDto[]>([]);
   const [picked, setPicked] = useState<string | null>(null);
   const [viewing, setViewing] = useState<string | null>(null);
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const { userId } = thread;
   // Un tema por animal: si hay varios avisos del mismo, se responde en el más reciente.
   const topics = [...new Map(thread.alerts.map((a) => [a.animal?.tag ?? a.reason, a])).entries()];
-  const latest = thread.alerts.reduce((x, y) =>
-    (y.lastMessage?.createdAt ?? y.createdAt) > (x.lastMessage?.createdAt ?? x.createdAt) ? y : x,
+  const latest = thread.alerts.reduce<UrgentAlertDto | undefined>(
+    (x, y) =>
+      !x || (y.lastMessage?.createdAt ?? y.createdAt) > (x.lastMessage?.createdAt ?? x.createdAt)
+        ? y
+        : x,
+    undefined,
   );
-  const alert = thread.alerts.find((a) => a.id === picked) ?? latest;
+  // Con urgencia sin confirmar se responde sobre ella; si no, conversación normal.
+  const fallback = userId && thread.pending.length === 0 ? GENERAL : latest?.id;
+  const target = picked ?? fallback ?? GENERAL;
+  const alert = thread.alerts.find((a) => a.id === target);
   const viewed = thread.alerts.find((a) => a.id === viewing)?.animal;
   const ids = thread.alerts.map((a) => a.id).join(",");
 
   const load = useCallback(() => {
     if (!online || document.hidden) return;
     Promise.all(
-      ids.split(",").map((id) => api.urgentMessages(id).then((r) => [id, r.items] as const)),
+      ids
+        .split(",")
+        .filter(Boolean)
+        .map((id) => api.urgentMessages(id).then((r) => [id, r.items] as const)),
     ).then(
       (all) => setMessages(Object.fromEntries(all)),
       () => undefined,
     );
-  }, [ids, online]);
-  const total = Object.values(messages).reduce((n, m) => n + m.length, 0);
+    if (userId)
+      api.chatMessages(userId).then(
+        (r) => setDirect(r.items),
+        () => undefined,
+      );
+  }, [ids, userId, online]);
+
+  // Todo en orden de llegada: los avisos, sus mensajes y la conversación normal.
+  const timeline = [
+    ...thread.alerts.map((a) => ({ at: a.createdAt, alert: a, message: null, src: "" })),
+    ...thread.alerts.flatMap((a) =>
+      (messages[a.id] ?? []).map((m) => ({
+        at: m.createdAt,
+        alert: null,
+        message: m,
+        src: `/v1/urgencias/${a.id}/mensajes/${m.id}/archivo`,
+      })),
+    ),
+    ...direct.map((m) => ({
+      at: m.createdAt,
+      alert: null,
+      message: m,
+      src: `/v1/chats/${userId}/mensajes/${m.id}/archivo`,
+    })),
+  ].sort((a, b) => a.at.localeCompare(b.at));
+  const total = timeline.length;
 
   useEffect(() => {
     ref.current?.showModal();
@@ -69,13 +109,14 @@ export function UrgentChat({
   // biome-ignore lint/correctness/useExhaustiveDependencies: bajar al llegar un mensaje o un aviso
   useEffect(() => {
     list.current?.scrollTo({ top: list.current.scrollHeight, behavior: "smooth" });
-  }, [total, thread.alerts.length]);
+  }, [total]);
 
   async function send(input: { body?: string; media?: Media }) {
     setBusy(true);
     setError(null);
     try {
-      await api.urgentSend(alert.id, input);
+      if (alert) await api.urgentSend(alert.id, input);
+      else if (userId) await api.chatSend(userId, input);
       if (input.body) setText("");
       load();
     } catch (e) {
@@ -103,9 +144,14 @@ export function UrgentChat({
     setBusy(false);
   }
 
-  const phone = phoneNumber(
-    alert.mine ? alert.recipients.find((r) => r.name === alert.ackBy)?.phone : alert.authorPhone,
-  );
+  const about = alert ?? latest;
+  const phone = about
+    ? phoneNumber(
+        about.mine
+          ? about.recipients.find((r) => r.name === about.ackBy)?.phone
+          : about.authorPhone,
+      )
+    : "";
 
   return createPortal(
     <dialog
@@ -130,23 +176,27 @@ export function UrgentChat({
         <div>
           <h2 id="uchat-title">{thread.name}</h2>
           <small>
-            {thread.alerts.length === 1
-              ? `${alert.reason}${alert.animal ? ` · ${alert.animal.tag}` : ""}`
-              : `${thread.alerts.length} avisos`}
+            {subtitle ??
+              (thread.alerts.length === 1 && latest
+                ? `${latest.reason}${latest.animal ? ` · ${latest.animal.tag}` : ""}`
+                : `${thread.alerts.length} avisos`)}
           </small>
         </div>
-        <a
-          className="uc-btn"
-          href={phone ? `tel:${phone}` : smsLink("", `GanSmart: ${alert.reason}`)}
-          aria-label="Llamar"
-        >
-          <Phone size={20} />
-        </a>
+        {(phone || about) && (
+          <a
+            className="uc-btn"
+            href={phone ? `tel:${phone}` : smsLink("", `GanSmart: ${about?.reason ?? ""}`)}
+            aria-label="Llamar"
+          >
+            <Phone size={20} />
+          </a>
+        )}
       </header>
       <div className="uc-list" ref={list} aria-live="polite">
-        {thread.alerts.map((a) => (
-          <Fragment key={a.id}>
-            <article className={a.ackBy ? "uc-case ok" : "uc-case"}>
+        {total === 0 && <p className="uc-system">Escriba el primer mensaje a {thread.name}.</p>}
+        {timeline.map(({ alert: a, message: m, src }) =>
+          a ? (
+            <article key={a.id} className={a.ackBy ? "uc-case ok" : "uc-case"}>
               <header>
                 <strong>
                   {a.reason}
@@ -164,27 +214,24 @@ export function UrgentChat({
                 </button>
               )}
             </article>
-            {messages[a.id]?.map((m) => {
-              const src = `/v1/urgencias/${a.id}/mensajes/${m.id}/archivo`;
-              return (
-                <div key={m.id} className={m.mine ? "uc-msg mine" : "uc-msg"}>
-                  {!m.mine && <strong>{m.authorName}</strong>}
-                  {m.mediaType?.startsWith("image/") && (
-                    <a href={src} target="_blank" rel="noopener noreferrer">
-                      <img src={src} alt="Foto enviada" />
-                    </a>
-                  )}
-                  {m.mediaType?.startsWith("video/") && (
-                    // biome-ignore lint/a11y/useMediaCaption: video grabado en el potrero, sin subtítulos
-                    <video src={src} controls playsInline preload="metadata" />
-                  )}
-                  {m.body && <p>{m.body}</p>}
-                  <small>{fechaHora(m.createdAt)}</small>
-                </div>
-              );
-            })}
-          </Fragment>
-        ))}
+          ) : (
+            m && (
+              <div key={m.id} className={m.mine ? "uc-msg mine" : "uc-msg"}>
+                {m.mediaType?.startsWith("image/") && (
+                  <a href={src} target="_blank" rel="noopener noreferrer">
+                    <img src={src} alt="Foto enviada" />
+                  </a>
+                )}
+                {m.mediaType?.startsWith("video/") && (
+                  // biome-ignore lint/a11y/useMediaCaption: video grabado en el potrero, sin subtítulos
+                  <video src={src} controls playsInline preload="metadata" />
+                )}
+                {m.body && <p>{m.body}</p>}
+                <small>{fechaHora(m.createdAt)}</small>
+              </div>
+            )
+          ),
+        )}
         {thread.alerts.some((a) => a.mine && !a.ackBy) && (
           <p className="uc-system">
             Mientras confirman, mande fotos o videos del animal: ya los pueden ver.
@@ -204,15 +251,24 @@ export function UrgentChat({
             : "Voy a atender"}
         </button>
       )}
-      {topics.length > 1 && (
+      {topics.length + (userId ? 1 : 0) > 1 && (
         // biome-ignore lint/a11y/useSemanticElements: grupo de opciones sobre el campo de texto
         <div className="uc-topics" role="group" aria-label="Responder sobre">
           <span>Sobre:</span>
+          {userId && (
+            <button
+              type="button"
+              aria-pressed={target === GENERAL}
+              onClick={() => setPicked(GENERAL)}
+            >
+              General
+            </button>
+          )}
           {topics.map(([label, a]) => (
             <button
               key={a.id}
               type="button"
-              aria-pressed={label === (alert.animal?.tag ?? alert.reason)}
+              aria-pressed={alert ? label === (alert.animal?.tag ?? alert.reason) : false}
               onClick={() => setPicked(a.id)}
             >
               {label}

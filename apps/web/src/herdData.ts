@@ -8,7 +8,7 @@ import type {
 } from "@ganaderia/contracts";
 import { uuidv7, validateRegistration } from "@ganaderia/domain";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useFarms } from "./animals";
+import { useActiveFarm, useFarms } from "./animals";
 import {
   type Animal,
   type CmtRec,
@@ -130,8 +130,18 @@ export function toRep(e: LocalAnimalEvent): RepEvent | null {
 export function useHerdData() {
   const { orgId, dataVersion, session, online, refresh, syncNow } = useApp();
   const farms = useFarms();
-  const [herd, setHerd] = useState<LocalHerdAnimal[]>([]);
-  const [events, setEvents] = useState<LocalAnimalEvent[]>([]);
+  const [allHerd, setHerd] = useState<LocalHerdAnimal[]>([]);
+  const [allEvents, setEvents] = useState<LocalAnimalEvent[]>([]);
+  // Todas las pantallas muestran la finca escogida arriba; sin escoger, todas juntas.
+  const active = useActiveFarm();
+  const herd = useMemo(
+    () => (active ? allHerd.filter((a) => a.farmId === active) : allHerd),
+    [allHerd, active],
+  );
+  const events = useMemo(
+    () => (active ? allEvents.filter((e) => e.farmId === active) : allEvents),
+    [allEvents, active],
+  );
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: dataVersion fuerza la relectura
   useEffect(() => {
@@ -141,7 +151,7 @@ export function useHerdData() {
   }, [orgId, dataVersion]);
 
   // Fuera de la cuenta demo siempre se usan los datos reales, aunque estén vacíos.
-  const real = herd.length > 0 || !isDemoScope();
+  const real = allHerd.length > 0 || !isDemoScope();
   const animals = useMemo(() => herd.map((a) => toAnimal(a, events)), [herd, events]);
   const byTag = useMemo(() => new Map(animals.map((a) => [a.tag, a])), [animals]);
 

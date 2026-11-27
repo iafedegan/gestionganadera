@@ -21,14 +21,7 @@ import { CATEGORY_LABEL, fechaHora, todayLocal } from "./labels";
 import { ageText, animalInfo } from "./lib/animalTags";
 import { ApiError, NetworkError, api } from "./lib/api";
 import type { LocalAnimalEvent, LocalHerdAnimal } from "./lib/localdb";
-import {
-  type NotifyState,
-  askNotify,
-  chime,
-  notifyState,
-  systemNotify,
-  titleBadge,
-} from "./lib/notify";
+import { type NotifyState, askNotify, chime, notifyState, systemNotify } from "./lib/notify";
 import { myOrgs } from "./lib/orgs";
 import { phoneNumber, smsLink, smsText } from "./lib/sms";
 import { type Thread, buildThreads, toAttend } from "./lib/threads";
@@ -351,6 +344,7 @@ export function EmergencyCard(props: Herd & { alert: EmergencyState; onRetry(): 
           <UrgentChat
             thread={{
               key: alert.id,
+              userId: null,
               name: alert.ackBy ?? "Su veterinario",
               alerts: [alert],
               pending: [],
@@ -471,26 +465,15 @@ function markRead(a: UrgentAlertDto): void {
 }
 
 /**
- * Urgencias en las notificaciones: una conversación por persona. Nada se pone sobre la pantalla;
- * suena, avisa y queda en la campana. También despacha los avisos que quedaron en cola.
+ * Urgencias: suenan, avisan y quedan en los chats y en la campana. También despacha los avisos
+ * que quedaron en cola.
  */
-export function useUrgentCenter(): {
-  node: ReactNode;
-  threads: Thread[];
-  unread: number;
-  open(thread: Thread): void;
-} {
+export function useUrgentCenter(onMessage: (alertId: string) => void) {
   const { orgId, online, notify } = useApp();
   const { items, reload } = useUrgentList(true);
   const threads = buildThreads(items);
   const pendingAlerts = items.filter(toAttend);
   const chats = items.filter((a) => a.mine || a.attending || toAttend(a));
-  // Se recuerda un aviso de la conversación: su clave cambia cuando alguien confirma.
-  const [openId, setOpenId] = useState<string | null>(null);
-  const chat = threads.find((t) => t.alerts.some((a) => a.id === openId));
-  useEffect(() => {
-    for (const a of chat?.alerts ?? []) markRead(a);
-  }, [chat]);
 
   // Un mensaje nuevo suena, sale en el sistema si la app está de fondo y abre su chat.
   useEffect(() => {
@@ -503,10 +486,10 @@ export function useUrgentCenter(): {
       notify(`${m.authorName}: ${m.preview}`, "warn");
       if (document.hidden)
         void systemNotify(`Mensaje de ${m.authorName}`, m.preview, `chat-${a.id}`);
-      if (!document.querySelector("dialog[open]")) setOpenId(a.id);
+      if (!document.querySelector("dialog[open]")) onMessage(a.id);
       break;
     }
-  }, [chats, notify]);
+  }, [chats, notify, onMessage]);
 
   useEffect(() => {
     if (!orgId || !online) return;
@@ -546,12 +529,6 @@ export function useUrgentCenter(): {
     );
   }, [pendingAlerts, notify]);
 
-  const unread = threads.filter(isNew).length;
-  useEffect(() => {
-    titleBadge(unread);
-    return () => titleBadge(0);
-  }, [unread]);
-
   const attend = (list: UrgentAlertDto[]) =>
     void Promise.all(list.map((a) => api.urgentAck(a.id))).then(
       () => {
@@ -560,60 +537,14 @@ export function useUrgentCenter(): {
       },
       () => notify("No se pudo confirmar. Revise la conexión.", "warn"),
     );
-
-  const node = chat ? (
-    <UrgentChat
-      thread={chat}
-      onClose={() => setOpenId(null)}
-      {...(chat.pending.length > 0 ? { onAttend: () => attend(chat.pending) } : {})}
-    />
-  ) : null;
-  return { node, threads, unread, open: (t) => setOpenId(t.alerts.at(-1)?.id ?? null) };
+  return { threads, attend };
 }
 
-/** Pendiente de confirmar o con algo sin leer. */
-const isNew = (t: Thread) => t.pending.length > 0 || t.alerts.some(isUnread);
-
-/** Las personas con urgencias, para la hoja de notificaciones. Al tocar se abre su chat. */
-export function ThreadList(props: { threads: Thread[]; onOpen(t: Thread): void }) {
-  if (props.threads.length === 0) return null;
-  return (
-    <ul className="threads" aria-label="Conversaciones">
-      {props.threads.map((t) => {
-        const animals = [...new Set(t.alerts.flatMap((a) => (a.animal ? [a.animal.tag] : [])))];
-        return (
-          <li key={t.key}>
-            <button
-              type="button"
-              className={t.pending.length ? "th urgent" : isNew(t) ? "th new" : "th"}
-              onClick={() => {
-                haptic(8);
-                props.onOpen(t);
-              }}
-            >
-              <span className="th-av" aria-hidden="true">
-                {initials(t.name)}
-              </span>
-              <span className="th-text">
-                <strong>{t.name}</strong>
-                <small>{t.preview}</small>
-                {animals.length > 0 && <em>{animals.join(" · ")}</em>}
-              </span>
-              <span className="th-meta">
-                <time>{ago(t.at)}</time>
-                {t.pending.length > 0 ? (
-                  <b>{t.pending.length > 1 ? `${t.pending.length} urgentes` : "Urgente"}</b>
-                ) : (
-                  isNew(t) && <span className="th-dot" />
-                )}
-              </span>
-            </button>
-          </li>
-        );
-      })}
-    </ul>
-  );
-}
+/** Avisos de la conversación sin leer. */
+export const unreadAlerts = (t: Thread) => t.alerts.filter(isUnread).length;
+export const markThreadRead = (t: Thread) => {
+  for (const a of t.alerts) markRead(a);
+};
 
 /** Pide permiso para avisar con la notificación del sistema, una sola vez y con un toque. */
 export function NotifyPrompt() {

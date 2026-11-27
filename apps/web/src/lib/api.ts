@@ -7,6 +7,7 @@ import type {
   AulaProgressDto,
   AulaQuizDto,
   AulaQuizResultDto,
+  ChatContact,
   CommunityPostCreate,
   CommunityPostDto,
   CommunityReplyDto,
@@ -203,6 +204,11 @@ export const api = {
     request<FarmProfileDto>("PUT", `/v1/profile?organizationId=${organizationId}`, profile),
   urgent: (orgId: string) =>
     request<{ items: UrgentAlertDto[] }>("GET", `/v1/urgencias?organizationId=${orgId}`),
+  chats: () => request<{ items: ChatContact[] }>("GET", "/v1/chats"),
+  chatMessages: (userId: string) =>
+    request<{ items: UrgentMessageDto[] }>("GET", `/v1/chats/${userId}/mensajes`),
+  chatSend: (userId: string, input: UrgentMessageCreate) =>
+    request<{ ok: true }>("POST", `/v1/chats/${userId}/mensajes`, input, { timeoutMs: 90_000 }),
   urgentMine: () =>
     request<{ items: UrgentAlertDto[]; organizations: string[] }>("GET", "/v1/urgencias/mias"),
   urgentMessages: (id: string) =>

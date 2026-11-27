@@ -744,7 +744,20 @@ export interface UrgentMessageDto {
   createdAt: string;
 }
 
+/** Persona del equipo con quien se puede conversar. */
+export interface ChatContact {
+  userId: string;
+  name: string;
+  avatar: string | null;
+  role: Role;
+  organizationName: string;
+  unread: number;
+  lastMessage: { id: string; mine: boolean; preview: string; createdAt: string } | null;
+}
+
 export interface UrgentAlertDto {
+  /** Quien confirmó que atiende. */
+  ackById: string | null;
   organizationId: string;
   organizationName: string;
   /** Mensajes del chat, incluidas fotos y videos. */

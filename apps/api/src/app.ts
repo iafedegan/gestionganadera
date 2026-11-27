@@ -64,6 +64,7 @@ import {
   resolveSession,
   toSessionDto,
 } from "./auth.js";
+import { directMedia, listContacts, listDirect, sendDirect } from "./chats.js";
 import {
   createPost,
   createReply,
@@ -1251,6 +1252,26 @@ export async function buildApp(opts: AppOptions): Promise<FastifyInstance> {
     return r;
   });
 
+  /** Entrega una foto o video; el iPhone pide los videos por tramos. */
+  function sendMedia(req: FastifyRequest, reply: FastifyReply, r: { type: string; data: Buffer }) {
+    reply
+      .type(r.type)
+      .header("content-disposition", "inline")
+      .header("content-security-policy", "sandbox")
+      .header("accept-ranges", "bytes");
+    const range = /^bytes=(\d*)-(\d*)$/.exec(req.headers.range ?? "");
+    if (!range || (!range[1] && !range[2])) return reply.send(r.data);
+    const size = r.data.length;
+    const start = range[1] ? Number(range[1]) : Math.max(0, size - Number(range[2]));
+    const end = range[1] && range[2] ? Math.min(Number(range[2]), size - 1) : size - 1;
+    if (start > end || start >= size)
+      return reply.code(416).header("content-range", `bytes */${size}`).send();
+    return reply
+      .code(206)
+      .header("content-range", `bytes ${start}-${end}/${size}`)
+      .send(r.data.subarray(start, end + 1));
+  }
+
   const chatCode = { NO_EXISTE: 404, SIN_ACCESO: 403, SIN_CONFIRMAR: 409, LIMITE: 429 } as const;
   const chatText = {
     NO_EXISTE: "No existe.",
@@ -1297,23 +1318,53 @@ export async function buildApp(opts: AppOptions): Promise<FastifyInstance> {
       if (!p.success) return chatFail(reply, "NO_EXISTE");
       const r = await urgentMedia(db, p.data.id, p.data.mid, a.user.id, a.memberships);
       if ("error" in r) return chatFail(reply, r.error);
-      reply
-        .type(r.type)
-        .header("content-disposition", "inline")
-        .header("content-security-policy", "sandbox")
-        .header("accept-ranges", "bytes");
-      // El iPhone pide los videos por tramos.
-      const range = /^bytes=(\d*)-(\d*)$/.exec(req.headers.range ?? "");
-      if (!range || (!range[1] && !range[2])) return reply.send(r.data);
-      const size = r.data.length;
-      const start = range[1] ? Number(range[1]) : Math.max(0, size - Number(range[2]));
-      const end = range[1] && range[2] ? Math.min(Number(range[2]), size - 1) : size - 1;
-      if (start > end || start >= size)
-        return reply.code(416).header("content-range", `bytes */${size}`).send();
-      return reply
-        .code(206)
-        .header("content-range", `bytes ${start}-${end}/${size}`)
-        .send(r.data.subarray(start, end + 1));
+      return sendMedia(req, reply, r);
+    },
+  );
+
+  /* ───── Chats entre personas del equipo ───── */
+  app.get("/v1/chats", { preHandler: requireSession }, async (req) => {
+    const a = req.auth as NonNullable<FastifyRequest["auth"]>;
+    return { items: await listContacts(db, a.user.id, a.memberships) };
+  });
+
+  const person = z.object({ userId: z.string().uuid() });
+
+  app.get("/v1/chats/:userId/mensajes", { preHandler: requireSession }, async (req, reply) => {
+    const a = req.auth as NonNullable<FastifyRequest["auth"]>;
+    const p = person.safeParse(req.params);
+    if (!p.success) return chatFail(reply, "NO_EXISTE");
+    const r = await listDirect(db, a.user.id, a.memberships, p.data.userId);
+    return "error" in r ? chatFail(reply, r.error) : { items: r };
+  });
+
+  app.post(
+    "/v1/chats/:userId/mensajes",
+    { preHandler: requireSession, bodyLimit: 4_300_000 },
+    async (req, reply) => {
+      const a = req.auth as NonNullable<FastifyRequest["auth"]>;
+      const p = person.safeParse(req.params);
+      const b = UrgentMessageCreate.safeParse(req.body);
+      if (!p.success) return chatFail(reply, "NO_EXISTE");
+      if (!b.success)
+        return reply.code(400).send({
+          error: ErrorCodes.VALIDACION,
+          message: "Archivo no admitido o demasiado grande (máximo 3 MB).",
+        });
+      const r = await sendDirect(db, a.user.id, a.memberships, p.data.userId, b.data);
+      return "error" in r ? chatFail(reply, r.error) : reply.code(201).send(r);
+    },
+  );
+
+  app.get(
+    "/v1/chats/:userId/mensajes/:mid/archivo",
+    { preHandler: requireSession },
+    async (req, reply) => {
+      const a = req.auth as NonNullable<FastifyRequest["auth"]>;
+      const p = person.extend({ mid: z.string().uuid() }).safeParse(req.params);
+      if (!p.success) return chatFail(reply, "NO_EXISTE");
+      const r = await directMedia(db, a.user.id, a.memberships, p.data.userId, p.data.mid);
+      return "error" in r ? chatFail(reply, r.error) : sendMedia(req, reply, r);
     },
   );
 

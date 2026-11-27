@@ -6,6 +6,8 @@ import type { UrgentAlertDto } from "@ganaderia/contracts";
  */
 export interface Thread {
   key: string;
+  /** null mientras nadie confirma: se habla con el equipo. */
+  userId: string | null;
   /** Persona con quien se habla. */
   name: string;
   /** Avisos de la conversación, del más viejo al más reciente. */
@@ -32,14 +34,18 @@ function previewOf(a: UrgentAlertDto): string {
 }
 
 export function buildThreads(items: UrgentAlertDto[]): Thread[] {
-  const groups = new Map<string, { name: string; alerts: UrgentAlertDto[] }>();
+  const groups = new Map<
+    string,
+    { userId: string | null; name: string; alerts: UrgentAlertDto[] }
+  >();
   for (const a of items.filter(takesPart)) {
-    const [key, name] = !a.mine
-      ? [`de:${a.authorId}`, a.authorName]
-      : a.ackBy
-        ? [`con:${a.ackBy}`, a.ackBy]
-        : ["equipo", "Su veterinario"];
-    const g = groups.get(key) ?? { name, alerts: [] };
+    const [userId, name] = !a.mine
+      ? [a.authorId, a.authorName]
+      : a.ackById
+        ? [a.ackById, a.ackBy as string]
+        : [null, "Su veterinario"];
+    const key = userId ? `u:${userId}` : "equipo";
+    const g = groups.get(key) ?? { userId, name, alerts: [] };
     g.alerts.push(a);
     groups.set(key, g);
   }
@@ -49,6 +55,7 @@ export function buildThreads(items: UrgentAlertDto[]): Thread[] {
       const latest = alerts.reduce((x, y) => (activity(y) > activity(x) ? y : x));
       return {
         key,
+        userId: g.userId,
         name: g.name,
         alerts,
         pending: alerts.filter(toAttend),

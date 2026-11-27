@@ -11,8 +11,10 @@ import {
 } from "lucide-react";
 import { type ReactNode, useEffect, useState } from "react";
 import { createPortal } from "react-dom";
+import { SwipeRow } from "./SwipeRow";
 import { useActiveFarm, useFarms } from "./animals";
 import { fechaHora, todayLocal } from "./labels";
+import { alertKey, dismiss, useDismissed } from "./lib/dismissed";
 import { localdb } from "./lib/localdb";
 import { type ModuleKey, canSeeModule } from "./modules";
 import { useApp } from "./state";
@@ -198,12 +200,19 @@ export function AlertsSheet({
   alerts,
   onClose,
   children,
+  onClearAll,
 }: {
   alerts: AlertItem[];
   onClose(): void;
-  /** Lo que va primero: las conversaciones de las urgencias. */
+  /** Lo que va primero: las conversaciones. */
   children?: ReactNode;
+  /** Borra también lo que va primero. */
+  onClearAll?(): void;
 }) {
+  const { orgId } = useApp();
+  const dismissed = useDismissed();
+  const shown = alerts.filter((a) => !dismissed.has(alertKey(orgId, a)));
+  const empty = shown.length === 0 && !children;
   return createPortal(
     <>
       <button
@@ -215,17 +224,32 @@ export function AlertsSheet({
       />
       <dialog open className="sheet-panel farm-sheet alerts-sheet" aria-label="Notificaciones">
         <span className="grabber" aria-hidden="true" />
-        <h2>Notificaciones</h2>
+        <div className="alerts-head">
+          <h2>Notificaciones</h2>
+          {!empty && (
+            <button
+              type="button"
+              className="link"
+              onClick={() => {
+                dismiss(...shown.map((a) => alertKey(orgId, a)));
+                onClearAll?.();
+              }}
+            >
+              Borrar todas
+            </button>
+          )}
+        </div>
+        {!empty && <p className="hint">Deslice una notificación para borrarla.</p>}
         {children}
-        {alerts.length === 0 && !children ? (
+        {empty ? (
           <div className="empty-state ok">
             <CheckCircle2 size={34} aria-hidden="true" />
             <p>Todo en orden. No hay notificaciones por ahora.</p>
           </div>
         ) : (
           <ul className="alert-rows">
-            {alerts.map((a) => (
-              <li key={a.title}>
+            {shown.map((a) => (
+              <SwipeRow key={a.title} onDismiss={() => dismiss(alertKey(orgId, a))}>
                 <span className={`ar-icon ar-${a.tone}`}>{a.icon}</span>
                 <div className="ar-text">
                   <strong>{a.title}</strong>
@@ -241,7 +265,7 @@ export function AlertsSheet({
                     ›
                   </button>
                 )}
-              </li>
+              </SwipeRow>
             ))}
           </ul>
         )}

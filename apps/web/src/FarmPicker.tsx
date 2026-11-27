@@ -3,6 +3,8 @@ import { useState } from "react";
 import { createPortal } from "react-dom";
 import { useFarms } from "./animals";
 import { scopedFarm, setActiveFarm, useStoredFarm } from "./lib/activeFarm";
+import { myOrgs } from "./lib/orgs";
+import { useApp } from "./state";
 
 /**
  * Chip de la barra superior para escoger la finca con la que se trabaja. Solo aparece con dos
@@ -12,7 +14,9 @@ export function FarmChip() {
   const farms = useFarms();
   const active = scopedFarm(useStoredFarm(), farms);
   const [open, setOpen] = useState(false);
-  if (farms.length < 2) return null;
+  const { session, orgId, switchOrg } = useApp();
+  const orgs = myOrgs(session);
+  if (farms.length < 2 && orgs.length < 2) return null;
   const current = farms.find((f) => f.id === active);
   const choose = (id: string) => {
     setActiveFarm(id);
@@ -28,7 +32,12 @@ export function FarmChip() {
         onClick={() => setOpen(true)}
       >
         <MapPin size={16} aria-hidden="true" />
-        <span className="farm-pick-name">{current?.name ?? "Todas mis fincas"}</span>
+        <span className="farm-pick-name">
+          {current?.name ??
+            (orgs.length > 1
+              ? (orgs.find((o) => o.organizationId === orgId)?.organizationName ?? "")
+              : "Todas mis fincas")}
+        </span>
         <ChevronDown size={16} aria-hidden="true" />
       </button>
       {open &&
@@ -71,6 +80,29 @@ export function FarmChip() {
                   </li>
                 ))}
               </ul>
+              {orgs.length > 1 && (
+                <>
+                  <h3 className="farm-orgs">Otras ganaderías</h3>
+                  <ul>
+                    {orgs
+                      .filter((o) => o.organizationId !== orgId)
+                      .map((o) => (
+                        <li key={o.organizationId}>
+                          <button
+                            type="button"
+                            className="farm-row"
+                            onClick={() => {
+                              switchOrg(o.organizationId);
+                              setOpen(false);
+                            }}
+                          >
+                            <span>{o.organizationName}</span>
+                          </button>
+                        </li>
+                      ))}
+                  </ul>
+                </>
+              )}
             </dialog>
           </>,
           // La barra superior tiene backdrop-filter: dentro de ella `fixed` no sería de pantalla.

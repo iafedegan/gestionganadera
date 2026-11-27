@@ -33,7 +33,7 @@ describe("conversaciones por persona", () => {
 
   it("quien reporta ve a su veterinario", () => {
     const t = buildThreads([
-      alert("1", { mine: true, ackBy: "Dra. Ruiz" }),
+      alert("1", { mine: true, ackBy: "Dra. Ruiz", ackById: "ruiz" }),
       alert("2", { mine: true }),
     ]);
     expect(t.map((x) => x.name).sort()).toEqual(["Dra. Ruiz", "Su veterinario"]);

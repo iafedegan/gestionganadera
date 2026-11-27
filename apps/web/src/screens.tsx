@@ -18,6 +18,7 @@ import {
   LogOut,
   Mail,
   Menu,
+  MessagesSquare,
   NotebookPen,
   PawPrint,
   RefreshCw,
@@ -38,8 +39,9 @@ import {
 import { AlertsSheet, useAlerts } from "./Alerts";
 import { AssistantDialog } from "./Assistant";
 import { Avatar, AvatarPicker, useMyAvatar } from "./Avatar";
+import { ChatRows, ChatsDialog, useChatCenter } from "./Chats";
 import { CowBot } from "./CowBot";
-import { NotifyPrompt, ThreadList, useUrgentCenter } from "./Emergency";
+import { NotifyPrompt } from "./Emergency";
 import { FarmIntel } from "./FarmIntel";
 import { FarmChip } from "./FarmPicker";
 import { type DashState, HomeStory } from "./HomeStory";
@@ -55,6 +57,7 @@ import { MOV_SEED, type Mov } from "./herd";
 import { useStore } from "./kit";
 import { CODE_LABEL, KIND_LABEL, fecha, fechaHora, num, todayLocal } from "./labels";
 import { ApiError, api } from "./lib/api";
+import { alertKey, chatKey, dismiss, useDismissed } from "./lib/dismissed";
 import { type HomeStats, homeStats } from "./lib/homeStats";
 import { type OutboxItem, localdb } from "./lib/localdb";
 import { lastEmail } from "./lib/session";
@@ -529,6 +532,7 @@ export function Shell(props: {
   children: ReactNode;
 }) {
   const {
+    orgId,
     session,
     role,
     online,
@@ -572,8 +576,13 @@ export function Shell(props: {
       props.onModule(m);
     },
   );
-  const urgent = useUrgentCenter();
-  const unseen = shellAlerts.length + urgent.unread;
+  const chats = useChatCenter();
+  const [chatsOpen, setChatsOpen] = useState(false);
+  const dismissed = useDismissed();
+  const news = chats.rows.filter(
+    (r) => (r.unread > 0 || r.pending.length > 0) && !dismissed.has(chatKey(r)),
+  );
+  const unseen = shellAlerts.filter((a) => !dismissed.has(alertKey(orgId, a))).length + news.length;
   const org = session?.memberships[0]?.organizationName ?? "";
   const name = session?.displayName ?? "";
 
@@ -665,6 +674,16 @@ export function Shell(props: {
               )}
               <span className="pill-text">{online ? "En línea" : "Sin conexión"}</span>
             </output>
+            <button
+              type="button"
+              className="icon-btn top-chats"
+              aria-label={`Chats${chats.unread > 0 ? `, ${chats.unread}` : ""}`}
+              aria-haspopup="dialog"
+              onClick={() => setChatsOpen(true)}
+            >
+              <MessagesSquare size={20} />
+              {chats.unread > 0 && <span className="dot">{chats.unread}</span>}
+            </button>
             <button
               type="button"
               className="icon-btn"
@@ -780,7 +799,6 @@ export function Shell(props: {
         </div>
 
         <main id="contenido" className="content">
-          {urgent.node}
           <div key={props.module} className="screen">
             {props.children}
           </div>
@@ -803,13 +821,14 @@ export function Shell(props: {
             aria-haspopup="dialog"
             onClick={(e) => {
               tapped(e);
-              setAsking(true);
+              setChatsOpen(true);
             }}
           >
             <span className="tc-ring">
               <CowBot size={50} />
             </span>
-            <span>Asistente</span>
+            {chats.unread > 0 && <i className="tc-badge">{chats.unread}</i>}
+            <span>Chats</span>
           </button>
         )}
         {!props.locked && tabs.slice(2, quick.length > 0 ? 3 : 4).map(tabButton)}
@@ -828,6 +847,16 @@ export function Shell(props: {
           </button>
         )}
       </nav>
+      {chatsOpen && (
+        <ChatsDialog
+          rows={chats.rows}
+          onOpen={chats.open}
+          onAssistant={() => setAsking(true)}
+          onClose={() => setChatsOpen(false)}
+        />
+      )}
+      {/* Se abren encima de la lista; al cerrarlos se vuelve a ella. */}
+      {chats.node}
       {asking && <AssistantDialog initial={null} onClose={() => setAsking(false)} />}
 
       {quickOpen && (
@@ -924,15 +953,20 @@ export function Shell(props: {
 
       {props.syncOpen && <SyncDrawer onClose={() => props.onSyncOpen(false)} />}
       {alertsOpen && (
-        <AlertsSheet alerts={shellAlerts} onClose={() => setAlertsOpen(false)}>
-          {urgent.threads.length > 0 ? (
+        <AlertsSheet
+          alerts={shellAlerts}
+          onClose={() => setAlertsOpen(false)}
+          onClearAll={() => dismiss(...news.map(chatKey))}
+        >
+          {news.length > 0 ? (
             <>
               <NotifyPrompt />
-              <ThreadList
-                threads={urgent.threads}
-                onOpen={(t) => {
+              <ChatRows
+                rows={news}
+                onDismiss={(r) => dismiss(chatKey(r))}
+                onOpen={(r) => {
                   setAlertsOpen(false);
-                  urgent.open(t);
+                  chats.open(r);
                 }}
               />
             </>
