@@ -32,6 +32,7 @@ import {
   TechCaseCreate,
   TechMessageCreate,
   UrgentAlertCreate,
+  UrgentMessageCreate,
 } from "@ganaderia/contracts";
 import { can } from "@ganaderia/domain";
 import Fastify, { type FastifyInstance, type FastifyReply, type FastifyRequest } from "fastify";
@@ -109,7 +110,15 @@ import {
   revokeInvitation,
 } from "./team.js";
 import { latestChecks, runCheck } from "./trazabilidad.js";
-import { ackUrgent, createUrgent, listUrgent } from "./urgent.js";
+import {
+  ackUrgent,
+  addUrgentMessage,
+  createUrgent,
+  listMessages,
+  listUrgent,
+  urgentMedia,
+  urgentTeam,
+} from "./urgent.js";
 
 const COOKIE = "sid";
 
@@ -1150,6 +1159,16 @@ export async function buildApp(opts: AppOptions): Promise<FastifyInstance> {
     return { items: await listUrgent(db, a.user.id, a.memberships, q.data.organizationId) };
   });
 
+  app.get("/v1/urgencias/equipo", { preHandler: requireSession }, async (req, reply) => {
+    const a = req.auth as NonNullable<FastifyRequest["auth"]>;
+    const q = orgQuery.safeParse(req.query);
+    if (!q.success || !a.memberships.some((m) => m.organizationId === q.data.organizationId))
+      return reply
+        .code(403)
+        .send({ error: ErrorCodes.PERMISO_DENEGADO, message: "Sin acceso a la organización." });
+    return { team: await urgentTeam(db, q.data.organizationId) };
+  });
+
   app.post("/v1/urgencias", { preHandler: requireSession }, async (req, reply) => {
     const a = req.auth as NonNullable<FastifyRequest["auth"]>;
     const b = UrgentAlertCreate.safeParse(req.body);
@@ -1181,6 +1200,72 @@ export async function buildApp(opts: AppOptions): Promise<FastifyInstance> {
         .send({ error: r.error, message: "No puede atender este aviso." });
     return r;
   });
+
+  const chatCode = { NO_EXISTE: 404, SIN_ACCESO: 403, SIN_CONFIRMAR: 409, LIMITE: 429 } as const;
+  const chatText = {
+    NO_EXISTE: "No existe.",
+    SIN_ACCESO: "Sin acceso a este chat.",
+    SIN_CONFIRMAR: "El chat se abre cuando el veterinario confirma.",
+    LIMITE: "Este chat llegó a su límite.",
+  } as const;
+  const chatFail = (reply: FastifyReply, e: keyof typeof chatCode) =>
+    reply.code(chatCode[e]).send({ error: e, message: chatText[e] });
+  const alertId = z.object({ id: z.string().uuid() });
+
+  app.get("/v1/urgencias/:id/mensajes", { preHandler: requireSession }, async (req, reply) => {
+    const a = req.auth as NonNullable<FastifyRequest["auth"]>;
+    const p = alertId.safeParse(req.params);
+    if (!p.success) return chatFail(reply, "NO_EXISTE");
+    const r = await listMessages(db, p.data.id, a.user.id, a.memberships);
+    return "error" in r ? chatFail(reply, r.error) : { items: r };
+  });
+
+  app.post(
+    "/v1/urgencias/:id/mensajes",
+    { preHandler: requireSession, bodyLimit: 4_300_000 },
+    async (req, reply) => {
+      const a = req.auth as NonNullable<FastifyRequest["auth"]>;
+      const p = alertId.safeParse(req.params);
+      const b = UrgentMessageCreate.safeParse(req.body);
+      if (!p.success) return chatFail(reply, "NO_EXISTE");
+      if (!b.success)
+        return reply.code(400).send({
+          error: ErrorCodes.VALIDACION,
+          message: "Archivo no admitido o demasiado grande (máximo 3 MB).",
+        });
+      const r = await addUrgentMessage(db, p.data.id, a.user.id, a.memberships, b.data);
+      return "error" in r ? chatFail(reply, r.error) : reply.code(201).send(r);
+    },
+  );
+
+  app.get(
+    "/v1/urgencias/:id/mensajes/:mid/archivo",
+    { preHandler: requireSession },
+    async (req, reply) => {
+      const a = req.auth as NonNullable<FastifyRequest["auth"]>;
+      const p = z.object({ id: z.string().uuid(), mid: z.string().uuid() }).safeParse(req.params);
+      if (!p.success) return chatFail(reply, "NO_EXISTE");
+      const r = await urgentMedia(db, p.data.id, p.data.mid, a.user.id, a.memberships);
+      if ("error" in r) return chatFail(reply, r.error);
+      reply
+        .type(r.type)
+        .header("content-disposition", "inline")
+        .header("content-security-policy", "sandbox")
+        .header("accept-ranges", "bytes");
+      // El iPhone pide los videos por tramos.
+      const range = /^bytes=(\d*)-(\d*)$/.exec(req.headers.range ?? "");
+      if (!range || (!range[1] && !range[2])) return reply.send(r.data);
+      const size = r.data.length;
+      const start = range[1] ? Number(range[1]) : Math.max(0, size - Number(range[2]));
+      const end = range[1] && range[2] ? Math.min(Number(range[2]), size - 1) : size - 1;
+      if (start > end || start >= size)
+        return reply.code(416).header("content-range", `bytes */${size}`).send();
+      return reply
+        .code(206)
+        .header("content-range", `bytes ${start}-${end}/${size}`)
+        .send(r.data.subarray(start, end + 1));
+    },
+  );
 
   app.get("/v1/assistant/status", { preHandler: requireSession }, async (req) => {
     const a = req.auth as NonNullable<FastifyRequest["auth"]>;

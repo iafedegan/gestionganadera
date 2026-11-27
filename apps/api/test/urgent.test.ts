@@ -114,5 +114,26 @@ describe("avisos urgentes al veterinario", () => {
     const ok = await app.inject({ method: "POST", url: ackUrl, headers: { ...H, cookie: vet } });
     expect(ok.statusCode).toBe(200);
     expect(await list(op)).toMatchObject([{ mine: true, ackBy: "vet@u.local" }]);
+
+    // Chat: texto y foto entre los dos; nadie más puede leerlo.
+    const chat = `/v1/urgencias/${first.json().id}/mensajes`;
+    const say = (cookie: string, payload: object) =>
+      app.inject({ method: "POST", url: chat, headers: { ...H, cookie }, payload });
+    expect((await say(op, { body: "Mire la foto" })).statusCode).toBe(201);
+    const photo = Buffer.from("foto-de-prueba").toString("base64");
+    expect((await say(vet, { media: { type: "image/jpeg", data: photo } })).statusCode).toBe(201);
+    expect((await say(vet, { media: { type: "text/html", data: photo } })).statusCode).toBe(400);
+    const msgs = (await app.inject({ url: chat, headers: { ...H, cookie: op } })).json().items;
+    expect(msgs).toMatchObject([
+      { body: "Mire la foto", mine: true },
+      { mediaType: "image/jpeg", mine: false },
+    ]);
+    const file = `${chat}/${msgs[1].id}/archivo`;
+    const got = await app.inject({ url: file, headers: { cookie: op, range: "bytes=0-3" } });
+    expect(got.statusCode).toBe(206);
+    expect(got.body).toBe("foto");
+    const other = await login("otro@u.local");
+    expect((await app.inject({ url: file, headers: { cookie: other } })).statusCode).toBe(403);
+    expect((await say(other, { body: "hola" })).statusCode).toBe(403);
   });
 });

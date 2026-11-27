@@ -437,7 +437,7 @@ export function AssistantDialog(props: { initial: string | null; onClose(): void
           {asking && (
             <AnimalAsk
               reason={asking.reason}
-              animals={snapshot.herd}
+              {...snapshot}
               onPick={(animal) => {
                 setAsking(null);
                 void emergency.send(
@@ -450,6 +450,7 @@ export function AssistantDialog(props: { initial: string | null; onClose(): void
           )}
           {emergency.alert && (
             <EmergencyCard
+              {...snapshot}
               alert={emergency.alert}
               onRetry={() => {
                 const a = emergency.alert;

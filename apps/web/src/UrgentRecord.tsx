@@ -1,4 +1,6 @@
 import type { UrgentAnimalRecord } from "@ganaderia/contracts";
+import { Send, X } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
 import { art } from "./art";
 import {
   CATEGORY_LABEL,
@@ -70,67 +72,113 @@ function Timeline({ events }: { events: UrgentAnimalRecord["events"] }) {
   );
 }
 
-export function UrgentRecord({ animal: a }: { animal: UrgentAnimalRecord }) {
-  // Lo clínico y reproductivo va a la vista; ordeños y pesajes, en listas aparte.
+const TABS = [
+  ["resumen", "Resumen"],
+  ["clinica", "Historia"],
+  ["produccion", "Producción"],
+] as const;
+
+/** Pantalla completa con la hoja de vida, ordenada en tres pestañas. */
+export function UrgentRecordSheet(props: {
+  animal: UrgentAnimalRecord;
+  onClose(): void;
+  onAttend(): void;
+}) {
+  const a = props.animal;
+  const ref = useRef<HTMLDialogElement>(null);
+  const [tab, setTab] = useState<(typeof TABS)[number][0]>("resumen");
+  useEffect(() => {
+    ref.current?.showModal();
+  }, []);
+  // Lo clínico y reproductivo aparte de ordeños y pesajes.
   const care = a.events.filter((e) => e.type !== "leche" && e.type !== "peso");
-  const weights = a.events.filter((e) => e.type === "peso");
-  const milk = a.events.filter((e) => e.type === "leche");
+  const output = a.events.filter((e) => e.type === "peso" || e.type === "leche");
   const facts: [string, string][] = [
-    ["Especie", SPECIES_LABEL[a.species as "bovino"] ?? a.species],
-    ["Categoría", CATEGORY_LABEL[a.category] ?? a.category],
+    ["Especie", SPECIES_LABEL[a.species] ?? a.species],
     ["Sexo", a.sex === "hembra" ? "Hembra" : "Macho"],
     ["Edad", ageText(a.birthDate, todayLocal()) || "Sin dato"],
     ["Estado", STATUS_LABEL[a.status] ?? a.status],
     ["Madre", a.motherTag ?? "Sin dato"],
     ["Padre", a.fatherTag ?? "Sin dato"],
   ];
+  const trace: [string, string][] = [
+    ["Predio actual", a.farmName],
+    [
+      "Ingreso",
+      a.entry
+        ? `${REASON_LABEL[a.entry.reason] ?? a.entry.reason}${a.entry.occurredAt ? ` · ${fecha(a.entry.occurredAt.slice(0, 10))}` : ""}`
+        : "Sin dato registrado",
+    ],
+    [
+      "Bosque",
+      a.forest
+        ? `${a.forest.lossAfterCutoffHa > 0 ? `${a.forest.lossAfterCutoffHa} ha de pérdida desde 2021` : "Sin pérdida desde 2021"} · ${fecha(a.forest.checkedAt.slice(0, 10))}`
+        : "Finca sin revisión satelital",
+    ],
+  ];
   return (
-    <div className="ur">
-      <header>
+    <dialog ref={ref} className="urs" onClose={props.onClose} aria-labelledby="urs-title">
+      <header className="urs-hero">
+        <button
+          type="button"
+          className="urs-close"
+          aria-label="Cerrar"
+          onClick={() => ref.current?.close()}
+        >
+          <X size={22} />
+        </button>
         <img src={art(a.species === "bufalino" ? "ficha-buffalo" : "ficha-cow")} alt="" />
-        <div>
-          <strong>{a.tag}</strong>
-          <small>{a.farmName}</small>
+        <h2 id="urs-title">{a.tag}</h2>
+        <p>
+          {CATEGORY_LABEL[a.category] ?? a.category} · {a.farmName}
+        </p>
+        <div className="urs-tabs" role="tablist">
+          {TABS.map(([k, label]) => (
+            <button
+              key={k}
+              type="button"
+              role="tab"
+              aria-selected={tab === k}
+              className={tab === k ? "on" : ""}
+              onClick={() => setTab(k)}
+            >
+              {label}
+            </button>
+          ))}
         </div>
       </header>
-      <dl>
-        {facts.map(([k, v]) => (
-          <div key={k}>
-            <dt>{k}</dt>
-            <dd>{v}</dd>
-          </div>
-        ))}
-      </dl>
-      <h4>Trazabilidad</h4>
-      <ul className="ur-trace">
-        <li>Predio actual: {a.farmName}</li>
-        <li>
-          Ingreso:{" "}
-          {a.entry
-            ? `${REASON_LABEL[a.entry.reason] ?? a.entry.reason}${a.entry.occurredAt ? ` · ${fecha(a.entry.occurredAt.slice(0, 10))}` : ""}`
-            : "sin dato registrado"}
-        </li>
-        <li>
-          Bosque:{" "}
-          {a.forest
-            ? `${a.forest.lossAfterCutoffHa > 0 ? `${a.forest.lossAfterCutoffHa} ha de pérdida desde 2021` : "sin pérdida desde 2021"} (revisado ${fecha(a.forest.checkedAt.slice(0, 10))})`
-            : "finca sin revisión satelital"}
-        </li>
-      </ul>
-      <h4>Historia clínica y reproductiva ({care.length})</h4>
-      {care.length ? <Timeline events={care} /> : <p>Sin registros.</p>}
-      {weights.length > 0 && (
-        <details>
-          <summary>Pesajes ({weights.length})</summary>
-          <Timeline events={weights} />
-        </details>
-      )}
-      {milk.length > 0 && (
-        <details>
-          <summary>Ordeños ({milk.length})</summary>
-          <Timeline events={milk} />
-        </details>
-      )}
-    </div>
+      <div className="urs-body">
+        {tab === "resumen" && (
+          <>
+            <dl className="urs-facts">
+              {facts.map(([k, v]) => (
+                <div key={k}>
+                  <dt>{k}</dt>
+                  <dd>{v}</dd>
+                </div>
+              ))}
+            </dl>
+            <h3>Trazabilidad</h3>
+            <ol className="ur-time">
+              {trace.map(([k, v]) => (
+                <li key={k}>
+                  <strong>{k}</strong>
+                  <p>{v}</p>
+                </li>
+              ))}
+            </ol>
+          </>
+        )}
+        {tab === "clinica" &&
+          (care.length ? <Timeline events={care} /> : <p>Sin registros clínicos.</p>)}
+        {tab === "produccion" &&
+          (output.length ? <Timeline events={output} /> : <p>Sin ordeños ni pesajes.</p>)}
+      </div>
+      <footer className="urs-foot">
+        <button type="button" className="urg-btn urg-red" onClick={props.onAttend}>
+          <Send size={20} aria-hidden="true" /> Voy a atender
+        </button>
+      </footer>
+    </dialog>
   );
 }

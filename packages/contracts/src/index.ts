@@ -694,11 +694,50 @@ export interface UrgentAnimalRecord {
   events: { type: string; occurredOn: string; data: Record<string, unknown> }[];
 }
 
+export const URGENT_MEDIA_TYPES = [
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+  "video/mp4",
+  "video/quicktime",
+  "video/webm",
+] as const;
+/** Tamaño máximo de una foto o video en el chat de la urgencia (3 MB). */
+export const URGENT_MEDIA_MAX = 3_000_000;
+
+export const UrgentMessageCreate = z
+  .object({
+    body: z.string().trim().min(1).max(2000).optional(),
+    media: z
+      .object({
+        type: z.enum(URGENT_MEDIA_TYPES),
+        data: z
+          .string()
+          .max(Math.ceil(URGENT_MEDIA_MAX / 3) * 4)
+          .regex(/^[A-Za-z0-9+/]+={0,2}$/),
+      })
+      .optional(),
+  })
+  .refine((m) => m.body || m.media, { message: "Escriba un mensaje o adjunte una foto." });
+export type UrgentMessageCreate = z.infer<typeof UrgentMessageCreate>;
+
+export interface UrgentMessageDto {
+  id: string;
+  authorName: string;
+  mine: boolean;
+  body: string | null;
+  mediaType: string | null;
+  createdAt: string;
+}
+
 export interface UrgentAlertDto {
+  /** La persona de la sesión es quien confirmó que atiende. */
+  attending: boolean;
   animal: UrgentAnimalRecord | null;
   id: string;
   farmName: string | null;
   authorName: string;
+  authorPhone: string | null;
   reason: string;
   message: string;
   createdAt: string;

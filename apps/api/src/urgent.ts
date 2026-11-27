@@ -2,6 +2,8 @@ import type {
   UrgentAlertCreate,
   UrgentAlertDto,
   UrgentAnimalRecord,
+  UrgentMessageCreate,
+  UrgentMessageDto,
   UrgentRecipient,
 } from "@ganaderia/contracts";
 import { type Membership, farmScope } from "./auth.js";
@@ -99,15 +101,17 @@ interface Row {
   farm_name: string | null;
   created_by: string;
   author_name: string;
+  author_phone: string | null;
   reason: string;
   message: string;
   created_at: Date | string;
   ack_name: string | null;
+  ack_by: string | null;
   ack_at: Date | string | null;
 }
 
-const SQL = `SELECT a.id, a.farm_id, f.name AS farm_name, a.created_by, u.display_name AS author_name,
-       a.animal_id, a.reason, a.message, a.created_at, k.display_name AS ack_name, a.ack_at
+const SQL = `SELECT a.id, a.farm_id, f.name AS farm_name, a.created_by, u.display_name AS author_name, u.phone AS author_phone,
+       a.animal_id, a.reason, a.message, a.created_at, k.display_name AS ack_name, a.ack_by, a.ack_at
   FROM urgent_alert a
   JOIN app_user u ON u.id = a.created_by
   LEFT JOIN farm f ON f.id = a.farm_id
@@ -128,16 +132,21 @@ async function toDto(
     animal: r.animal_id ? await animalRecord(q, r.animal_id) : null,
     farmName: r.farm_name,
     authorName: r.author_name,
+    authorPhone: r.author_phone,
     reason: r.reason,
     message: r.message,
     createdAt: iso(r.created_at),
     ackBy: r.ack_name,
+    attending: r.ack_by === userId,
     ackAt: r.ack_at ? iso(r.ack_at) : null,
     recipients: await recipients(q, orgId, r.farm_id),
     mine: r.created_by === userId,
     canAck: canAck(memberships, orgId),
   };
 }
+
+/** Veterinarios y asesores del equipo, para tener a quién llamar aun sin señal. */
+export const urgentTeam = (db: Db, orgId: string) => db.admin((q) => recipients(q, orgId, null));
 
 export async function createUrgent(
   db: Db,
@@ -241,5 +250,121 @@ export async function ackUrgent(
       [id, userId],
     );
     return { ok: true as const };
+  });
+}
+
+/* ───────────── Chat de la urgencia ───────────── */
+
+type ChatFail = { error: "NO_EXISTE" | "SIN_ACCESO" | "SIN_CONFIRMAR" | "LIMITE" };
+const MAX_MESSAGES = 200;
+const MAX_MEDIA = 30;
+
+/** Participan quien reportó y quienes pueden atender esa finca. */
+async function chatAccess(
+  q: Q,
+  alertId: string,
+  userId: string,
+  memberships: Membership[],
+): Promise<{ confirmed: boolean } | ChatFail> {
+  const [r] = await q<{
+    organization_id: string;
+    farm_id: string | null;
+    created_by: string;
+    ack_by: string | null;
+  }>("SELECT organization_id, farm_id, created_by, ack_by FROM urgent_alert WHERE id = $1", [
+    alertId,
+  ]);
+  if (!r) return { error: "NO_EXISTE" };
+  const member = memberships.some((m) => m.organizationId === r.organization_id);
+  const scope = farmScope(memberships, r.organization_id);
+  const attends =
+    canAck(memberships, r.organization_id) &&
+    (scope === "ALL" || !r.farm_id || scope.includes(r.farm_id));
+  if (!member || !(r.created_by === userId || attends)) return { error: "SIN_ACCESO" };
+  return { confirmed: r.ack_by !== null };
+}
+
+export async function listMessages(
+  db: Db,
+  alertId: string,
+  userId: string,
+  memberships: Membership[],
+): Promise<UrgentMessageDto[] | ChatFail> {
+  return db.admin(async (q) => {
+    const access = await chatAccess(q, alertId, userId, memberships);
+    if ("error" in access) return access;
+    const rows = await q<{
+      id: string;
+      author_id: string;
+      author_name: string;
+      body: string | null;
+      media_type: string | null;
+      created_at: Date | string;
+    }>(
+      `SELECT m.id, m.author_id, u.display_name AS author_name, m.body, m.media_type, m.created_at
+         FROM urgent_message m JOIN app_user u ON u.id = m.author_id
+        WHERE m.alert_id = $1 ORDER BY m.created_at`,
+      [alertId],
+    );
+    return rows.map((m) => ({
+      id: m.id,
+      authorName: m.author_name,
+      mine: m.author_id === userId,
+      body: m.body,
+      mediaType: m.media_type,
+      createdAt: iso(m.created_at),
+    }));
+  });
+}
+
+export async function addUrgentMessage(
+  db: Db,
+  alertId: string,
+  userId: string,
+  memberships: Membership[],
+  input: UrgentMessageCreate,
+): Promise<{ ok: true } | ChatFail> {
+  return db.admin(async (q) => {
+    const access = await chatAccess(q, alertId, userId, memberships);
+    if ("error" in access) return access;
+    // El chat se abre cuando alguien confirma que atiende.
+    if (!access.confirmed) return { error: "SIN_CONFIRMAR" as const };
+    const [n] = await q<{ total: string; media: string }>(
+      "SELECT count(*) AS total, count(media_type) AS media FROM urgent_message WHERE alert_id = $1",
+      [alertId],
+    );
+    if (Number(n?.total) >= MAX_MESSAGES || (input.media && Number(n?.media) >= MAX_MEDIA))
+      return { error: "LIMITE" as const };
+    await q(
+      `INSERT INTO urgent_message (alert_id, author_id, body, media_type, media)
+       VALUES ($1,$2,$3,$4,$5)`,
+      [
+        alertId,
+        userId,
+        input.body ?? null,
+        input.media?.type ?? null,
+        input.media ? Buffer.from(input.media.data, "base64") : null,
+      ],
+    );
+    return { ok: true as const };
+  });
+}
+
+export async function urgentMedia(
+  db: Db,
+  alertId: string,
+  messageId: string,
+  userId: string,
+  memberships: Membership[],
+): Promise<{ type: string; data: Buffer } | ChatFail> {
+  return db.admin(async (q) => {
+    const access = await chatAccess(q, alertId, userId, memberships);
+    if ("error" in access) return access;
+    const [m] = await q<{ media_type: string | null; media: Uint8Array | null }>(
+      "SELECT media_type, media FROM urgent_message WHERE id = $1 AND alert_id = $2",
+      [messageId, alertId],
+    );
+    if (!m?.media || !m.media_type) return { error: "NO_EXISTE" as const };
+    return { type: m.media_type, data: Buffer.from(m.media) };
   });
 }
