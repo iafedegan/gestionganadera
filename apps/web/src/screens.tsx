@@ -177,7 +177,7 @@ export function Login() {
         <div className="hero-glow" aria-hidden="true" />
         <div className="login-hero-top">
           <span className="brand-mark" aria-hidden="true" />
-          <span className="brand-name">Gestión Ganadera</span>
+          <span className="brand-name">FarmaGan</span>
         </div>
         <div className="login-hero-body">
           <span className="hero-badge">
@@ -272,7 +272,7 @@ export function Login() {
             noValidate={false}
           >
             <header className="lc-head">
-              <p className="kicker">Sistema Integral de Gestión Ganadera</p>
+              <p className="kicker">Gestión ganadera integral</p>
               <h1 id="login-title">Ingrese a su finca</h1>
               <p className="lc-sub">Use el correo y la contraseña de su cuenta.</p>
               {invite && (
@@ -638,7 +638,7 @@ export function Shell(props: {
           <div className="topbar-left">
             <span className="brand-mark brand-sm hide-mobile" aria-hidden="true" />
             <span className="brand-line hide-mobile">
-              <strong>Sistema Integral de Gestión Ganadera</strong>
+              <strong>FarmaGan</strong>
               <span className="vbar" />
               <span>{org}</span>
             </span>

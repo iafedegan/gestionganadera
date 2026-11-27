@@ -13,8 +13,8 @@ export default defineConfig({
       registerType: "autoUpdate",
       includeAssets: ["icon.svg", "apple-touch-icon.png"],
       manifest: {
-        name: "Sistema Integral de Gestión Ganadera",
-        short_name: "Gestión Ganadera",
+        name: "FarmaGan",
+        short_name: "FarmaGan",
         description: "Gestión de fincas, animales y registros de campo, también sin conexión.",
         lang: "es-CO",
         start_url: "/app/?source=pwa",

@@ -7,10 +7,10 @@
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-    <meta name="apple-mobile-web-app-title" content="Gestión Ganadera" />
+    <meta name="apple-mobile-web-app-title" content="FarmaGan" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
     <link rel="icon" href="/icon.svg" type="image/svg+xml" />
-    <title>Sistema Integral de Gestión Ganadera</title>
+    <title>FarmaGan</title>
   </head>
   <body>
     <style>
@@ -19,9 +19,9 @@
         gap: 14px; padding: env(safe-area-inset-top) 24px env(safe-area-inset-bottom);
         background: radial-gradient(120% 80% at 50% 0%, #14553d 0%, #0f3d2e 55%, #092a1f 100%); color: #f4f2e9;
         font-family: Georgia, serif; text-align: center; }
-      .splash i { width: 84px; height: 84px; border-radius: 50%; background: #f6f8f3; margin-bottom: 6px;
-        box-shadow: inset 0 0 0 15px #0f3d2e, inset 0 0 0 22px #d8b558, 0 0 0 3px rgb(216 181 88 / .35),
-          0 18px 40px -12px rgb(0 0 0 / .5);
+      .splash i { width: 112px; height: 112px; border-radius: 28px; margin-bottom: 6px;
+        background: url("/app/icon.svg") center / cover no-repeat;
+        box-shadow: 0 0 0 3px rgb(216 181 88 / .45), 0 18px 40px -12px rgb(0 0 0 / .6);
         animation: splash-pulse 1.6s ease-in-out infinite; }
       .splash p { margin: 0; font-size: 1.6rem; letter-spacing: .02em; }
       .splash small { font: 500 .95rem/1.3 system-ui, -apple-system, sans-serif; color: #d8b558; }
@@ -32,7 +32,7 @@
       @keyframes splash-bar { from { background-position: -100% 0; } to { background-position: 200% 0; } }
       @media (prefers-reduced-motion: reduce) { .splash, .splash i, .splash .splash-bar { animation: none; } }
     </style>
-    <div id="root"><div class="splash"><i></i><p>Gestión Ganadera</p><small>Su finca ordenada, con o sin señal</small><span class="splash-bar"></span></div></div>
+    <div id="root"><div class="splash"><i></i><p>FarmaGan</p><small>Su finca ordenada, con o sin señal</small><span class="splash-bar"></span></div></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

@@ -1,7 +1,39 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
-  <!-- Ícono PROVISIONAL. No es el emblema de CONtexto Ganadero: reemplazar por el archivo oficial. -->
-  <rect width="512" height="512" fill="#0F3D2E"/>
-  <circle cx="256" cy="256" r="176" fill="#F6F8F3"/>
-  <path d="M168 300c0-60 36-112 88-112s88 52 88 112" fill="none" stroke="#0F3D2E" stroke-width="28" stroke-linecap="round"/>
-  <circle cx="256" cy="316" r="22" fill="#D8B558"/>
+  <!-- FarmaGan: la vaca entre el sol y el potrero. -->
+  <defs>
+    <linearGradient id="f" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#1F8A55"/>
+      <stop offset="0.55" stop-color="#0C4A30"/>
+      <stop offset="1" stop-color="#062B1B"/>
+    </linearGradient>
+    <linearGradient id="o" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FFE08A"/>
+      <stop offset="1" stop-color="#D99A1E"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" fill="url(#f)"/>
+  <!-- sol -->
+  <circle cx="256" cy="232" r="166" fill="none" stroke="url(#o)" stroke-width="18" stroke-linecap="round" stroke-dasharray="760 283" transform="rotate(137 256 232)"/>
+  <!-- potrero -->
+  <path d="M0 398C92 352 172 362 256 388s170 26 256-22v146H0Z" fill="#39B36B"/>
+  <path d="M0 446c104-38 190-22 280-2s164 8 232-26v94H0Z" fill="#8FD36B"/>
+  <!-- cuernos -->
+  <path d="M176 188c-46-6-70-36-66-84 22 30 52 38 94 40Z" fill="url(#o)"/>
+  <path d="M336 188c46-6 70-36 66-84-22 30-52 38-94 40Z" fill="url(#o)"/>
+  <!-- orejas -->
+  <path d="M176 210c-40-22-76-8-86 14 24 30 62 30 94 12Z" fill="#FFF7E6"/>
+  <path d="M336 210c40-22 76-8 86 14-24 30-62 30-94 12Z" fill="#FFF7E6"/>
+  <!-- cabeza -->
+  <path d="M256 132c-66 0-100 38-96 100 3 42 18 66 30 90 12 26 30 52 66 52s54-26 66-52c12-24 27-48 30-90 4-62-30-100-96-100Z" fill="#FFF7E6"/>
+  <path d="M318 148c24 18 34 46 30 80-30-6-50-34-30-80Z" fill="#B5713F"/>
+  <!-- ojos -->
+  <circle cx="214" cy="236" r="15" fill="#10231A"/>
+  <circle cx="298" cy="236" r="15" fill="#10231A"/>
+  <circle cx="219" cy="231" r="5" fill="#fff"/>
+  <circle cx="303" cy="231" r="5" fill="#fff"/>
+  <!-- hocico -->
+  <ellipse cx="256" cy="324" rx="66" ry="44" fill="#F4A9A0"/>
+  <ellipse cx="232" cy="318" rx="9" ry="13" fill="#8A3F3F"/>
+  <ellipse cx="280" cy="318" rx="9" ry="13" fill="#8A3F3F"/>
+  <path d="M234 346c14 10 30 10 44 0" fill="none" stroke="#8A3F3F" stroke-width="7" stroke-linecap="round"/>
 </svg>

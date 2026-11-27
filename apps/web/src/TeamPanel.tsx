@@ -80,7 +80,7 @@ const initials = (n: string) =>
 const linkFor = (code: string) => `${location.origin}/app/?invitacion=${encodeURIComponent(code)}`;
 
 function shareText(org: string, role: InviteRole, code: string) {
-  return `Hola, lo invito a ${org} en Gestión Ganadera como ${ROLE_NAME[role].toLowerCase()}. Abra este enlace para crear su cuenta: ${linkFor(code)} (código ${code}).`;
+  return `Hola, lo invito a ${org} en FarmaGan como ${ROLE_NAME[role].toLowerCase()}. Abra este enlace para crear su cuenta: ${linkFor(code)} (código ${code}).`;
 }
 
 /** Equipo de la organización: quién tiene acceso, invitaciones pendientes y nuevas invitaciones. */
