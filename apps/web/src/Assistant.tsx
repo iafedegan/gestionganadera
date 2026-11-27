@@ -4,9 +4,10 @@ import { ArrowUp, BookOpen, Sparkles, Stethoscope, Trash2, X } from "lucide-reac
 import { type ReactNode, useEffect, useRef, useState } from "react";
 import { AnswerVisuals, useHerdSnapshot } from "./AssistantVisuals";
 import { CowBot } from "./CowBot";
-import { EmergencyCard, useEmergencyAlert } from "./Emergency";
+import { AnimalAsk, EmergencyCard, useEmergencyAlert } from "./Emergency";
 import { EscalateDialog } from "./Extension";
 import { useActiveFarm, useFarms } from "./animals";
+import { tagsIn } from "./lib/animalCompare";
 import { ApiError, NetworkError, api } from "./lib/api";
 import { isDemoEmail } from "./lib/avatar";
 import { getSoil, getWeather, texture, thi } from "./lib/farmIntel";
@@ -219,6 +220,7 @@ export function AssistantDialog(props: { initial: string | null; onClose(): void
   const sentInitial = useRef(false);
   const snapshot = useHerdSnapshot();
   const emergency = useEmergencyAlert();
+  const [asking, setAsking] = useState<{ reason: string; message: string } | null>(null);
   const [escalate, setEscalate] = useState<{ question: string; aiAnswer: string } | null>(null);
 
   useEffect(() => {
@@ -240,7 +242,7 @@ export function AssistantDialog(props: { initial: string | null; onClose(): void
         ? last.offsetTop - list.offsetTop - 8
         : list.scrollHeight;
     list.scrollTo({ top, behavior: "smooth" });
-  }, [turns.length, busy, emergency.alert?.status]);
+  }, [turns.length, busy, asking, emergency.alert?.status]);
 
   async function send(question: string) {
     const q = question.trim();
@@ -248,7 +250,24 @@ export function AssistantDialog(props: { initial: string | null; onClose(): void
     setError(null);
     // La urgencia se atiende primero y aparte: no depende de que la IA conteste.
     const reason = detectEmergency(q);
-    if (reason) void emergency.send(reason, q);
+    if (reason) {
+      // En una emergencia la IA no contesta: se avisa al veterinario.
+      const kept: Turn[] = [...turns, { role: "user", text: q }];
+      setTurns(kept);
+      saveHistory(orgId, kept);
+      setDraft("");
+      emergency.clear();
+      // Si ya nombró el arete se envía de una vez; si no, se pregunta cuál es.
+      const [tag] = tagsIn(
+        q,
+        snapshot.herd.map((a) => a.tag),
+      );
+      const animal = snapshot.herd.find((a) => a.tag === tag);
+      if (animal) void emergency.send(reason, q, { id: animal.id, tag: animal.tag });
+      else setAsking({ reason, message: q });
+      return;
+    }
+    emergency.clear();
     const history = turns.slice(-10).map(({ role, text }) => ({ role, text }));
     const next = [...turns, { role: "user" as const, text: q }];
     setTurns(next);
@@ -302,11 +321,14 @@ export function AssistantDialog(props: { initial: string | null; onClose(): void
     setTurns([]);
     saveHistory(orgId, []);
     emergency.clear();
+    setAsking(null);
     setError(null);
   };
 
   const off = enabled === false;
-  const canSend = online && !off && !busy && draft.trim().length >= 2;
+  // Una urgencia se puede enviar aunque la IA no esté activada.
+  const canSend =
+    online && !busy && draft.trim().length >= 2 && (!off || detectEmergency(draft) !== null);
 
   return (
     <dialog
@@ -412,13 +434,26 @@ export function AssistantDialog(props: { initial: string | null; onClose(): void
             </output>
           )}
 
+          {asking && (
+            <AnimalAsk
+              reason={asking.reason}
+              animals={snapshot.herd}
+              onPick={(animal) => {
+                setAsking(null);
+                void emergency.send(
+                  asking.reason,
+                  asking.message,
+                  animal ? { id: animal.id, tag: animal.tag } : null,
+                );
+              }}
+            />
+          )}
           {emergency.alert && (
             <EmergencyCard
               alert={emergency.alert}
-              onAuthorize={() => void emergency.authorize()}
               onRetry={() => {
                 const a = emergency.alert;
-                if (a) void emergency.send(a.reason, a.question);
+                if (a) void emergency.send(a.reason, a.message, a.animal);
               }}
             />
           )}
@@ -453,7 +488,6 @@ export function AssistantDialog(props: { initial: string | null; onClose(): void
             maxLength={1500}
             placeholder={off ? "Asistente no disponible" : "Cuénteme o pregunte…"}
             aria-label="Su pregunta"
-            disabled={off}
             onChange={(e) => setDraft(e.target.value)}
             onKeyDown={(e) => {
               if (e.key === "Enter" && !e.shiftKey) {

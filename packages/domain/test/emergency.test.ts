@@ -10,6 +10,8 @@ describe("detectEmergency", () => {
     expect(detectEmergency("Amaneció con la barriga muy inflada")).toBe("timpanismo");
     expect(detectEmergency("creo que comió veneno y está convulsionando")).toBe("convulsiones");
     expect(detectEmergency("Se me murió una novilla")).toBe("muerte o agonía");
+    expect(detectEmergency("Tengo una urgencia")).toBe("urgencia reportada");
+    expect(detectEmergency("¡Emergencia!")).toBe("urgencia reportada");
   });
 
   it("no alarma con preguntas normales o de prevención", () => {

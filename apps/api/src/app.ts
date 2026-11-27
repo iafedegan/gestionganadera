@@ -31,6 +31,7 @@ import {
   RegisterRequest,
   TechCaseCreate,
   TechMessageCreate,
+  UrgentAlertCreate,
 } from "@ganaderia/contracts";
 import { can } from "@ganaderia/domain";
 import Fastify, { type FastifyInstance, type FastifyReply, type FastifyRequest } from "fastify";
@@ -108,6 +109,7 @@ import {
   revokeInvitation,
 } from "./team.js";
 import { latestChecks, runCheck } from "./trazabilidad.js";
+import { ackUrgent, createUrgent, listUrgent } from "./urgent.js";
 
 const COOKIE = "sid";
 
@@ -1137,6 +1139,48 @@ export async function buildApp(opts: AppOptions): Promise<FastifyInstance> {
       return r ?? notFound(reply);
     },
   );
+
+  app.get("/v1/urgencias", { preHandler: requireSession }, async (req, reply) => {
+    const a = req.auth as NonNullable<FastifyRequest["auth"]>;
+    const q = orgQuery.safeParse(req.query);
+    if (!q.success || !a.memberships.some((m) => m.organizationId === q.data.organizationId))
+      return reply
+        .code(403)
+        .send({ error: ErrorCodes.PERMISO_DENEGADO, message: "Sin acceso a la organización." });
+    return { items: await listUrgent(db, a.user.id, a.memberships, q.data.organizationId) };
+  });
+
+  app.post("/v1/urgencias", { preHandler: requireSession }, async (req, reply) => {
+    const a = req.auth as NonNullable<FastifyRequest["auth"]>;
+    const b = UrgentAlertCreate.safeParse(req.body);
+    if (!b.success)
+      return reply.code(400).send({ error: ErrorCodes.VALIDACION, message: "Datos inválidos." });
+    if (!a.memberships.some((m) => m.organizationId === b.data.organizationId))
+      return reply
+        .code(403)
+        .send({ error: ErrorCodes.PERMISO_DENEGADO, message: "Sin acceso a la organización." });
+    const r = await createUrgent(db, a.user.id, a.memberships, b.data);
+    if ("error" in r)
+      return r.error === "LIMITE"
+        ? reply.code(429).send({
+            error: ErrorCodes.LIMITE_DIARIO,
+            message: "Ya se enviaron muchos avisos hoy. Llame directamente.",
+          })
+        : reply.code(404).send({ error: "NO_EXISTE", message: "La finca no existe." });
+    return reply.code(201).send(r);
+  });
+
+  app.post("/v1/urgencias/:id/atender", { preHandler: requireSession }, async (req, reply) => {
+    const a = req.auth as NonNullable<FastifyRequest["auth"]>;
+    const p = z.object({ id: z.string().uuid() }).safeParse(req.params);
+    if (!p.success) return reply.code(404).send({ error: "NO_EXISTE", message: "No existe." });
+    const r = await ackUrgent(db, p.data.id, a.user.id, a.memberships);
+    if ("error" in r)
+      return reply
+        .code(r.error === "NO_EXISTE" ? 404 : 403)
+        .send({ error: r.error, message: "No puede atender este aviso." });
+    return r;
+  });
 
   app.get("/v1/assistant/status", { preHandler: requireSession }, async (req) => {
     const a = req.auth as NonNullable<FastifyRequest["auth"]>;

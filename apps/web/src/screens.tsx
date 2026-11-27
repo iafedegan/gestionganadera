@@ -39,6 +39,7 @@ import { AlertsSheet, useAlerts } from "./Alerts";
 import { AssistantDialog } from "./Assistant";
 import { Avatar, AvatarPicker, useMyAvatar } from "./Avatar";
 import { CowBot } from "./CowBot";
+import { UrgentBanner } from "./Emergency";
 import { FarmIntel } from "./FarmIntel";
 import { FarmChip } from "./FarmPicker";
 import { type DashState, HomeStory } from "./HomeStory";
@@ -775,6 +776,7 @@ export function Shell(props: {
         </div>
 
         <main id="contenido" className="content">
+          <UrgentBanner />
           <div key={props.module} className="screen">
             {props.children}
           </div>

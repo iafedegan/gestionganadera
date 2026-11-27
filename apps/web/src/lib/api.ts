@@ -51,6 +51,8 @@ import type {
   TechCaseCreate,
   TechCaseDto,
   TechCaseThreadDto,
+  UrgentAlertCreate,
+  UrgentAlertDto,
 } from "@ganaderia/contracts";
 
 /** Sin respuesta del servidor: no hay red o el servidor no está disponible. */
@@ -188,6 +190,11 @@ export const api = {
     request<FarmProfileDto>("GET", `/v1/profile?organizationId=${organizationId}`),
   saveProfile: (organizationId: string, profile: FarmProfileInput) =>
     request<FarmProfileDto>("PUT", `/v1/profile?organizationId=${organizationId}`, profile),
+  urgent: (orgId: string) =>
+    request<{ items: UrgentAlertDto[] }>("GET", `/v1/urgencias?organizationId=${orgId}`),
+  urgentCreate: (input: UrgentAlertCreate) =>
+    request<UrgentAlertDto>("POST", "/v1/urgencias", input),
+  urgentAck: (id: string) => request<{ ok: true }>("POST", `/v1/urgencias/${id}/atender`, {}),
   assistantStatus: (orgId: string) =>
     request<{ enabled: boolean; dailyLimit: number }>(
       "GET",

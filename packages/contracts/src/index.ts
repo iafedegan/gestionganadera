@@ -662,6 +662,54 @@ export interface SessionDto {
   avatar?: string;
 }
 
+export const UrgentAlertCreate = z.object({
+  organizationId: z.string().uuid(),
+  farmId: z.string().uuid().nullable().optional(),
+  /** Animal afectado: con él viaja su hoja de vida completa. */
+  animalId: z.string().uuid().nullable().optional(),
+  reason: z.string().trim().min(2).max(60),
+  message: z.string().trim().min(2).max(1500),
+});
+export type UrgentAlertCreate = z.infer<typeof UrgentAlertCreate>;
+
+export interface UrgentRecipient {
+  name: string;
+  phone: string | null;
+  role: string;
+}
+
+/** Hoja de vida y trazabilidad del animal del aviso, leída en el momento. */
+export interface UrgentAnimalRecord {
+  tag: string;
+  species: string;
+  sex: string;
+  category: string;
+  status: string;
+  birthDate: string | null;
+  farmName: string;
+  motherTag: string | null;
+  fatherTag: string | null;
+  entry: { reason: string; occurredAt: string } | null;
+  forest: { checkedAt: string; lossAfterCutoffHa: number } | null;
+  events: { type: string; occurredOn: string; data: Record<string, unknown> }[];
+}
+
+export interface UrgentAlertDto {
+  animal: UrgentAnimalRecord | null;
+  id: string;
+  farmName: string | null;
+  authorName: string;
+  reason: string;
+  message: string;
+  createdAt: string;
+  ackBy: string | null;
+  ackAt: string | null;
+  /** Veterinarios y asesores del equipo que reciben el aviso. */
+  recipients: UrgentRecipient[];
+  mine: boolean;
+  canAck: boolean;
+}
+
 export const DEFAULT_GEMINI_MODEL = "gemini-flash-latest";
 
 /** Clave propia de Gemini de la ganadería; apiKey null la quita. */

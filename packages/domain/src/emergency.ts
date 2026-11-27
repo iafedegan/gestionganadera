@@ -32,6 +32,11 @@ const RULES: [RegExp, string][] = [
     /aftosa|rabia|carbon (bacteridiano|sintomatico)|ampollas en la (boca|lengua|ubre)/,
     "posible enfermedad de reporte",
   ],
+  // Quien lo dice con sus palabras: «tengo una urgencia», «es urgente», «auxilio».
+  [
+    /(tengo|hay|es) (una )?(urgencia|emergencia)|urgente|auxilio|^\W*(urgencia|emergencia)/,
+    "urgencia reportada",
+  ],
 ];
 
 const PREVENTION =
