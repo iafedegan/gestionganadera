@@ -1,18 +1,19 @@
 import type { UrgentAlertDto, UrgentMessageDto } from "@ganaderia/contracts";
-import { ArrowUp, Camera, ClipboardList, Phone, X } from "lucide-react";
+import { ArrowUp, Camera, ClipboardList, Mic, Phone, Trash2, X } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { UrgentRecordSheet } from "./UrgentRecord";
 import { fechaHora } from "./labels";
 import { ApiError, NetworkError, api } from "./lib/api";
-import { type Media, prepareMedia } from "./lib/media";
+import { type Media, prepareMedia, prepareVoice } from "./lib/media";
 import { phoneNumber, smsLink } from "./lib/sms";
 import type { Thread } from "./lib/threads";
+import { useVoiceNote } from "./lib/useVoiceNote";
 import { useApp } from "./state";
 
 /**
- * Chat de las urgencias con una persona: cada aviso aparece como un caso, seguido de sus
- * mensajes, fotos y videos. Se responde sobre el animal que se escoja.
+ * Chat con una persona: cada aviso urgente aparece como un caso, seguido de sus mensajes,
+ * fotos, videos y notas de voz. Se responde sobre el animal que se escoja.
  */
 
 const EVERY = 4_000;
@@ -22,12 +23,18 @@ export function UrgentChat({
   thread,
   onClose,
   onAttend,
+  onDelete,
+  since,
   subtitle,
 }: {
   thread: Thread;
   onClose(): void;
   /** El veterinario lee antes de confirmar y confirma desde aquí. */
   onAttend?(): void;
+  /** Borra el chat para esta persona; responde si se borró. */
+  onDelete?(): Promise<boolean>;
+  /** Cuándo la persona borró el chat: lo anterior no se muestra. */
+  since?: string | null;
   /** Papel y ganadería de la persona. */
   subtitle?: string;
 }) {
@@ -82,12 +89,18 @@ export function UrgentChat({
   const timeline = [
     ...thread.alerts.map((a) => ({ at: a.createdAt, alert: a, message: null, src: "" })),
     ...thread.alerts.flatMap((a) =>
-      (messages[a.id] ?? []).map((m) => ({
-        at: m.createdAt,
-        alert: null,
-        message: m,
-        src: `/v1/urgencias/${a.id}/mensajes/${m.id}/archivo`,
-      })),
+      (messages[a.id] ?? []).flatMap((m) =>
+        since && m.createdAt <= since
+          ? []
+          : [
+              {
+                at: m.createdAt,
+                alert: null,
+                message: m,
+                src: `/v1/urgencias/${a.id}/mensajes/${m.id}/archivo`,
+              },
+            ],
+      ),
     ),
     ...direct.map((m) => ({
       at: m.createdAt,
@@ -130,6 +143,17 @@ export function UrgentChat({
     }
     setBusy(false);
   }
+
+  const voice = useVoiceNote({
+    onRecorded: (blob) => {
+      void (async () => {
+        const media = await prepareVoice(blob);
+        if ("error" in media) setError(media.error);
+        else await send({ media });
+      })();
+    },
+    onError: setError,
+  });
 
   async function attach(f: File) {
     setBusy(true);
@@ -182,6 +206,18 @@ export function UrgentChat({
                 : `${thread.alerts.length} avisos`)}
           </small>
         </div>
+        {onDelete && (
+          <button
+            type="button"
+            className="uc-btn"
+            aria-label="Borrar chat"
+            onClick={async () => {
+              if (await onDelete()) ref.current?.close();
+            }}
+          >
+            <Trash2 size={20} />
+          </button>
+        )}
         {(phone || about) && (
           <a
             className="uc-btn"
@@ -225,6 +261,10 @@ export function UrgentChat({
                 {m.mediaType?.startsWith("video/") && (
                   // biome-ignore lint/a11y/useMediaCaption: video grabado en el potrero, sin subtítulos
                   <video src={src} controls playsInline preload="metadata" />
+                )}
+                {m.mediaType?.startsWith("audio/") && (
+                  // biome-ignore lint/a11y/useMediaCaption: nota de voz, sin transcripción
+                  <audio src={src} controls preload="metadata" aria-label="Nota de voz" />
                 )}
                 {m.body && <p>{m.body}</p>}
                 <small>{fechaHora(m.createdAt)}</small>
@@ -283,42 +323,83 @@ export function UrgentChat({
           if (text.trim()) void send({ body: text.trim() });
         }}
       >
-        <button
-          type="button"
-          className="uc-btn uc-cam"
-          aria-label="Enviar foto o video"
-          disabled={busy || !online}
-          onClick={() => file.current?.click()}
-        >
-          <Camera size={24} />
-        </button>
-        <input
-          ref={file}
-          type="file"
-          accept="image/*,video/*"
-          hidden
-          onChange={(e) => {
-            const f = e.target.files?.[0];
-            e.target.value = "";
-            if (f) void attach(f);
-          }}
-        />
-        <input
-          className="uc-text"
-          value={text}
-          maxLength={2000}
-          placeholder="Escriba un mensaje"
-          aria-label="Mensaje"
-          onChange={(e) => setText(e.target.value)}
-        />
-        <button
-          type="submit"
-          className="uc-btn uc-send"
-          aria-label="Enviar"
-          disabled={busy || !online || !text.trim()}
-        >
-          <ArrowUp size={22} />
-        </button>
+        {voice.recording ? (
+          <>
+            <button
+              type="button"
+              className="uc-btn uc-cam"
+              aria-label="Descartar nota de voz"
+              onClick={() => voice.stop(false)}
+            >
+              <Trash2 size={22} />
+            </button>
+            <output className="uc-rec">
+              <span className="uc-rec-dot" /> Grabando {voice.clock}
+            </output>
+            <button
+              type="button"
+              className="uc-btn uc-send"
+              aria-label="Enviar nota de voz"
+              onClick={() => voice.stop(true)}
+            >
+              <ArrowUp size={22} />
+            </button>
+          </>
+        ) : (
+          <>
+            <button
+              type="button"
+              className="uc-btn uc-cam"
+              aria-label="Enviar foto o video"
+              disabled={busy || !online}
+              onClick={() => file.current?.click()}
+            >
+              <Camera size={24} />
+            </button>
+            <input
+              ref={file}
+              type="file"
+              accept="image/*,video/*"
+              hidden
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                e.target.value = "";
+                if (f) void attach(f);
+              }}
+            />
+            <input
+              className="uc-text"
+              value={text}
+              maxLength={2000}
+              placeholder="Escriba un mensaje"
+              aria-label="Mensaje"
+              onChange={(e) => setText(e.target.value)}
+            />
+            {!text.trim() && voice.supported ? (
+              <button
+                type="button"
+                className="uc-btn uc-send"
+                aria-label="Grabar nota de voz"
+                disabled={busy || !online}
+                onClick={() => {
+                  setError(null);
+                  void voice.start();
+                }}
+              >
+                <Mic size={22} />
+              </button>
+            ) : (
+              <button
+                type="submit"
+                className="uc-btn uc-send"
+                aria-label="Enviar"
+                disabled={busy || !online || !text.trim()}
+              >
+                <ArrowUp size={22} />
+              </button>
+            )}
+          </>
+        )}
       </form>
     </dialog>,
     document.body,

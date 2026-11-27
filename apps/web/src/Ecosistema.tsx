@@ -23,6 +23,7 @@ import {
   Tv,
 } from "lucide-react";
 import { type FormEvent, type ReactNode, useCallback, useEffect, useRef, useState } from "react";
+import { ask } from "./Ask";
 import { AulaDialog } from "./Aula";
 import { PageHead } from "./components";
 import { fecha, fechaHora } from "./labels";
@@ -1133,7 +1134,15 @@ function Thread(props: { id: string; onBack(): void }) {
   };
 
   const remove = async (kind: "post" | "reply", id: string) => {
-    if (!confirm("¿Retirar esta publicación? Dejará de verse en la comunidad.")) return;
+    if (
+      !(await ask({
+        title: "¿Retirar esta publicación?",
+        message: "Dejará de verse en la comunidad.",
+        confirm: "Retirar",
+        danger: true,
+      }))
+    )
+      return;
     try {
       await api.communityRemove(kind, id);
       if (kind === "post") props.onBack();
@@ -1143,7 +1152,14 @@ function Thread(props: { id: string; onBack(): void }) {
     }
   };
   const report = async (kind: "post" | "reply", id: string) => {
-    if (!confirm("¿Reportar este contenido como inapropiado?")) return;
+    if (
+      !(await ask({
+        title: "¿Reportar este contenido?",
+        message: "Lo revisamos si es inapropiado; con varios reportes se oculta de inmediato.",
+        confirm: "Reportar",
+      }))
+    )
+      return;
     try {
       const r = await api.communityReport(kind, id);
       notify(

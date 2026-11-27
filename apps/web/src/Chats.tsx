@@ -2,6 +2,7 @@ import type { ChatContact, Role } from "@ganaderia/contracts";
 import { Search, X } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { ask } from "./Ask";
 import { Avatar } from "./Avatar";
 import { CowBot } from "./CowBot";
 import { markThreadRead, unreadAlerts, useUrgentCenter } from "./Emergency";
@@ -52,6 +53,10 @@ function when(iso: string): string {
 
 const about = (r: ChatRow) =>
   r.contact ? `${ROLE[r.contact.role]} · ${r.contact.organizationName}` : "";
+
+/** Se borra un chat con una persona que tenga algo escrito; una urgencia sin atender, no. */
+export const deletable = (r: ChatRow) =>
+  r.contact !== null && r.at !== "" && r.pending.length === 0;
 
 export function useChatCenter() {
   const { session, online, notify } = useApp();
@@ -117,10 +122,42 @@ export function useChatCenter() {
     return () => titleBadge(0);
   }, [unread]);
 
+  /** Borra el chat para esta persona, después de confirmarlo. */
+  const remove = useCallback(
+    async (r: ChatRow): Promise<boolean> => {
+      if (!r.contact) return false;
+      if (!online) {
+        notify("Sin conexión: el chat se puede borrar cuando vuelva la señal.", "warn");
+        return false;
+      }
+      const name = r.name.replace(/\s*\(.*\)$/, "");
+      if (
+        !(await ask({
+          title: `¿Borrar el chat con ${name}?`,
+          message: `Se borra solo para usted: ${name} conserva sus mensajes.`,
+          confirm: "Borrar chat",
+          danger: true,
+        }))
+      )
+        return false;
+      try {
+        await api.chatClear(r.contact.userId);
+      } catch {
+        notify("No se pudo borrar el chat. Intente de nuevo.", "warn");
+        return false;
+      }
+      load();
+      return true;
+    },
+    [online, notify, load],
+  );
+
   const node = row ? (
     <UrgentChat
       key={row.key}
       thread={row}
+      since={row.contact?.clearedAt ?? null}
+      {...(deletable(row) ? { onDelete: () => remove(row) } : {})}
       {...(row.contact ? { subtitle: about(row) } : {})}
       onClose={() => {
         setOpen(null);
@@ -134,6 +171,7 @@ export function useChatCenter() {
     node,
     rows,
     unread,
+    remove,
     open: (r: ChatRow) => {
       const alertId = r.alerts.at(-1)?.id;
       setOpen({ key: r.key, ...(alertId ? { alertId } : {}) });
@@ -144,8 +182,10 @@ export function useChatCenter() {
 export function ChatRows(props: {
   rows: ChatRow[];
   onOpen(r: ChatRow): void;
-  /** En las notificaciones cada fila se puede deslizar para borrarla. */
-  onDismiss?(r: ChatRow): void;
+  /** Al deslizar una fila se borra (de las notificaciones, o el chat). `false` la devuelve. */
+  onDismiss?(r: ChatRow): unknown;
+  /** Qué filas se pueden deslizar; por defecto, todas. */
+  canDismiss?(r: ChatRow): boolean;
 }) {
   return (
     <ul className="chats" aria-label="Conversaciones">
@@ -178,7 +218,7 @@ export function ChatRows(props: {
             </span>
           </button>
         );
-        return props.onDismiss ? (
+        return props.onDismiss && (props.canDismiss?.(r) ?? true) ? (
           <SwipeRow key={r.key} onDismiss={() => props.onDismiss?.(r)}>
             {row}
           </SwipeRow>
@@ -203,6 +243,8 @@ export function ChatsDialog(props: {
   rows: ChatRow[];
   onOpen(r: ChatRow): void;
   onAssistant(): void;
+  /** Borra el chat con una persona; responde si se borró. */
+  onDelete(r: ChatRow): Promise<boolean>;
   onClose(): void;
 }) {
   const ref = useRef<HTMLDialogElement>(null);
@@ -273,7 +315,12 @@ export function ChatsDialog(props: {
             </span>
           </button>
         )}
-        <ChatRows rows={shown} onOpen={props.onOpen} />
+        <ChatRows
+          rows={shown}
+          onOpen={props.onOpen}
+          onDismiss={props.onDelete}
+          canDismiss={deletable}
+        />
         {shown.length === 0 && (
           <p className="ch-empty">
             {props.rows.length === 0

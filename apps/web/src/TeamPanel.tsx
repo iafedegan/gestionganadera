@@ -13,6 +13,7 @@ import {
   X,
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
+import { ask } from "./Ask";
 import { Avatar, useMyAvatar } from "./Avatar";
 import { useFarms } from "./animals";
 import { CardHead } from "./components";
@@ -33,31 +34,31 @@ const WHO: { role: InviteRole; icon: typeof HardHat; title: string; text: string
     role: "operario",
     icon: HardHat,
     title: "Un operario",
-    text: "Ordeñador o vaquero. Registra ordeños, pesajes y novedades del día. No ve costos ni administra.",
+    text: "Ordeñador o vaquero. Anota ordeños, pesajes y novedades del día. No ve costos ni administra.",
   },
   {
     role: "mayordomo",
     icon: Users,
     title: "El mayordomo",
-    text: "Jefe de finca: registra animales y eventos, maneja potreros e insumos. No ve la economía.",
+    text: "Jefe de finca: dirige el trabajo diario, registra animales, maneja potreros y bodega. No ve costos.",
   },
   {
     role: "veterinario",
     icon: Stethoscope,
     title: "Mi veterinario",
-    text: "Historia clínica, reproducción y tratamientos. Sin acceso a la economía y por el tiempo que usted decida.",
+    text: "Historia clínica, reproducción y tratamientos; recibe las urgencias. Sin acceso a la economía y por el tiempo que usted decida.",
   },
   {
     role: "tecnico",
     icon: ClipboardCheck,
     title: "Un asesor técnico",
-    text: "Zootecnista o agrónomo: consulta y acompaña, con el tiempo de acceso que usted decida.",
+    text: "Zootecnista o agrónomo: potreros, indicadores, trazabilidad y visitas. Sin costos y por el tiempo que usted decida.",
   },
   {
     role: "admin_entidad",
     icon: ShieldCheck,
     title: "Un administrador",
-    text: "Maneja la finca completa e invita personas. No ve la economía.",
+    text: "Dirige la finca por usted: equipo, compras, ventas y costos. La clave de IA sigue siendo suya.",
   },
 ];
 
@@ -157,9 +158,12 @@ export function TeamPanel() {
                     className="btn btn-ghost btn-sm danger"
                     onClick={async () => {
                       if (
-                        !window.confirm(
-                          `¿Quitar el acceso de ${m.displayName}? Dejará de ver la información desde ya.`,
-                        )
+                        !(await ask({
+                          title: `¿Quitar el acceso de ${m.displayName}?`,
+                          message: "Dejará de ver la información desde ya.",
+                          confirm: "Quitar acceso",
+                          danger: true,
+                        }))
                       )
                         return;
                       try {
@@ -199,7 +203,15 @@ export function TeamPanel() {
                       type="button"
                       className="btn btn-ghost btn-sm"
                       onClick={async () => {
-                        if (!window.confirm(`¿Anular la invitación de ${i.label}?`)) return;
+                        if (
+                          !(await ask({
+                            title: `¿Anular la invitación de ${i.label}?`,
+                            message: "El enlace deja de servir.",
+                            confirm: "Anular",
+                            danger: true,
+                          }))
+                        )
+                          return;
                         await api.revokeInvitation(orgId, i.id).catch(() => undefined);
                         void load();
                       }}
@@ -489,7 +501,13 @@ function VetPicker(props: { days: number; onAdded(name: string): void }) {
   const shown = vets?.filter((v) => plain(v.displayName).includes(plain(search.trim())));
 
   async function add(v: VetOption) {
-    if (!window.confirm(`¿Dar acceso a ${v.displayName}? Verá la información de sus fincas.`))
+    if (
+      !(await ask({
+        title: `¿Dar acceso a ${v.displayName}?`,
+        message: "Verá la información de sus fincas.",
+        confirm: "Dar acceso",
+      }))
+    )
       return;
     setBusy(v.userId);
     setError(null);

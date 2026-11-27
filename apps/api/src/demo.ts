@@ -59,7 +59,18 @@ async function create(db: Db, spec: DemoSpec): Promise<{ userId: string; orgId: 
       [spec.email],
     );
     const existing = found[0];
-    if (existing?.ready && existing.org) return { userId: existing.id, orgId: existing.org };
+    if (existing?.ready && existing.org) {
+      // Si cambió el papel de alguien del equipo de muestra, la ganadería ya creada se pone al día.
+      for (const m of spec.team) {
+        await q(
+          `UPDATE membership SET role = $3
+            WHERE organization_id = $1 AND role <> $3
+              AND user_id = (SELECT id FROM app_user WHERE email = $2)`,
+          [existing.org, m.email, m.role],
+        );
+      }
+      return { userId: existing.id, orgId: existing.org };
+    }
     if (existing) {
       // Un intento anterior quedó a medias: se parte de cero para esa cuenta.
       throw new Error(

@@ -1,4 +1,4 @@
-/** Prepara fotos y videos para el chat de la urgencia: las fotos se reducen antes de enviarse. */
+/** Prepara fotos, videos y notas de voz para los chats: las fotos se reducen antes de enviarse. */
 import {
   URGENT_MEDIA_MAX,
   URGENT_MEDIA_TYPES,
@@ -41,4 +41,28 @@ export async function prepareMedia(file: File): Promise<Media | { error: string 
       error: "El video pesa más de 3 MB. Grabe uno corto (unos 10 segundos, calidad baja).",
     };
   return { type, data: await toBase64(file) };
+}
+
+/** Tipo sin parámetros: «audio/webm;codecs=opus» → «audio/webm». */
+export const baseType = (mime: string): string => (mime.split(";")[0] ?? "").trim().toLowerCase();
+
+/** Formatos en que se intenta grabar, del preferido al último recurso. */
+const VOICE_FORMATS = [
+  "audio/webm;codecs=opus",
+  "audio/mp4",
+  "audio/ogg;codecs=opus",
+  "audio/webm",
+];
+
+/** El primer formato que el navegador graba y el servidor acepta; null si no hay cómo grabar. */
+export function pickVoiceFormat(supported: (mime: string) => boolean): string | null {
+  const accepted = new Set<string>(URGENT_MEDIA_TYPES);
+  return VOICE_FORMATS.find((f) => accepted.has(baseType(f)) && supported(f)) ?? null;
+}
+
+export async function prepareVoice(blob: Blob): Promise<Media | { error: string }> {
+  const type = URGENT_MEDIA_TYPES.find((t) => t.startsWith("audio/") && t === baseType(blob.type));
+  if (!type) return { error: "Este teléfono graba en un formato que no se puede enviar." };
+  if (blob.size > URGENT_MEDIA_MAX) return { error: "La nota de voz es muy larga." };
+  return { type, data: await toBase64(blob) };
 }

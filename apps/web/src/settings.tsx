@@ -1,3 +1,4 @@
+import { can } from "@ganaderia/domain";
 import {
   Bluetooth,
   Building2,
@@ -129,7 +130,10 @@ const TECH: { icon: ReactNode; name: string; use: string; reach: string; note: s
 ];
 
 export function SettingsScreen() {
-  const { notify } = useApp();
+  const { notify, role } = useApp();
+  // Las fincas, el equipo y la clave de IA son de quien dirige; el resto es de cada persona.
+  const manages = role !== null && can(role, "farm.write");
+  const leads = role !== null && can(role, "team.manage");
   const [caps] = useState(detectCapabilities);
   const [reads, setReads] = useState<TagRead[]>(loadReads);
   const [scanning, setScanning] = useState(false);
@@ -182,26 +186,34 @@ export function SettingsScreen() {
         kicker="Configuración"
         icon={<Settings size={30} aria-hidden="true" />}
         title="Configuración"
-        lead="Sus fincas y los dispositivos de identificación: lea la chapeta o el chip del animal para abrir su hoja de vida o registrarlo sin escribir."
+        lead={
+          manages
+            ? "Sus fincas y los dispositivos de identificación: lea la chapeta o el chip del animal para abrir su hoja de vida o registrarlo sin escribir."
+            : "Sus datos y los dispositivos de identificación: lea la chapeta o el chip del animal para abrir su hoja de vida."
+        }
       />
 
       <div className="folds">
-        <Fold
-          icon={<Building2 size={24} />}
-          title="Mis fincas"
-          sub="Datos de cada finca, área y carga"
-          tone="verde"
-        >
-          <FarmsCard />
-        </Fold>
-        <Fold
-          icon={<Users size={24} />}
-          title="Su equipo"
-          sub="Trabajadores, veterinario y accesos"
-          tone="azul"
-        >
-          <TeamPanel />
-        </Fold>
+        {manages && (
+          <Fold
+            icon={<Building2 size={24} />}
+            title="Mis fincas"
+            sub="Datos de cada finca, área y carga"
+            tone="verde"
+          >
+            <FarmsCard />
+          </Fold>
+        )}
+        {leads && (
+          <Fold
+            icon={<Users size={24} />}
+            title="Su equipo"
+            sub="Trabajadores, veterinario y accesos"
+            tone="azul"
+          >
+            <TeamPanel />
+          </Fold>
+        )}
         <Fold
           icon={<ShieldCheck size={24} />}
           title="Mis datos"
@@ -210,14 +222,16 @@ export function SettingsScreen() {
         >
           <MisDatosCard />
         </Fold>
-        <Fold
-          icon={<Sparkles size={24} />}
-          title="Inteligencia artificial"
-          sub="Clave de Google Gemini para el asistente"
-          tone="azul"
-        >
-          <AiCard />
-        </Fold>
+        {role === "propietario" && (
+          <Fold
+            icon={<Sparkles size={24} />}
+            title="Inteligencia artificial"
+            sub="Clave de Google Gemini para el asistente"
+            tone="azul"
+          >
+            <AiCard />
+          </Fold>
+        )}
         <Fold
           icon={<Smartphone size={24} />}
           title="Este dispositivo"

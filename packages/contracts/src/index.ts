@@ -715,9 +715,17 @@ export const URGENT_MEDIA_TYPES = [
   "video/mp4",
   "video/quicktime",
   "video/webm",
+  // Notas de voz: lo que graba cada navegador (Chrome y Android, Safari y iPhone, Firefox).
+  "audio/webm",
+  "audio/mp4",
+  "audio/ogg",
 ] as const;
-/** Tamaño máximo de una foto o video en el chat de la urgencia (3 MB). */
+/** Tamaño máximo de una foto, video o nota de voz en los chats (3 MB). */
 export const URGENT_MEDIA_MAX = 3_000_000;
+
+/** Texto corto de un adjunto en la lista de chats. */
+export const mediaPreview = (type: string | null): string =>
+  type?.startsWith("video/") ? "Video" : type?.startsWith("audio/") ? "Nota de voz" : "Foto";
 
 export const UrgentMessageCreate = z
   .object({
@@ -753,6 +761,8 @@ export interface ChatContact {
   organizationName: string;
   unread: number;
   lastMessage: { id: string; mine: boolean; preview: string; createdAt: string } | null;
+  /** Cuándo borró esta persona el chat: lo anterior ya no se le muestra. */
+  clearedAt: string | null;
 }
 
 export interface UrgentAlertDto {

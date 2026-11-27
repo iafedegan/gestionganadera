@@ -1,10 +1,11 @@
-import type {
-  UrgentAlertCreate,
-  UrgentAlertDto,
-  UrgentAnimalRecord,
-  UrgentMessageCreate,
-  UrgentMessageDto,
-  UrgentRecipient,
+import {
+  type UrgentAlertCreate,
+  type UrgentAlertDto,
+  type UrgentAnimalRecord,
+  type UrgentMessageCreate,
+  type UrgentMessageDto,
+  type UrgentRecipient,
+  mediaPreview,
 } from "@ganaderia/contracts";
 import { type Membership, farmScope } from "./auth.js";
 import type { Db, Q } from "./db.js";
@@ -139,7 +140,7 @@ async function lastMessage(q: Q, alertId: string, userId: string) {
     id: m.id,
     authorName: m.author_name,
     mine: m.author_id === userId,
-    preview: m.body?.slice(0, 80) ?? (m.media_type?.startsWith("video/") ? "Video" : "Foto"),
+    preview: m.body?.slice(0, 80) ?? mediaPreview(m.media_type),
     createdAt: iso(m.created_at),
   };
 }

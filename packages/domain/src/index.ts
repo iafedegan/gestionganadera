@@ -147,12 +147,15 @@ export type Permission =
   | "team.manage";
 
 const MATRIX: Record<Role, readonly Permission[]> = {
+  // Administrador de la finca: la dirige por el propietario. Contrata y paga al equipo, compra
+  // insumos y vende leche y ganado, así que necesita ver los costos. La clave de IA es del dueño.
   admin_entidad: [
     "farm.read",
     "farm.write",
     "animal.read",
     "animal.write",
     "event.write",
+    "economy.read",
     "supply.write",
     "stock.write",
     "audit.read",
@@ -185,7 +188,8 @@ const MATRIX: Record<Role, readonly Permission[]> = {
   // TDR: operario con consulta mínima y captura de eventos autorizados; sin administración.
   // Puede recibir y consumir insumos en bodega, pero no crear el catálogo ni ver costos.
   operario: ["farm.read", "animal.read", "event.write", "stock.write"],
-  // TDR: técnico con consulta y registro técnico; sin acceso económico por defecto.
+  // Asesor técnico (zootecnista, agrónomo o extensionista): consulta y registro técnico;
+  // sin acceso económico por defecto (TDR).
   tecnico: ["farm.read", "animal.read", "event.write"],
 };
 

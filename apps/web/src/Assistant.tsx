@@ -1,6 +1,6 @@
 import type { AssistantRequest, KnowledgeSourceDto } from "@ganaderia/contracts";
 import { detectEmergency } from "@ganaderia/domain";
-import { ArrowUp, BookOpen, Sparkles, Stethoscope, Trash2, X } from "lucide-react";
+import { ArrowUp, BookOpen, Stethoscope, Trash2, X } from "lucide-react";
 import { type ReactNode, useEffect, useRef, useState } from "react";
 import { AnswerVisuals, useHerdSnapshot } from "./AssistantVisuals";
 import { CowBot } from "./CowBot";
@@ -167,37 +167,6 @@ function Sources({ items }: { items: KnowledgeSourceDto[] }) {
 }
 
 /** Tarjeta de Inicio: una puerta de entrada con preguntas listas para tocar. */
-export function AssistantCard() {
-  const [open, setOpen] = useState<string | null | false>(false);
-  return (
-    <article className="card asis-card">
-      <div className="asis-card-head">
-        <span className="asis-badge" aria-hidden="true">
-          <Sparkles size={22} />
-        </span>
-        <div>
-          <h2>Pregúntele a su finca</h2>
-          <p>
-            Su super ganadero: analiza los datos de sus fincas y propone ajustes al hato y a los
-            potreros. No reemplaza al veterinario.
-          </p>
-        </div>
-      </div>
-      <div className="asis-chips">
-        {SUGGESTIONS.slice(0, 3).map((s) => (
-          <button key={s} type="button" className="asis-chip" onClick={() => setOpen(s)}>
-            {s}
-          </button>
-        ))}
-      </div>
-      <button type="button" className="btn btn-primary asis-open" onClick={() => setOpen(null)}>
-        <Sparkles size={18} aria-hidden="true" /> Hacer una pregunta
-      </button>
-      {open !== false && <AssistantDialog initial={open} onClose={() => setOpen(false)} />}
-    </article>
-  );
-}
-
 export function AssistantDialog(props: { initial: string | null; onClose(): void }) {
   const { orgId, online, session } = useApp();
   const ownAi = session && isDemoEmail(session.email) ? localAi(session.userId) : null;

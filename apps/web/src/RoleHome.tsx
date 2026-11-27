@@ -18,7 +18,6 @@ import {
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useAlerts } from "./Alerts";
-import { AssistantCard } from "./Assistant";
 import { FarmIntel } from "./FarmIntel";
 import { useActiveFarm } from "./animals";
 import { PageHead } from "./components";
@@ -178,7 +177,7 @@ export function RoleHome(props: { onOpenSync(): void; onModule(m: ModuleKey): vo
       <PageHead
         kicker={`${first ? `Hola, ${first}` : "Hola"} · ${role ? ROLE_LABEL[role] : ""}`}
         title={TITLE[key] ?? "Inicio"}
-        lead={session?.memberships[0]?.organizationName ?? ""}
+        lead={session?.memberships.find((m) => m.organizationId === orgId)?.organizationName ?? ""}
       />
 
       <nav className="role-actions" aria-label="Acciones de su rol">
@@ -241,7 +240,6 @@ export function RoleHome(props: { onOpenSync(): void; onModule(m: ModuleKey): vo
       </article>
 
       {(key === "mayordomo" || key === "tecnico") && <FarmIntel />}
-      {key !== "operario" && <AssistantCard />}
     </section>
   );
 }

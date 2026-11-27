@@ -5,6 +5,7 @@ import "@ganaderia/ui/tokens.css";
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { App } from "./App";
+import { AskHost } from "./Ask";
 import { watchForUpdates } from "./lib/appUpdate";
 import { isStandalone } from "./lib/standalone";
 import { AppProvider } from "./state";
@@ -24,6 +25,7 @@ if (root) {
     <StrictMode>
       <AppProvider>
         <App />
+        <AskHost />
       </AppProvider>
     </StrictMode>,
   );

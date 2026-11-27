@@ -214,4 +214,9 @@ describe("permisos por rol", () => {
     expect(can("veterinario", "animal.write")).toBe(false);
     expect(can("operario", "supply.write")).toBe(false);
   });
+  it("el administrador dirige la finca con sus costos: compra, vende y maneja el equipo", async () => {
+    const { can } = await import("../src/index");
+    for (const p of ["economy.read", "supply.write", "team.manage", "farm.write"] as const)
+      expect(can("admin_entidad", p)).toBe(true);
+  });
 });

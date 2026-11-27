@@ -209,6 +209,7 @@ export const api = {
     request<{ items: UrgentMessageDto[] }>("GET", `/v1/chats/${userId}/mensajes`),
   chatSend: (userId: string, input: UrgentMessageCreate) =>
     request<{ ok: true }>("POST", `/v1/chats/${userId}/mensajes`, input, { timeoutMs: 90_000 }),
+  chatClear: (userId: string) => request<{ ok: true }>("DELETE", `/v1/chats/${userId}`),
   urgentMine: () =>
     request<{ items: UrgentAlertDto[]; organizations: string[] }>("GET", "/v1/urgencias/mias"),
   urgentMessages: (id: string) =>

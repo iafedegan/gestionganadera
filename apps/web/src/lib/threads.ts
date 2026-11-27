@@ -50,21 +50,37 @@ export function buildThreads(items: UrgentAlertDto[]): Thread[] {
     groups.set(key, g);
   }
   return [...groups]
-    .map(([key, g]) => {
-      const alerts = [...g.alerts].sort((a, b) => a.createdAt.localeCompare(b.createdAt));
-      const latest = alerts.reduce((x, y) => (activity(y) > activity(x) ? y : x));
-      return {
-        key,
-        userId: g.userId,
-        name: g.name,
-        alerts,
-        pending: alerts.filter(toAttend),
-        preview: previewOf(latest),
-        at: activity(latest),
-      };
-    })
+    .map(([key, g]) => threadOf(key, g.userId, g.name, g.alerts))
     .sort(
       (a, b) =>
         Number(b.pending.length > 0) - Number(a.pending.length > 0) || b.at.localeCompare(a.at),
     );
+}
+
+function threadOf(
+  key: string,
+  userId: string | null,
+  name: string,
+  items: UrgentAlertDto[],
+): Thread {
+  const alerts = [...items].sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+  const latest = alerts.reduce((x, y) => (activity(y) > activity(x) ? y : x));
+  return {
+    key,
+    userId,
+    name,
+    alerts,
+    pending: alerts.filter(toAttend),
+    preview: previewOf(latest),
+    at: activity(latest),
+  };
+}
+
+/**
+ * La conversación después de que la persona borró el chat: quedan los avisos con movimiento
+ * posterior y los que aún debe atender, que nunca se esconden. Sin ninguno, no queda nada.
+ */
+export function trimThread(t: Thread, since: string): Thread | null {
+  const alerts = t.alerts.filter((a) => toAttend(a) || activity(a) > since);
+  return alerts.length > 0 ? threadOf(t.key, t.userId, t.name, alerts) : null;
 }

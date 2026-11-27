@@ -683,6 +683,10 @@ fieldset.voice-field {
 .sidebar .brand-text strong {
   color: var(--ios-texto);
 }
+/* Títulos de grupo («Ecosistema FEDEGÁN 5.0», «Gestión empresarial»): legibles en la barra clara. */
+.sidebar .nav-group {
+  color: var(--ios-texto-2);
+}
 .nav {
   border-radius: 10px;
   color: var(--ios-texto);

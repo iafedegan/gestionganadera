@@ -65,7 +65,7 @@ import {
   resolveSession,
   toSessionDto,
 } from "./auth.js";
-import { directMedia, listContacts, listDirect, sendDirect } from "./chats.js";
+import { clearDirect, directMedia, listContacts, listDirect, sendDirect } from "./chats.js";
 import {
   createPost,
   createReply,
@@ -1356,6 +1356,14 @@ export async function buildApp(opts: AppOptions): Promise<FastifyInstance> {
       return "error" in r ? chatFail(reply, r.error) : reply.code(201).send(r);
     },
   );
+
+  app.delete("/v1/chats/:userId", { preHandler: requireSession }, async (req, reply) => {
+    const a = req.auth as NonNullable<FastifyRequest["auth"]>;
+    const p = person.safeParse(req.params);
+    if (!p.success) return chatFail(reply, "NO_EXISTE");
+    const r = await clearDirect(db, a.user.id, a.memberships, p.data.userId);
+    return "error" in r ? chatFail(reply, r.error) : r;
+  });
 
   app.get(
     "/v1/chats/:userId/mensajes/:mid/archivo",

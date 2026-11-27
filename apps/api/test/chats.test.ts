@@ -82,6 +82,35 @@ describe("chats del equipo", () => {
 
     expect((await say(out, "dueno@c.local", { body: "hola" })).statusCode).toBe(403);
     expect((await get(out, url("vet@c.local"))).statusCode).toBe(403);
+    const clear = (cookie: string, to: string) =>
+      app.inject({ method: "DELETE", url: `/v1/chats/${ids[to]}`, headers: { ...H, cookie } });
+    expect((await clear(out, "dueno@c.local")).statusCode).toBe(403);
+
+    // Una nota de voz se ve como tal en la lista.
+    const voice = Buffer.from("audio-de-prueba").toString("base64");
+    await say(vet, "dueno@c.local", { media: { type: "audio/webm", data: voice } });
+    expect(await contacts(owner)).toMatchObject([
+      { unread: 1, lastMessage: { mine: false, preview: "Nota de voz" }, clearedAt: null },
+    ]);
+
+    // Quien borra deja de ver la conversación; la otra persona conserva la suya.
+    expect((await clear(owner, "vet@c.local")).statusCode).toBe(200);
+    const [mine] = await contacts(owner);
+    expect(mine).toMatchObject({ unread: 0, lastMessage: null });
+    expect(mine.clearedAt).toEqual(expect.any(String));
+    expect((await get(owner, url("vet@c.local"))).json().items).toEqual([]);
+    expect((await get(vet, url("dueno@c.local"))).json().items).toHaveLength(3);
+    // Lo nuevo sí aparece.
+    await say(vet, "dueno@c.local", { body: "¿Sigue la vaca igual?" });
+    expect((await get(owner, url("vet@c.local"))).json().items).toMatchObject([
+      { body: "¿Sigue la vaca igual?" },
+    ]);
+    // Cuando los dos borran, lo borrado por ambos sale del servidor.
+    expect((await clear(vet, "dueno@c.local")).statusCode).toBe(200);
+    const left = await db.admin((q) =>
+      q<{ body: string | null }>("SELECT body FROM direct_message"),
+    );
+    expect(left).toEqual([{ body: "¿Sigue la vaca igual?" }]);
     // Quien sale del equipo pierde la conversación.
     await db.admin((q) =>
       q("UPDATE membership SET valid_until = now() WHERE user_id = $1", [ids["vet@c.local"]]),

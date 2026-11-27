@@ -1,15 +1,17 @@
-import type {
-  ChatContact,
-  Role,
-  UrgentMessageCreate,
-  UrgentMessageDto,
+import {
+  type ChatContact,
+  type Role,
+  type UrgentMessageCreate,
+  type UrgentMessageDto,
+  mediaPreview,
 } from "@ganaderia/contracts";
 import type { Membership } from "./auth.js";
 import type { Db, Q } from "./db.js";
 
 /**
  * Chats entre personas que comparten una ganadería. El acceso se decide en cada petición: si
- * alguien sale del equipo, la conversación deja de estar disponible.
+ * alguien sale del equipo, la conversación deja de estar disponible. Cada persona puede borrar
+ * su copia de un chat; la otra conserva la suya.
  */
 
 const PER_DAY = 500;
@@ -17,7 +19,12 @@ const MEDIA_PER_DAY = 40;
 const iso = (v: Date | string) => (v instanceof Date ? v : new Date(v)).toISOString();
 const orgsOf = (m: Membership[]) => [...new Set(m.map((x) => x.organizationId))];
 const preview = (body: string | null, type: string | null) =>
-  body?.slice(0, 80) ?? (type?.startsWith("video/") ? "Video" : "Foto");
+  body?.slice(0, 80) ?? mediaPreview(type);
+
+/** Mensajes entre $1 y $2 que $1 no borró. */
+const VISIBLE = `((m.sender_id = $1 AND m.recipient_id = $2) OR (m.sender_id = $2 AND m.recipient_id = $1))
+  AND m.created_at > coalesce(
+    (SELECT cleared_at FROM chat_clear WHERE user_id = $1 AND other_id = $2), '-infinity')`;
 
 /** Quienes tienen acceso vigente a alguna de las ganaderías de la persona. */
 const PEOPLE = `SELECT u.id, u.display_name, u.avatar, m.role, o.name AS organization_name
@@ -50,11 +57,17 @@ export async function listContacts(
       media_type: string | null;
       created_at: Date | string;
     }>(
-      `SELECT DISTINCT ON (other) * FROM (
+      `SELECT DISTINCT ON (t.other) t.* FROM (
          SELECT id, CASE WHEN sender_id = $1 THEN recipient_id ELSE sender_id END AS other,
                 sender_id = $1 AS mine, body, media_type, created_at
            FROM direct_message WHERE sender_id = $1 OR recipient_id = $1) t
-        ORDER BY other, created_at DESC`,
+        LEFT JOIN chat_clear c ON c.user_id = $1 AND c.other_id = t.other
+        WHERE c.cleared_at IS NULL OR t.created_at > c.cleared_at
+        ORDER BY t.other, t.created_at DESC`,
+      [userId],
+    );
+    const cleared = await q<{ other_id: string; cleared_at: Date | string }>(
+      "SELECT other_id, cleared_at FROM chat_clear WHERE user_id = $1",
       [userId],
     );
     const unread = await q<{ sender_id: string; n: string }>(
@@ -66,6 +79,7 @@ export async function listContacts(
     for (const p of people) {
       if (out.has(p.id)) continue;
       const m = last.find((x) => x.other === p.id);
+      const c = cleared.find((x) => x.other_id === p.id);
       out.set(p.id, {
         userId: p.id,
         name: p.display_name,
@@ -81,6 +95,7 @@ export async function listContacts(
               createdAt: iso(m.created_at),
             }
           : null,
+        clearedAt: c ? iso(c.cleared_at) : null,
       });
     }
     return [...out.values()];
@@ -122,7 +137,7 @@ export async function listDirect(
     }>(
       `SELECT m.id, m.sender_id, u.display_name AS author_name, m.body, m.media_type, m.created_at
          FROM direct_message m JOIN app_user u ON u.id = m.sender_id
-        WHERE (m.sender_id = $1 AND m.recipient_id = $2) OR (m.sender_id = $2 AND m.recipient_id = $1)
+        WHERE ${VISIBLE}
         ORDER BY m.created_at DESC LIMIT 200`,
       [userId, other],
     );
@@ -168,6 +183,39 @@ export async function sendDirect(
   });
 }
 
+/**
+ * Borra el chat para quien lo pide: lo recibido queda leído y deja de verse. Lo que las dos
+ * personas ya borraron se elimina del servidor.
+ */
+export async function clearDirect(
+  db: Db,
+  userId: string,
+  memberships: Membership[],
+  other: string,
+): Promise<{ ok: true } | Fail> {
+  return db.admin(async (q) => {
+    if (!(await shares(q, memberships, userId, other))) return { error: "SIN_ACCESO" as const };
+    await q(
+      `INSERT INTO chat_clear (user_id, other_id) VALUES ($1, $2)
+       ON CONFLICT (user_id, other_id) DO UPDATE SET cleared_at = now()`,
+      [userId, other],
+    );
+    await q(
+      `UPDATE direct_message SET read_at = now()
+        WHERE recipient_id = $1 AND sender_id = $2 AND read_at IS NULL`,
+      [userId, other],
+    );
+    await q(
+      `DELETE FROM direct_message m USING chat_clear a, chat_clear b
+        WHERE a.user_id = $1 AND a.other_id = $2 AND b.user_id = $2 AND b.other_id = $1
+          AND ((m.sender_id = $1 AND m.recipient_id = $2) OR (m.sender_id = $2 AND m.recipient_id = $1))
+          AND m.created_at <= least(a.cleared_at, b.cleared_at)`,
+      [userId, other],
+    );
+    return { ok: true as const };
+  });
+}
+
 export async function directMedia(
   db: Db,
   userId: string,
@@ -178,9 +226,8 @@ export async function directMedia(
   return db.admin(async (q) => {
     if (!(await shares(q, memberships, userId, other))) return { error: "SIN_ACCESO" as const };
     const [m] = await q<{ media_type: string | null; media: Uint8Array | null }>(
-      `SELECT media_type, media FROM direct_message WHERE id = $1 AND
-        ((sender_id = $2 AND recipient_id = $3) OR (sender_id = $3 AND recipient_id = $2))`,
-      [messageId, userId, other],
+      `SELECT m.media_type, m.media FROM direct_message m WHERE ${VISIBLE} AND m.id = $3`,
+      [userId, other, messageId],
     );
     if (!m?.media || !m.media_type) return { error: "NO_EXISTE" as const };
     return { type: m.media_type, data: Buffer.from(m.media) };

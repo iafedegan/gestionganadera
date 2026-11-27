@@ -503,7 +503,19 @@ const REQUIRES: Partial<Record<ModuleKey, Permission>> = {
   activos: "farm.write",
 };
 
-/** Módulos de cada rol (propietario y administrador ven todos los que sus permisos admiten). */
+/**
+ * Módulos de cada rol: solo lo que esa persona usa en su trabajo. El propietario y el
+ * administrador ven todos los que sus permisos admiten.
+ *
+ * - Mayordomo: el día a día de la finca (hato, ordeño, potreros, bodega) y los compromisos de
+ *   las visitas técnicas. No compra en la tienda ni ve noticias o la comunidad de productores.
+ * - Veterinario: historia clínica, reproducción y la producción como señal clínica (caída de
+ *   leche, retiros, pesos); deja recomendaciones en Asistencia técnica. Potreros, expediente,
+ *   bosque y el ecosistema del gremio no son de su trabajo.
+ * - Operario o vaquero: anotar lo del día y capacitarse (Escuela Virtual).
+ * - Asesor técnico: zootecnista o agrónomo que acompaña la finca: expediente, trazabilidad,
+ *   potreros, indicadores y visitas.
+ */
 const ROLE_MODULES: Partial<Record<Role, readonly ModuleKey[]>> = {
   mayordomo: [
     "inicio",
@@ -515,10 +527,7 @@ const ROLE_MODULES: Partial<Record<Role, readonly ModuleKey[]>> = {
     "compras",
     "asistencia",
     "configuracion",
-    "noticias",
     "capacitacion",
-    "comunidad",
-    "tienda",
   ],
   veterinario: [
     "inicio",
@@ -526,14 +535,8 @@ const ROLE_MODULES: Partial<Record<Role, readonly ModuleKey[]>> = {
     "sanidad",
     "reproduccion",
     "produccion",
-    "pasturas",
-    "expediente",
-    "trazabilidad",
     "asistencia",
     "configuracion",
-    "noticias",
-    "capacitacion",
-    "comunidad",
   ],
   operario: [
     "inicio",
@@ -542,7 +545,6 @@ const ROLE_MODULES: Partial<Record<Role, readonly ModuleKey[]>> = {
     "reproduccion",
     "sanidad",
     "configuracion",
-    "noticias",
     "capacitacion",
   ],
   tecnico: [
@@ -556,9 +558,6 @@ const ROLE_MODULES: Partial<Record<Role, readonly ModuleKey[]>> = {
     "pasturas",
     "asistencia",
     "configuracion",
-    "noticias",
-    "capacitacion",
-    "comunidad",
   ],
 };
 

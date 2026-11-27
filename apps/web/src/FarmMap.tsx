@@ -1,4 +1,5 @@
 import L from "leaflet";
+import { ask, askText } from "./Ask";
 import { useActiveFarm } from "./animals";
 import "leaflet/dist/leaflet.css";
 import { can, uuidv7 } from "@ganaderia/domain";
@@ -863,11 +864,14 @@ export function FarmMap() {
               <button
                 type="button"
                 className="btn btn-ghost btn-sm"
-                onClick={() => {
+                onClick={async () => {
                   if (
-                    window.confirm(
-                      "¿Restablecer el mapa de ejemplo? Se borrarán sus dibujos en este dispositivo.",
-                    )
+                    await ask({
+                      title: "¿Restablecer el mapa de ejemplo?",
+                      message: "Se borrarán sus dibujos en este dispositivo.",
+                      confirm: "Restablecer",
+                      danger: true,
+                    })
                   ) {
                     save(demo());
                     setSel(null);
@@ -907,9 +911,15 @@ export function FarmMap() {
                     <button
                       type="button"
                       className="btn btn-ghost btn-sm"
-                      onClick={() => {
-                        const n = window.prompt("Nuevo nombre del potrero", p.nombre);
-                        if (n?.trim())
+                      onClick={async () => {
+                        const n = await askText({
+                          title: "Renombrar potrero",
+                          label: "Nuevo nombre",
+                          value: p.nombre,
+                          maxLength: 60,
+                          confirm: "Guardar",
+                        });
+                        if (n)
                           save({
                             ...data,
                             potreros: data.potreros.map((x) =>
@@ -933,8 +943,14 @@ export function FarmMap() {
                     <button
                       type="button"
                       className="btn btn-ghost btn-sm danger"
-                      onClick={() => {
-                        if (window.confirm(`¿Eliminar ${p.nombre}?`)) {
+                      onClick={async () => {
+                        if (
+                          await ask({
+                            title: `¿Eliminar ${p.nombre}?`,
+                            confirm: "Eliminar",
+                            danger: true,
+                          })
+                        ) {
                           save({ ...data, potreros: data.potreros.filter((x) => x.id !== p.id) });
                           setSel(null);
                         }

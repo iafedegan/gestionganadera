@@ -2,8 +2,15 @@ import { Trash2 } from "lucide-react";
 import { type PointerEvent, type ReactNode, useRef, useState } from "react";
 import { haptic } from "./native";
 
-/** Fila que se borra al deslizarla hacia un lado (o con la tecla Supr). */
-export function SwipeRow(props: { children: ReactNode; onDismiss(): void }) {
+/**
+ * Fila que se borra al deslizarla hacia un lado (o con la tecla Supr). Si `onDismiss` responde
+ * `false` (p. ej. no se confirmó), la fila vuelve a su sitio.
+ */
+export function SwipeRow(props: {
+  children: ReactNode;
+  /** Devuelve (o promete) `false` para cancelar. */
+  onDismiss(): unknown;
+}) {
   const [dx, setDx] = useState(0);
   const [gone, setGone] = useState(false);
   const start = useRef<{ x: number; y: number; on: boolean } | null>(null);
@@ -13,7 +20,11 @@ export function SwipeRow(props: { children: ReactNode; onDismiss(): void }) {
     haptic(15);
     setGone(true);
     setDx(side * window.innerWidth);
-    window.setTimeout(props.onDismiss, 200);
+    window.setTimeout(async () => {
+      if ((await props.onDismiss()) !== false) return;
+      setGone(false);
+      setDx(0);
+    }, 200);
   };
   const end = (e: PointerEvent<HTMLLIElement>) => {
     if (!start.current?.on) {

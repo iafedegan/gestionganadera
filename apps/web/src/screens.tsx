@@ -37,6 +37,7 @@ import {
   useState,
 } from "react";
 import { AlertsSheet, useAlerts } from "./Alerts";
+import { ask } from "./Ask";
 import { AssistantDialog } from "./Assistant";
 import { Avatar, AvatarPicker, useMyAvatar } from "./Avatar";
 import { ChatRows, ChatsDialog, useChatCenter } from "./Chats";
@@ -588,9 +589,11 @@ export function Shell(props: {
 
   async function exit() {
     if (pendientes > 0 || revisar > 0) {
-      const ok = window.confirm(
-        `Hay ${pendientes + revisar} registros sin confirmar en el servidor. Se conservan cifrados en este dispositivo y se enviarán al volver a ingresar con conexión. ¿Cerrar sesión?`,
-      );
+      const ok = await ask({
+        title: "¿Cerrar sesión?",
+        message: `Hay ${pendientes + revisar} registros sin confirmar en el servidor. Se conservan cifrados en este dispositivo y se enviarán al volver a ingresar con conexión.`,
+        confirm: "Cerrar sesión",
+      });
       if (!ok) return;
     }
     await logout();
@@ -852,6 +855,7 @@ export function Shell(props: {
           rows={chats.rows}
           onOpen={chats.open}
           onAssistant={() => setAsking(true)}
+          onDelete={chats.remove}
           onClose={() => setChatsOpen(false)}
         />
       )}
@@ -1264,7 +1268,15 @@ function SyncDrawer({ onClose }: { onClose(): void }) {
   }
 
   async function discard(id: string) {
-    if (!window.confirm("¿Descartar este registro? No se enviará al servidor.")) return;
+    if (
+      !(await ask({
+        title: "¿Descartar este registro?",
+        message: "No se enviará al servidor.",
+        confirm: "Descartar",
+        danger: true,
+      }))
+    )
+      return;
     await localdb.outboxDiscard(id);
     await refresh();
   }

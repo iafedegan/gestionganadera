@@ -6862,46 +6862,6 @@ fieldset.voice-field {
 }
 
 /* ───────────── Asistente de la finca (IA) ───────────── */
-.asis-card {
-  display: grid;
-  gap: 14px;
-  background: radial-gradient(
-      120% 140% at 100% 0%,
-      color-mix(in srgb, var(--azul) 10%, transparent),
-      transparent 60%
-    ), var(--superficie, #fff);
-}
-.asis-card-head {
-  display: flex;
-  gap: 14px;
-  align-items: flex-start;
-}
-.asis-card-head h2 {
-  font-size: 1.2rem;
-  margin: 0 0 4px;
-}
-.asis-card-head p {
-  margin: 0;
-  color: var(--texto-suave);
-  font-size: 0.93rem;
-  line-height: 1.4;
-}
-.asis-badge {
-  flex: none;
-  display: grid;
-  place-items: center;
-  width: 44px;
-  height: 44px;
-  border-radius: 14px;
-  color: #fff;
-  background: linear-gradient(135deg, #0f6bc4, #0c4a30);
-  box-shadow: 0 6px 16px -8px rgb(15 107 196 / 0.6);
-}
-.asis-badge.big {
-  width: 60px;
-  height: 60px;
-  border-radius: 20px;
-}
 .asis-chips {
   display: flex;
   flex-wrap: wrap;
@@ -6931,10 +6891,6 @@ fieldset.voice-field {
   opacity: 0.5;
   cursor: default;
 }
-.asis-open {
-  justify-self: start;
-}
-
 .asis-dialog {
   width: min(680px, 96vw);
   height: min(86dvh, 820px);

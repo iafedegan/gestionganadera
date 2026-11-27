@@ -425,7 +425,7 @@ export const DEMO_SPECS: DemoSpec[] = [
       {
         email: `demo-completo-vet@${DOMAIN}`,
         displayName: "Dr. Julián Mora (veterinario)",
-        role: "tecnico",
+        role: "veterinario",
         farm: null,
       },
     ],
@@ -615,7 +615,7 @@ export function buildHerd(spec: DemoSpec, today: string, seed = 7) {
     };
 
     const vet =
-      spec.team.find((t) => t.role === "tecnico")?.displayName.replace(/ \(.*\)$/, "") ??
+      spec.team.find((t) => t.role === "veterinario")?.displayName.replace(/ \(.*\)$/, "") ??
       "Veterinario de la finca";
     const staff = "Operario de la finca";
     const mine = animals.filter((x) => x.farm === farm);
@@ -1248,35 +1248,35 @@ export const DEMO_ROLES: DemoRoleSpec[] = [
     "admin_entidad",
     "Administrador de la finca",
     "Andrés Admin (muestra)",
-    "Maneja la finca e invita personas. No ve la economía.",
+    "Dirige la finca por el dueño: equipo, compras, ventas y costos.",
   ),
   roleSpec(
     "rol_mayordomo",
     "mayordomo",
     "Mayordomo (jefe de finca)",
     "Manuel Mayordomo (muestra)",
-    "Dirige el trabajo diario: animales, potreros e insumos.",
+    "Dirige el trabajo diario: hato, ordeño, potreros y bodega. No ve costos.",
   ),
   roleSpec(
     "rol_veterinario",
     "veterinario",
     "Veterinario",
     "Valeria Veterinaria (muestra)",
-    "Historia clínica, reproducción y tratamientos.",
+    "Historia clínica, reproducción y tratamientos. Recibe las urgencias.",
   ),
   roleSpec(
     "rol_operario",
     "operario",
     "Operario o vaquero",
     "Óscar Operario (muestra)",
-    "Registra ordeños, pesajes y novedades del día.",
+    "Ordeñador o vaquero: anota ordeños, pesajes y novedades del día.",
   ),
   roleSpec(
     "rol_tecnico",
     "tecnico",
     "Asesor técnico",
     "Tatiana Asesora (muestra)",
-    "Consulta el expediente y la trazabilidad, y acompaña.",
+    "Zootecnista o agrónomo: potreros, indicadores, trazabilidad y visitas.",
   ),
 ];
 
