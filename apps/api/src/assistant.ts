@@ -112,6 +112,7 @@ export async function farmContext(
   memberships: Membership[],
   extra: Pick<AssistantRequest, "weather" | "soil">,
   now = Date.now(),
+  question = "",
 ): Promise<string> {
   const scope = farmScope(memberships, orgId);
   const farmIds = scope === "ALL" ? null : scope;
@@ -149,6 +150,21 @@ export async function farmContext(
               GROUP BY s.id HAVING s.min_stock > 0
                  AND COALESCE(SUM(CASE m.kind WHEN 'entrada' THEN m.quantity ELSE -m.quantity END), 0) < s.min_stock
               ORDER BY s.name LIMIT 15`,
+          )
+        : [];
+
+    const farmIdsFound = farms.map((f) => f.id);
+    const maps = await q<{ farm_id: string; paddocks: { name?: string; areaHa?: number }[] }>(
+      "SELECT farm_id, paddocks FROM farm_map WHERE farm_id = ANY($1)",
+      [farmIdsFound],
+    );
+    const stock =
+      role && can(role, "stock.write")
+        ? await q<{ name: string; unit: string; balance: number }>(
+            `SELECT s.name, s.unit,
+                    COALESCE(SUM(CASE m.kind WHEN 'entrada' THEN m.quantity ELSE -m.quantity END), 0)::float AS balance
+               FROM supply s LEFT JOIN stock_movement m ON m.supply_id = s.id
+              GROUP BY s.id ORDER BY s.name LIMIT 40`,
           )
         : [];
 
@@ -322,6 +338,52 @@ export async function farmContext(
         `Insumos por debajo del mínimo: ${lowStock.map((s) => `${s.name} (${Math.round(s.balance * 10) / 10} ${s.unit}, mínimo ${s.min_stock})`).join(", ")}.`,
       );
     out.push(...sit);
+
+    // Cada finca por separado, para comparar y responder por nombre.
+    if (farms.length > 0) {
+      for (const f of farms) {
+        const mine = animals.filter((a) => a.farm_id === f.id);
+        const ids = new Set(mine.map((a) => a.id));
+        const kinds = new Map<string, number>();
+        for (const a of mine) kinds.set(a.category, (kinds.get(a.category) ?? 0) + 1);
+        const liters = events
+          .filter((e) => e.type === "leche" && ids.has(e.animal_id))
+          .filter((e) => days(iso(e.occurred_on), now) < 7)
+          .reduce((s, e) => s + Number(e.payload.liters ?? 0), 0);
+        const paddocks = maps.find((m) => m.farm_id === f.id)?.paddocks ?? [];
+        out.push(
+          [
+            `Detalle de «${f.name}»: ${mine.length} animales`,
+            kinds.size ? ` (${[...kinds].map(([k, n]) => `${n} ${k}`).join(", ")})` : "",
+            `; leche 7 días ${Math.round(liters)} L`,
+            paddocks.length
+              ? `; ${paddocks.length} potreros (${list(
+                  paddocks.map((p) => p.name ?? "sin nombre"),
+                  15,
+                )})`
+              : "",
+            ".",
+          ].join(""),
+        );
+      }
+    }
+    if (stock.length)
+      out.push(
+        `Bodega: ${stock.map((s) => `${s.name} ${Math.round(s.balance * 10) / 10} ${s.unit}`).join(", ")}.`,
+      );
+
+    // Historia de los animales que la pregunta nombra por su arete.
+    const words = question.toUpperCase().split(/[^A-Z0-9ÁÉÍÓÚÑ-]+/);
+    const named = animals.filter((a) => words.includes(a.tag.toUpperCase())).slice(0, 5);
+    for (const a of named) {
+      const farm = farms.find((f) => f.id === a.farm_id)?.name ?? "sin finca";
+      const history = (byAnimal.get(a.id) ?? [])
+        .slice(-30)
+        .map((e) => `${iso(e.occurred_on)} ${e.type} ${JSON.stringify(e.payload)}`);
+      out.push(
+        `Animal ${a.tag}: ${a.species} ${a.category} ${a.sex}, finca «${farm}»${a.birth_date ? `, nacido ${iso(a.birth_date)}` : ""}. Registros: ${history.join(" | ") || "ninguno"}.`,
+      );
+    }
 
     if (extra.weather) {
       const w = extra.weather;

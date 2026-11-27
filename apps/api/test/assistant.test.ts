@@ -133,6 +133,16 @@ afterAll(async () => {
 });
 
 describe("asistente con IA", () => {
+  it("entrega la historia del animal que la pregunta nombra por su arete", async () => {
+    const cookie = await login(app, "dueno@asis.local");
+    const res = await ask(app, cookie, { organizationId: org, question: "¿Cómo va la as-1?" });
+    expect(res.statusCode).toBe(200);
+    const text = String(calls.at(-1)?.messages.at(-1)?.content);
+    expect(text).toContain("Animal AS-1: bovino vaca hembra, finca «La Esperanza»");
+    expect(text).toContain("servicio");
+    await db.admin((q) => q("DELETE FROM assistant_usage WHERE organization_id = $1", [org]));
+  });
+
   it("responde con los datos reales de la finca y descuenta la cuota", async () => {
     const cookie = await login(app, "dueno@asis.local");
     const res = await ask(app, cookie, {
@@ -153,6 +163,8 @@ describe("asistente con IA", () => {
     expect(text).toContain("AS-1: Oxitetraciclina, leche hasta");
     expect(text).toContain("ITH 84");
     expect(text.endsWith("¿Qué debo revisar esta semana?")).toBe(true);
+    expect(text).toContain("Detalle de «La Esperanza»: 1 animales (1 vaca)");
+    expect(text).not.toContain("Animal AS-1:");
 
     const [u] = await db.admin((q) =>
       q(

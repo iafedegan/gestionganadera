@@ -18,8 +18,8 @@ import {
   LogOut,
   Mail,
   Menu,
+  NotebookPen,
   PawPrint,
-  Plus,
   RefreshCw,
   Share,
   SquarePlus,
@@ -37,6 +37,7 @@ import {
 } from "react";
 import { AlertsSheet, useAlerts } from "./Alerts";
 import { AssistantDialog } from "./Assistant";
+import { CowBot } from "./CowBot";
 import { FarmIntel } from "./FarmIntel";
 import { FarmChip } from "./FarmPicker";
 import { type DashState, HomeStory } from "./HomeStory";
@@ -517,6 +518,7 @@ export function Shell(props: {
   const ptr = usePullToRefresh(() => syncNow().then(() => undefined), mobile);
   const moreSwipe = useSwipeDismiss<HTMLElement>(() => setMore(false));
   const [quickOpen, setQuickOpen] = useState(false);
+  const [asking, setAsking] = useState(false);
 
   // El menú "Más" solo existe en celular: si la ventana se ensancha, se cierra.
   useEffect(() => {
@@ -555,6 +557,21 @@ export function Shell(props: {
     (k) => !props.locked || SETUP_MODULES.includes(k),
   );
   const quick = props.locked ? [] : quickFor(role);
+  const tabButton = (k: ModuleKey) => (
+    <button
+      key={k}
+      type="button"
+      className={k === props.module ? "tab active" : "tab"}
+      aria-current={k === props.module ? "page" : undefined}
+      onClick={(e) => {
+        tapped(e);
+        pick(k);
+      }}
+    >
+      <ModIcon k={k} size={22} />
+      <span>{moduleByKey(k).short}</span>
+    </button>
+  );
 
   function pick(m: ModuleKey) {
     props.onModule(m);
@@ -626,13 +643,25 @@ export function Shell(props: {
             </button>
             <div className="user-wrap">
               {mobile ? (
-                // En el celular el avatar solo identifica la cuenta: módulos y salida están en «Más».
-                <span className="user" title={name}>
+                // En el celular el avatar abre el menú: todos los módulos, la cuenta y la salida.
+                <button
+                  type="button"
+                  className="user user-more"
+                  aria-label={`Menú y cuenta de ${name}`}
+                  aria-haspopup="dialog"
+                  aria-expanded={more}
+                  onClick={(e) => {
+                    tapped(e);
+                    setMore(true);
+                  }}
+                >
                   <span className="avatar" aria-hidden="true">
                     {initials(name)}
                   </span>
-                  <span className="sr-only">{name}</span>
-                </span>
+                  <span className="um-badge" aria-hidden="true">
+                    <Menu size={11} strokeWidth={3} />
+                  </span>
+                </button>
               ) : (
                 <button
                   type="button"
@@ -732,59 +761,41 @@ export function Shell(props: {
         </footer>
       </div>
 
-      <nav className={quick.length ? "bottom-nav has-quick" : "bottom-nav"} aria-label="Módulos">
-        {tabs.slice(0, quick.length ? 2 : 4).map((k) => (
+      <nav className={props.locked ? "bottom-nav" : "bottom-nav has-cow"} aria-label="Módulos">
+        {tabs.slice(0, props.locked ? 4 : 2).map(tabButton)}
+        {!props.locked && (
           <button
-            key={k}
             type="button"
-            className={k === props.module ? "tab active" : "tab"}
-            aria-current={k === props.module ? "page" : undefined}
+            className="tab tab-cow"
+            aria-haspopup="dialog"
             onClick={(e) => {
               tapped(e);
-              pick(k);
+              setAsking(true);
             }}
           >
-            <ModIcon k={k} size={22} />
-            <span>{moduleByKey(k).short}</span>
+            <span className="tc-ring">
+              <CowBot size={50} />
+            </span>
+            <span>Asistente</span>
           </button>
-        ))}
+        )}
+        {!props.locked && tabs.slice(2, quick.length > 0 ? 3 : 4).map(tabButton)}
         {quick.length > 0 && (
           <button
             type="button"
-            className="tab tab-quick"
+            className="tab tab-note"
             aria-haspopup="dialog"
-            onClick={() => {
-              haptic(10);
+            onClick={(e) => {
+              tapped(e);
               setQuickOpen(true);
             }}
           >
-            <span className="tq-ring" aria-hidden="true">
-              <Plus size={28} strokeWidth={2.6} />
-            </span>
+            <NotebookPen size={22} aria-hidden="true" />
             <span>Anotar</span>
           </button>
         )}
-        {quick.length > 0 &&
-          tabs.slice(2, 3).map((k) => (
-            <button
-              key={k}
-              type="button"
-              className={k === props.module ? "tab active" : "tab"}
-              aria-current={k === props.module ? "page" : undefined}
-              onClick={(e) => {
-                tapped(e);
-                pick(k);
-              }}
-            >
-              <ModIcon k={k} size={22} />
-              <span>{moduleByKey(k).short}</span>
-            </button>
-          ))}
-        <button type="button" className="tab" onClick={() => setMore(true)}>
-          <Menu size={22} aria-hidden="true" />
-          <span>Más</span>
-        </button>
       </nav>
+      {asking && <AssistantDialog initial={null} onClose={() => setAsking(false)} />}
 
       {quickOpen && (
         <QuickSheet items={quick} onModule={pick} onClose={() => setQuickOpen(false)} />

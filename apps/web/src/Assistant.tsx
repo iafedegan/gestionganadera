@@ -1,6 +1,7 @@
 import type { AssistantRequest, KnowledgeSourceDto } from "@ganaderia/contracts";
 import { ArrowUp, BookOpen, Sparkles, Stethoscope, Trash2, X } from "lucide-react";
 import { type ReactNode, useEffect, useRef, useState } from "react";
+import { CowBot } from "./CowBot";
 import { EscalateDialog } from "./Extension";
 import { useActiveFarm, useFarms } from "./animals";
 import { ApiError, NetworkError, api } from "./lib/api";
@@ -311,13 +312,13 @@ export function AssistantDialog(props: { initial: string | null; onClose(): void
 
           {turns.length === 0 && !busy && (
             <div className="asis-empty">
-              <span className="asis-badge big" aria-hidden="true">
-                <Sparkles size={28} />
-              </span>
+              <CowBot size={120} />
               <p>
-                {farm
-                  ? `Pregunte lo que quiera sobre ${farm.name}.`
-                  : "Pregunte lo que quiera sobre su finca."}
+                {farms.length > 1
+                  ? `Pregunte lo que quiera sobre sus ${farms.length} fincas o sobre un animal por su arete.`
+                  : farm
+                    ? `Pregunte lo que quiera sobre ${farm.name} o sobre un animal por su arete.`
+                    : "Pregunte lo que quiera sobre su finca."}
               </p>
               <div className="asis-chips">
                 {SUGGESTIONS.map((s) => (

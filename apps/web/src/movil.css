@@ -2884,3 +2884,128 @@
 .herd-search {
   margin-top: -2px;
 }
+
+/* ═════════════ Barra inferior: vaca asistente al centro y «Anotar» ═════════════ */
+.cow-bot {
+  display: block;
+  overflow: visible;
+}
+.cow-bot .cow-bob {
+  transform-box: fill-box;
+  transform-origin: 50% 90%;
+  animation: cow-bob 3.4s ease-in-out infinite;
+}
+.cow-bot .cow-blink {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: cow-blink 4.6s infinite;
+}
+.cow-bot .cow-ear-l,
+.cow-bot .cow-ear-r {
+  transform-box: fill-box;
+  animation: cow-ear 5.2s ease-in-out infinite;
+}
+.cow-bot .cow-ear-l {
+  transform-origin: 100% 50%;
+}
+.cow-bot .cow-ear-r {
+  transform-origin: 0 50%;
+  animation-delay: 0.4s;
+}
+.cow-bot .cow-steam {
+  opacity: 0;
+}
+@media (max-width: 900px) {
+  .bottom-nav.has-cow {
+    overflow: visible;
+  }
+  .tab-cow {
+    color: var(--titulo, #0c4a30) !important;
+    font-weight: 700 !important;
+  }
+  .tc-ring {
+    display: grid;
+    place-items: center;
+    width: 66px;
+    height: 66px;
+    margin-top: -32px;
+    border-radius: 50%;
+    background: radial-gradient(circle at 50% 30%, #1f8a55, #0c4a30 75%);
+    box-shadow: 0 0 0 5px var(--lienzo, #f8faf7), 0 10px 22px -6px rgb(12 74 48 / 0.6);
+    transition: transform 300ms cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+  .tab-cow:active .tc-ring {
+    transform: scale(0.9);
+  }
+  .bottom-nav .tab.tab-cow .tc-ring svg {
+    padding: 0;
+    background: none;
+    transform: none;
+  }
+  .user-more {
+    position: relative;
+    min-width: 44px;
+    min-height: 44px;
+    border: 0;
+    background: none;
+    padding: 0;
+    cursor: pointer;
+  }
+  .um-badge {
+    position: absolute;
+    right: -2px;
+    bottom: -1px;
+    display: grid;
+    place-items: center;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    border: 2px solid #fff;
+    background: #0c4a30;
+    color: #fff;
+  }
+  /* El asistente ya está en la barra: sin botón repetido en el Inicio. */
+  .page-dash .dash-ask {
+    display: none;
+  }
+}
+.asis-empty > .cow-bot {
+  margin-inline: auto;
+}
+@keyframes cow-bob {
+  0%,
+  100% {
+    transform: translateY(0) rotate(-1.5deg);
+  }
+  50% {
+    transform: translateY(-4px) rotate(1.5deg);
+  }
+}
+@keyframes cow-blink {
+  0%,
+  92%,
+  100% {
+    transform: scaleY(1);
+  }
+  95% {
+    transform: scaleY(0.08);
+  }
+}
+@keyframes cow-ear {
+  0%,
+  80%,
+  100% {
+    transform: rotate(0);
+  }
+  86% {
+    transform: rotate(-14deg);
+  }
+  92% {
+    transform: rotate(6deg);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .cow-bot * {
+    animation: none !important;
+  }
+}

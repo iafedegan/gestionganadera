@@ -1141,7 +1141,7 @@ export async function buildApp(opts: AppOptions): Promise<FastifyInstance> {
     // El conocimiento del gremio se busca a la vez que se arma el resumen de la finca;
     // si CONtexto Ganadero no responde, el asistente sigue solo con los datos de la finca.
     const [context, knowledge] = await Promise.all([
-      farmContext(db, orgId, a.memberships, body.data),
+      farmContext(db, orgId, a.memberships, body.data, Date.now(), body.data.question),
       eco
         ? eco.knowledge(body.data.question).catch((err): KnowledgeHit[] => {
             req.log.warn(err, "conocimiento del gremio no disponible");

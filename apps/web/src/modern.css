@@ -520,3 +520,16 @@
     color: #fff;
   }
 }
+
+/* La vaca del botón central, a su tamaño completo. */
+@media (max-width: 900px) {
+  .shell .bottom-nav .tab.tab-cow .tc-ring svg.cow-bot {
+    box-sizing: border-box;
+    width: 54px;
+    height: 54px;
+    padding: 0;
+    border-radius: 0;
+    background: none;
+    transform: none;
+  }
+}
