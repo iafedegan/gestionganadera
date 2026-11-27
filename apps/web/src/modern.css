@@ -2086,3 +2086,58 @@ dialog.uchat[open] {
   box-shadow: 0 14px 30px -12px rgb(0 0 0 / 0.7);
   cursor: pointer;
 }
+
+/* ───── Mis ganaderías (menú de la cuenta) ───── */
+.my-orgs {
+  display: grid;
+  gap: 8px;
+  margin: 8px 0 12px;
+}
+.my-orgs ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 6px;
+}
+.my-orgs .mo-title {
+  margin: 0;
+  font-weight: 600;
+}
+.mo-org {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  min-height: 44px;
+  padding: 8px 14px;
+  border: 1px solid rgba(15, 60, 35, 0.14);
+  border-radius: 14px;
+  background: #fff;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.mo-org.on {
+  border-color: #137a45;
+  background: #e8f5ee;
+}
+.mo-join {
+  display: grid;
+  gap: 8px;
+}
+.mo-join label {
+  display: grid;
+  gap: 4px;
+}
+.alert-rows li.is-new .ar-text strong::after {
+  content: "";
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  margin-left: 6px;
+  border-radius: 50%;
+  background: #d92d3a;
+}

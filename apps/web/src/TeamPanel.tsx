@@ -80,7 +80,7 @@ const initials = (n: string) =>
 const linkFor = (code: string) => `${location.origin}/app/?invitacion=${encodeURIComponent(code)}`;
 
 function shareText(org: string, role: InviteRole, code: string) {
-  return `Hola, lo invito a ${org} en GanSmart como ${ROLE_NAME[role].toLowerCase()}. Abra este enlace para crear su cuenta: ${linkFor(code)} (código ${code}).`;
+  return `Hola, lo invito a ${org} en GanSmart como ${ROLE_NAME[role].toLowerCase()}. Abra este enlace para crear su cuenta: ${linkFor(code)}. Si ya tiene cuenta, en su menú toque «Unirme con un código» y escriba ${code}.`;
 }
 
 /** Equipo de la organización: quién tiene acceso, invitaciones pendientes y nuevas invitaciones. */
@@ -383,7 +383,10 @@ function InviteDialog(props: {
           )}
           {done && (
             <section className="fsec inv-done">
-              <p>Envíele este enlace. Al abrirlo crea su cuenta y entra directo a {props.org}.</p>
+              <p>
+                Envíele este enlace para crear su cuenta en {props.org}. Si ya tiene cuenta, en su
+                menú toca «Unirme con un código».
+              </p>
               <div className="inv-code" aria-label="Código de invitación">
                 {done.code}
               </div>

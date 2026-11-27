@@ -18,6 +18,7 @@ import {
 import { ApiError, NetworkError, api } from "./lib/api";
 import { errorText } from "./lib/errorText";
 import { localdb } from "./lib/localdb";
+import { chosenOrg, preferOrg, rememberOrg } from "./lib/orgs";
 import { isDemoOrg, setDataScope } from "./lib/scope";
 import {
   clearKeystore,
@@ -74,6 +75,8 @@ interface AppState {
     input: RegisterInvitedRequest,
   ): Promise<{ ok: true } | { ok: false; message: string }>;
   acceptInvitation(code: string): Promise<{ ok: true } | { ok: false; message: string }>;
+  /** Pasa a trabajar en otra de las ganaderías de la persona. */
+  switchOrg(orgId: string): void;
   logout(): Promise<void>;
   syncNow(): Promise<SyncOutcome | null>;
   refresh(): Promise<void>;
@@ -89,7 +92,13 @@ export const useApp = (): AppState => {
 const ZERO: Counts = { pendiente: 0, rechazado: 0, conflicto: 0 };
 
 export function AppProvider({ children }: { children: ReactNode }) {
-  const [session, setSession] = useState<SessionDto | null>(null);
+  const [stored, setSession] = useState<SessionDto | null>(null);
+  const [picked, setPicked] = useState<string | null>(null);
+  // La ganadería elegida va de primera: es con la que trabaja toda la aplicación.
+  const session = useMemo(
+    () => stored && preferOrg(stored, picked ?? chosenOrg(stored.userId)),
+    [stored, picked],
+  );
   const [booting, setBooting] = useState(isStandalone);
   const [online, setOnline] = useState(true);
   const [syncing, setSyncing] = useState(false);
@@ -321,8 +330,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const acceptInvitation: AppState["acceptInvitation"] = useCallback(async (code) => {
     try {
+      const before = new Set(loadSession(lastEmail())?.memberships.map((m) => m.organizationId));
       const s = await api.acceptInvitation(code);
       saveSession(s);
+      // Se pasa de una vez a la ganadería recién agregada.
+      const added = s.memberships.find((m) => !before.has(m.organizationId));
+      if (added) {
+        rememberOrg(s.userId, added.organizationId);
+        setPicked(added.organizationId);
+      }
       setSession(s);
       return { ok: true as const };
     } catch (err) {
@@ -333,6 +349,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
       };
     }
   }, []);
+
+  const userId = stored?.userId;
+  const switchOrg: AppState["switchOrg"] = useCallback(
+    (id) => {
+      if (userId) rememberOrg(userId, id);
+      setPicked(id);
+    },
+    [userId],
+  );
 
   const completeOnboarding: AppState["completeOnboarding"] = useCallback(async (input) => {
     try {
@@ -354,6 +379,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     await localdb.lock();
     api.logout().catch(() => undefined);
     setSession(null);
+    setPicked(null);
     setCounts(ZERO);
     setLastSync(null);
     setSyncNotice(null);
@@ -396,10 +422,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
       entered.current = null;
       return;
     }
-    if (entered.current === session.userId) return;
-    entered.current = session.userId;
+    const here = `${session.userId}:${orgId}`;
+    if (entered.current === here) return;
+    entered.current = here;
     void refresh().then(() => syncNow());
-  }, [session, refresh, syncNow]);
+  }, [session, orgId, refresh, syncNow]);
 
   useEffect(() => {
     const on = () => void syncNow();
@@ -434,6 +461,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       completeOnboarding,
       registerInvited,
       acceptInvitation,
+      switchOrg,
       logout,
       syncNow,
       refresh,
@@ -459,6 +487,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       completeOnboarding,
       registerInvited,
       acceptInvitation,
+      switchOrg,
       logout,
       syncNow,
       refresh,

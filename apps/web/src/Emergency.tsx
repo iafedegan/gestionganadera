@@ -13,7 +13,8 @@ import {
   Send,
   WifiOff,
 } from "lucide-react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { type ReactNode, useCallback, useEffect, useRef, useState } from "react";
+import type { AlertItem } from "./Alerts";
 import { UrgentChat } from "./UrgentChat";
 import { UrgentRecordSheet } from "./UrgentRecord";
 import { useActiveFarm, useFarms } from "./animals";
@@ -22,6 +23,7 @@ import { CATEGORY_LABEL, fechaHora, todayLocal } from "./labels";
 import { ageText, animalInfo } from "./lib/animalTags";
 import { ApiError, NetworkError, api } from "./lib/api";
 import type { LocalAnimalEvent, LocalHerdAnimal } from "./lib/localdb";
+import { myOrgs } from "./lib/orgs";
 import { phoneNumber, smsLink, smsText } from "./lib/sms";
 import {
   pending,
@@ -80,15 +82,23 @@ function ago(iso: string): string {
 
 /** Avisos recientes, revisados cada pocos segundos mientras la app está abierta. */
 export function useUrgentList(active: boolean) {
-  const { orgId, online } = useApp();
+  const { session, online } = useApp();
   const [items, setItems] = useState<UrgentAlertDto[]>([]);
+  // Los avisos llegan de todas las ganaderías de la persona, no solo de la que está viendo.
+  const orgs = myOrgs(session)
+    .map((o) => o.organizationId)
+    .sort()
+    .join(",");
   const load = useCallback(() => {
-    if (!orgId || !online || document.hidden) return;
-    api.urgent(orgId).then(
-      (r) => setItems(r.items),
+    if (!orgs || !online || document.hidden) return;
+    Promise.all(orgs.split(",").map((id) => api.urgent(id))).then(
+      (all) =>
+        setItems(
+          all.flatMap((r) => r.items).sort((a, b) => b.createdAt.localeCompare(a.createdAt)),
+        ),
       () => undefined,
     );
-  }, [orgId, online]);
+  }, [orgs, online]);
   useEffect(() => {
     if (!active) return;
     load();
@@ -404,8 +414,29 @@ function markSeen(id: string): void {
   }
 }
 
-/** Para quien atiende (veterinario, asesor o dueño). También despacha los avisos en cola. */
-export function UrgentBanner() {
+const readKey = (alertId: string) => `gg.vet.leido.${alertId}`;
+/** Una conversación es nueva hasta que se abre; vuelve a serlo con cada mensaje de la otra parte. */
+function isUnread(a: UrgentAlertDto): boolean {
+  if (a.lastMessage?.mine) return false;
+  try {
+    return localStorage.getItem(readKey(a.id)) !== (a.lastMessage?.id ?? "abierto");
+  } catch {
+    return false;
+  }
+}
+function markRead(a: UrgentAlertDto): void {
+  try {
+    localStorage.setItem(readKey(a.id), a.lastMessage?.id ?? "abierto");
+  } catch {
+    /* sin almacenamiento */
+  }
+}
+
+/**
+ * Para quien atiende (veterinario, asesor o dueño). Las urgencias por confirmar salen en la
+ * pantalla; las conversaciones van a las notificaciones. También despacha los avisos en cola.
+ */
+export function useUrgentCenter(): { node: ReactNode; messages: AlertItem[]; unread: number } {
   const { orgId, online, notify } = useApp();
   const { items, reload } = useUrgentList(true);
   const [viewing, setViewing] = useState<string | null>(null);
@@ -415,6 +446,9 @@ export function UrgentBanner() {
   const chats = items.filter((a) => a.ackBy && (a.mine || a.attending));
   const [chatId, setChatId] = useState<string | null>(null);
   const chat = chats.find((a) => a.id === chatId);
+  useEffect(() => {
+    if (chat) markRead(chat);
+  }, [chat]);
 
   // Un mensaje nuevo se anuncia y abre su chat, salvo que haya otra ventana abierta.
   useEffect(() => {
@@ -470,24 +504,19 @@ export function UrgentBanner() {
     );
 
   const shown = open.find((a) => a.id === viewing);
-  if (open.length === 0 && chats.length === 0) return null;
-  return (
+  const messages: AlertItem[] = chats.map((a) => ({
+    id: a.id,
+    tone: "info",
+    fresh: isUnread(a),
+    icon: <MessagesSquare size={22} />,
+    title: `Chat con ${a.mine ? a.ackBy : a.authorName}`,
+    text: a.lastMessage
+      ? `${a.lastMessage.mine ? "Usted" : "Respondió"}: ${a.lastMessage.preview}`
+      : `${a.reason}${a.animal ? ` · ${a.animal.tag}` : ""}`,
+    go: () => setChatId(a.id),
+  }));
+  const node = (open.length > 0 || chat) && (
     <div className="urgent-list">
-      {/* Las conversaciones en curso van primero: allí llegan los mensajes. */}
-      {chats.map((a) => (
-        <button key={a.id} type="button" className="uc-bar" onClick={() => setChatId(a.id)}>
-          <MessagesSquare size={20} aria-hidden="true" />
-          <span>
-            <strong>Chat con {a.mine ? a.ackBy : a.authorName}</strong>
-            <small>
-              {a.lastMessage
-                ? `${a.lastMessage.mine ? "Usted" : "Respondió"}: ${a.lastMessage.preview}`
-                : `${a.reason}${a.animal ? ` · ${a.animal.tag}` : ""}`}
-            </small>
-          </span>
-          <ChevronRight size={20} aria-hidden="true" />
-        </button>
-      ))}
       {open.map((a) => {
         const phone = phoneNumber(a.authorPhone);
         const last = a.animal?.events.find((e) => e.type === "salud");
@@ -558,4 +587,5 @@ export function UrgentBanner() {
       )}
     </div>
   );
+  return { node, messages, unread: messages.filter((m) => m.fresh).length };
 }

@@ -32,7 +32,7 @@ export async function runSync(orgId: string): Promise<SyncOutcome> {
   let received = 0;
   try {
     for (;;) {
-      const batch: CommandEnvelope[] = await localdb.outboxPending(BATCH);
+      const batch: CommandEnvelope[] = await localdb.outboxPending(BATCH, orgId);
       if (batch.length === 0) break;
       const res = await api.push(orgId, deviceId(), batch);
       sent += batch.length;
@@ -52,17 +52,27 @@ export async function runSync(orgId: string): Promise<SyncOutcome> {
       if (res.results.length < batch.length) break;
     }
 
-    let cursor = Number(await localdb.getMeta("cursor")) || 0;
-    const storedScope = await localdb.getMeta("scope");
+    // Cada ganadería lleva su propia marca de descarga. Las copias antiguas tenían una sola.
+    const saved = async (name: "cursor" | "scope") =>
+      (await localdb.getMeta(`${name}:${orgId}`)) ??
+      ((await localdb.listFarms(orgId)).length > 0 ? await localdb.getMeta(name) : null);
+    let cursor = Number(await saved("cursor")) || 0;
+    let storedScope = await saved("scope");
     for (;;) {
       const page = await api.pull(orgId, cursor);
       if (storedScope && storedScope !== page.scope && cursor !== 0) {
         // Cambió el conjunto de fincas autorizadas: se descarga desde cero.
-        await localdb.resetSynced();
+        await localdb.resetSynced(orgId);
         cursor = 0;
+        storedScope = null;
         continue;
       }
-      await localdb.applyPull({ changes: page.changes, cursor: page.cursor, scope: page.scope });
+      await localdb.applyPull({
+        orgId,
+        changes: page.changes,
+        cursor: page.cursor,
+        scope: page.scope,
+      });
       received += page.changes.length;
       cursor = page.cursor;
       if (!page.hasMore) break;

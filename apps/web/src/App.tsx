@@ -19,6 +19,7 @@ import { StaffGate } from "./Tecnigan";
 import { TrazabilidadScreen } from "./Trazabilidad";
 import { VentasScreen } from "./Ventas";
 import { AnimalsScreen } from "./animals";
+import { api } from "./lib/api";
 import { isDemoOrg } from "./lib/scope";
 import { canSeeModule } from "./modules";
 import { ModuleProto } from "./proto";
@@ -51,7 +52,7 @@ const SCREENS: Partial<Record<ModuleKey, (go: (m: ModuleKey) => void) => ReactNo
 };
 
 export function App() {
-  const { session, role, acceptInvitation, notify, syncNow, booting } = useApp();
+  const { session, role, acceptInvitation, notify, booting } = useApp();
   const [module, setModule] = useState<ModuleKey>("inicio");
   /** Cambio de pantalla con transición suave del navegador (View Transitions), si la hay. */
   const go = useCallback((m: ModuleKey) => {
@@ -69,9 +70,10 @@ export function App() {
   // biome-ignore lint/correctness/useExhaustiveDependencies: solo al cambiar de usuario
   useEffect(() => {
     if (!session) return;
-    let code: string | null = null;
+    // El enlace puede abrirse con la sesión ya iniciada.
+    let code: string | null = new URLSearchParams(location.search).get("invitacion");
     try {
-      code = sessionStorage.getItem("gg.invite");
+      code = sessionStorage.getItem("gg.invite") ?? code;
       sessionStorage.removeItem("gg.invite");
     } catch {
       /* sin almacenamiento de sesión */
@@ -79,14 +81,18 @@ export function App() {
     if (new URLSearchParams(location.search).has("invitacion"))
       history.replaceState(null, "", location.pathname);
     if (!code) return;
-    // Quien se registró con la invitación ya está dentro: no hay nada más que aceptar.
-    if (session.memberships.length === 1 && session.memberships[0]?.role !== "propietario") return;
-    void acceptInvitation(code).then((r) => {
-      if (r.ok) {
-        notify("Invitación aceptada: ya tiene acceso a la nueva ganadería.", "ok");
-        void syncNow();
-      } else notify(r.message, "warn");
-    });
+    // Quien se registró con la invitación ya la usó: la vista previa falla y no se hace nada.
+    const pending = code;
+    void api
+      .previewInvitation(pending)
+      .then(() => acceptInvitation(pending))
+      .then(
+        (r) => {
+          if (r.ok) notify("Invitación aceptada: ya tiene acceso a la nueva ganadería.", "ok");
+          else notify(r.message, "warn");
+        },
+        () => undefined,
+      );
   }, [session?.userId]);
 
   if (booting) return <Splash />;

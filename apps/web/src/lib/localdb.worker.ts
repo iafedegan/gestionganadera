@@ -453,6 +453,7 @@ const api = {
   },
 
   async applyPull(args: {
+    orgId: string;
     changes: Change[];
     cursor: number;
     scope: string;
@@ -640,12 +641,12 @@ const api = {
         }
       }
       d.exec({
-        sql: "INSERT INTO meta (k, v) VALUES ('cursor', ?) ON CONFLICT (k) DO UPDATE SET v = excluded.v",
-        bind: [String(args.cursor)],
+        sql: "INSERT INTO meta (k, v) VALUES (?, ?) ON CONFLICT (k) DO UPDATE SET v = excluded.v",
+        bind: [`cursor:${args.orgId}`, String(args.cursor)],
       });
       d.exec({
-        sql: "INSERT INTO meta (k, v) VALUES ('scope', ?) ON CONFLICT (k) DO UPDATE SET v = excluded.v",
-        bind: [args.scope],
+        sql: "INSERT INTO meta (k, v) VALUES (?, ?) ON CONFLICT (k) DO UPDATE SET v = excluded.v",
+        bind: [`scope:${args.orgId}`, args.scope],
       });
       d.exec("COMMIT");
     } catch (err) {
@@ -656,11 +657,19 @@ const api = {
   },
 
   /** El alcance de fincas cambió: se descarta lo sincronizado y se conserva lo pendiente. */
-  resetSynced(): void {
+  resetSynced(orgId: string): void {
     const d = requireDb();
-    d.exec(
-      "DELETE FROM animal_event WHERE sync_state = 'sincronizado'; DELETE FROM animal WHERE sync_state = 'sincronizado'; DELETE FROM supply WHERE sync_state = 'sincronizado'; DELETE FROM stock_movement; DELETE FROM farm_map WHERE sync_state = 'sincronizado'; DELETE FROM farm; DELETE FROM meta WHERE k IN ('cursor','scope');",
-    );
+    for (const table of ["animal_event", "animal", "supply", "farm_map"])
+      d.exec({
+        sql: `DELETE FROM ${table} WHERE org_id = ? AND sync_state = 'sincronizado'`,
+        bind: [orgId],
+      });
+    for (const table of ["stock_movement", "farm"])
+      d.exec({ sql: `DELETE FROM ${table} WHERE org_id = ?`, bind: [orgId] });
+    d.exec({
+      sql: "DELETE FROM meta WHERE k IN (?, ?, 'cursor', 'scope')",
+      bind: [`cursor:${orgId}`, `scope:${orgId}`],
+    });
   },
 
   async listFarms(orgId: string): Promise<LocalFarm[]> {
@@ -929,10 +938,11 @@ const api = {
     return { ok: true };
   },
 
-  async outboxPending(limit: number): Promise<CommandEnvelope[]> {
+  async outboxPending(limit: number, orgId: string): Promise<CommandEnvelope[]> {
+    // Cada registro se envía a la ganadería donde se anotó.
     const rows = requireDb().selectObjects(
-      "SELECT body FROM outbox WHERE state = 'pendiente' ORDER BY seq LIMIT ?",
-      [limit],
+      "SELECT body FROM outbox WHERE state = 'pendiente' AND org_id = ? ORDER BY seq LIMIT ?",
+      [orgId, limit],
     ) as { body: Uint8Array<ArrayBuffer> }[];
     const out: CommandEnvelope[] = [];
     for (const r of rows) out.push(JSON.parse(await unseal(r.body)) as CommandEnvelope);

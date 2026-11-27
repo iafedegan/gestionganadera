@@ -19,6 +19,9 @@ import { useApp } from "./state";
 import { statusOf } from "./supplies";
 
 export interface AlertItem {
+  id?: string;
+  /** Sin leer. */
+  fresh?: boolean;
   tone: "error" | "warn" | "info";
   icon: ReactNode;
   title: string;
@@ -204,18 +207,18 @@ export function AlertsSheet({ alerts, onClose }: { alerts: AlertItem[]; onClose(
         tabIndex={-1}
         onClick={onClose}
       />
-      <dialog open className="sheet-panel farm-sheet alerts-sheet" aria-label="Alertas">
+      <dialog open className="sheet-panel farm-sheet alerts-sheet" aria-label="Notificaciones">
         <span className="grabber" aria-hidden="true" />
-        <h2>Alertas</h2>
+        <h2>Notificaciones</h2>
         {alerts.length === 0 ? (
           <div className="empty-state ok">
             <CheckCircle2 size={34} aria-hidden="true" />
-            <p>Todo en orden. No hay alertas por ahora.</p>
+            <p>Todo en orden. No hay notificaciones por ahora.</p>
           </div>
         ) : (
           <ul className="alert-rows">
             {alerts.map((a) => (
-              <li key={a.title}>
+              <li key={a.id ?? a.title} className={a.fresh ? "is-new" : undefined}>
                 <span className={`ar-icon ar-${a.tone}`}>{a.icon}</span>
                 <div className="ar-text">
                   <strong>{a.title}</strong>

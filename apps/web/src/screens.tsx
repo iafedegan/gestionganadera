@@ -39,10 +39,11 @@ import { AlertsSheet, useAlerts } from "./Alerts";
 import { AssistantDialog } from "./Assistant";
 import { Avatar, AvatarPicker, useMyAvatar } from "./Avatar";
 import { CowBot } from "./CowBot";
-import { UrgentBanner } from "./Emergency";
+import { useUrgentCenter } from "./Emergency";
 import { FarmIntel } from "./FarmIntel";
 import { FarmChip } from "./FarmPicker";
 import { type DashState, HomeStory } from "./HomeStory";
+import { MyOrgs } from "./MyOrgs";
 import { type PendingInvite, RegisterForm } from "./Onboarding";
 import { Pasture } from "./Pasture";
 import { ProfileWizard, useFarmProfile } from "./Profile";
@@ -571,6 +572,19 @@ export function Shell(props: {
       props.onModule(m);
     },
   );
+  const urgent = useUrgentCenter();
+  const unseen = shellAlerts.length + urgent.unread;
+  // En las notificaciones van primero las conversaciones de las urgencias.
+  const notices = [
+    ...urgent.messages.map((m) => ({
+      ...m,
+      go: () => {
+        setAlertsOpen(false);
+        m.go?.();
+      },
+    })),
+    ...shellAlerts,
+  ];
   const org = session?.memberships[0]?.organizationName ?? "";
   const name = session?.displayName ?? "";
 
@@ -665,12 +679,12 @@ export function Shell(props: {
             <button
               type="button"
               className="icon-btn"
-              aria-label={`Alertas${shellAlerts.length > 0 ? `, ${shellAlerts.length}` : ""}`}
+              aria-label={`Alertas${unseen > 0 ? `, ${unseen}` : ""}`}
               aria-haspopup="dialog"
               onClick={() => setAlertsOpen(true)}
             >
               <Bell size={20} />
-              {shellAlerts.length > 0 && <span className="dot">{shellAlerts.length}</span>}
+              {unseen > 0 && <span className="dot">{unseen}</span>}
             </button>
             <div className="user-wrap">
               {mobile ? (
@@ -723,6 +737,7 @@ export function Shell(props: {
                       <small>{org}</small>
                       <AvatarPicker initials={initials(name)} />
                     </div>
+                    <MyOrgs onDone={() => setMenuOpen(false)} />
                     <button
                       type="button"
                       className="um-item"
@@ -776,7 +791,7 @@ export function Shell(props: {
         </div>
 
         <main id="contenido" className="content">
-          <UrgentBanner />
+          {urgent.node}
           <div key={props.module} className="screen">
             {props.children}
           </div>
@@ -864,6 +879,7 @@ export function Shell(props: {
                 {role && <small>{ROLE_LABEL[role]}</small>}
               </span>
             </div>
+            <MyOrgs onDone={() => setMore(false)} />
             <NavList
               active={props.module}
               onPick={pick}
@@ -918,7 +934,7 @@ export function Shell(props: {
       </div>
 
       {props.syncOpen && <SyncDrawer onClose={() => props.onSyncOpen(false)} />}
-      {alertsOpen && <AlertsSheet alerts={shellAlerts} onClose={() => setAlertsOpen(false)} />}
+      {alertsOpen && <AlertsSheet alerts={notices} onClose={() => setAlertsOpen(false)} />}
     </div>
   );
 }
