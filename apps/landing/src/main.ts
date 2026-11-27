@@ -82,7 +82,7 @@ for (const a of document.querySelectorAll<HTMLAnchorElement>("[data-signup-link]
 const contact = import.meta.env.VITE_CONTACT_EMAIL as string | undefined;
 if (contact) {
   for (const a of document.querySelectorAll<HTMLAnchorElement>("[data-contact]")) {
-    a.href = `mailto:${contact}?subject=${encodeURIComponent("Demostración de FarmaGan")}`;
+    a.href = `mailto:${contact}?subject=${encodeURIComponent("Demostración de GanSmart")}`;
     a.hidden = false;
   }
 }

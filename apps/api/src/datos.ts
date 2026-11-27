@@ -173,7 +173,7 @@ export async function exportData(
 
   return {
     generado: new Date().toISOString(),
-    nota: "Copia de sus datos en FarmaGan (Ley 1581 de 2012). Guárdela en un lugar seguro: contiene información de su finca.",
+    nota: "Copia de sus datos en GanSmart (Ley 1581 de 2012). Guárdela en un lugar seguro: contiene información de su finca.",
     cuenta: { correo: user.email, nombre: user.displayName },
     ...personal,
     ganaderias,

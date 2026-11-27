@@ -4623,7 +4623,7 @@ tbody tr:hover {
     width: 48px;
     height: 48px;
     border-radius: 14px;
-    background: #f8f8ef url("/app/icon.svg") center / 34px no-repeat;
+    background: #f8f8ef url("/app/icon-192.png") center / 34px no-repeat;
     transition: opacity 120ms ease;
   }
   .sidebar:hover .sidebar-art,
@@ -4645,7 +4645,7 @@ tbody tr:hover {
     width: 44px;
     height: 44px;
     border-radius: 12px;
-    background: url("/app/icon.svg") center / contain no-repeat;
+    background: url("/app/icon-192.png") center / contain no-repeat;
     box-shadow: 0 0 0 2px rgb(255 255 255 / 0.14);
   }
 }

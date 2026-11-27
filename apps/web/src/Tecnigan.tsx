@@ -35,7 +35,7 @@ export function StaffGate() {
   if (staff) return <TecniganApp staff={staff} />;
   return (
     <section className="page staff-empty">
-      <h1>FarmaGan</h1>
+      <h1>GanSmart</h1>
       <p className="eco-text">
         {staff === undefined
           ? online

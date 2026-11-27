@@ -11,10 +11,10 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: "autoUpdate",
-      includeAssets: ["icon.svg", "apple-touch-icon.png"],
+      includeAssets: ["logo.png", "apple-touch-icon.png"],
       manifest: {
-        name: "FarmaGan",
-        short_name: "FarmaGan",
+        name: "GanSmart",
+        short_name: "GanSmart",
         description: "Gestión de fincas, animales y registros de campo, también sin conexión.",
         lang: "es-CO",
         start_url: "/app/?source=pwa",
@@ -26,8 +26,7 @@ export default defineConfig({
         icons: [
           { src: "icon-192.png", sizes: "192x192", type: "image/png", purpose: "any" },
           { src: "icon-512.png", sizes: "512x512", type: "image/png", purpose: "any" },
-          { src: "icon-512.png", sizes: "512x512", type: "image/png", purpose: "maskable" },
-          { src: "icon.svg", sizes: "any", type: "image/svg+xml", purpose: "any" },
+          { src: "icon-maskable.png", sizes: "512x512", type: "image/png", purpose: "maskable" },
         ],
       },
       workbox: {

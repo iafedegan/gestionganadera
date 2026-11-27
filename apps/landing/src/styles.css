@@ -1051,10 +1051,10 @@ h3 {
   }
 }
 
-/* Logo de FarmaGan */
+/* Logo de GanSmart */
 .mark,
 .mark.mark-s {
   border-radius: 28%;
-  background: url("/icon.svg") center / cover no-repeat;
+  background: url("/icon-192.png") center / cover no-repeat;
   box-shadow: 0 0 0 2px rgb(216 181 88 / 0.5);
 }

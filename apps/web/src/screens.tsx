@@ -176,8 +176,11 @@ export function Login() {
       <section className="login-hero">
         <div className="hero-glow" aria-hidden="true" />
         <div className="login-hero-top">
-          <span className="brand-mark" aria-hidden="true" />
-          <span className="brand-name">FarmaGan</span>
+          <img
+            className="brand-logo"
+            src={`${import.meta.env.BASE_URL}logo.png`}
+            alt="GanSmart, inteligencia y control"
+          />
         </div>
         <div className="login-hero-body">
           <span className="hero-badge">
@@ -272,7 +275,7 @@ export function Login() {
             noValidate={false}
           >
             <header className="lc-head">
-              <p className="kicker">Gestión ganadera integral</p>
+              <p className="kicker">Inteligencia y control</p>
               <h1 id="login-title">Ingrese a su finca</h1>
               <p className="lc-sub">Use el correo y la contraseña de su cuenta.</p>
               {invite && (
@@ -638,7 +641,7 @@ export function Shell(props: {
           <div className="topbar-left">
             <span className="brand-mark brand-sm hide-mobile" aria-hidden="true" />
             <span className="brand-line hide-mobile">
-              <strong>FarmaGan</strong>
+              <strong>GanSmart</strong>
               <span className="vbar" />
               <span>{org}</span>
             </span>
