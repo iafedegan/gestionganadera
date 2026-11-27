@@ -2066,3 +2066,23 @@ dialog.uchat[open] {
   align-items: center;
   align-content: start;
 }
+
+.app-update {
+  position: fixed;
+  z-index: 9998;
+  left: 50%;
+  bottom: calc(96px + env(safe-area-inset-bottom));
+  transform: translateX(-50%);
+  width: max-content;
+  max-width: calc(100vw - 24px);
+  min-height: 52px;
+  padding: 10px 20px;
+  border: 0;
+  border-radius: 999px;
+  background: #112810;
+  color: #f4dc8f;
+  font: inherit;
+  font-weight: 800;
+  box-shadow: 0 14px 30px -12px rgb(0 0 0 / 0.7);
+  cursor: pointer;
+}
