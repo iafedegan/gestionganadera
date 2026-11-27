@@ -34,7 +34,8 @@ const RULES: [RegExp, string][] = [
   ],
   // Quien lo dice con sus palabras: «tengo una urgencia», «es urgente», «auxilio».
   [
-    /(tengo|hay|es) (una )?(urgencia|emergencia)|urgente|auxilio|^\W*(urgencia|emergencia)/,
+    // Se toleran los errores de digitación más comunes: «ugente», «urjente», «emerjencia».
+    /(tengo|hay|es) (una )?(urgencia|emergencia)|urgente|auxilio|^\W*(urgencia|emergencia)|\b(ugente|urjente|ujente|urgnete|urgete)\b|^\W*(ugencia|urjencia|urgensia|emerjencia|emergensia)\b/,
     "urgencia reportada",
   ],
 ];

@@ -39,7 +39,7 @@ import { AlertsSheet, useAlerts } from "./Alerts";
 import { AssistantDialog } from "./Assistant";
 import { Avatar, AvatarPicker, useMyAvatar } from "./Avatar";
 import { CowBot } from "./CowBot";
-import { useUrgentCenter } from "./Emergency";
+import { NotifyPrompt, ThreadList, useUrgentCenter } from "./Emergency";
 import { FarmIntel } from "./FarmIntel";
 import { FarmChip } from "./FarmPicker";
 import { type DashState, HomeStory } from "./HomeStory";
@@ -574,17 +574,6 @@ export function Shell(props: {
   );
   const urgent = useUrgentCenter();
   const unseen = shellAlerts.length + urgent.unread;
-  // En las notificaciones van primero las conversaciones de las urgencias.
-  const notices = [
-    ...urgent.messages.map((m) => ({
-      ...m,
-      go: () => {
-        setAlertsOpen(false);
-        m.go?.();
-      },
-    })),
-    ...shellAlerts,
-  ];
   const org = session?.memberships[0]?.organizationName ?? "";
   const name = session?.displayName ?? "";
 
@@ -934,7 +923,22 @@ export function Shell(props: {
       </div>
 
       {props.syncOpen && <SyncDrawer onClose={() => props.onSyncOpen(false)} />}
-      {alertsOpen && <AlertsSheet alerts={notices} onClose={() => setAlertsOpen(false)} />}
+      {alertsOpen && (
+        <AlertsSheet alerts={shellAlerts} onClose={() => setAlertsOpen(false)}>
+          {urgent.threads.length > 0 ? (
+            <>
+              <NotifyPrompt />
+              <ThreadList
+                threads={urgent.threads}
+                onOpen={(t) => {
+                  setAlertsOpen(false);
+                  urgent.open(t);
+                }}
+              />
+            </>
+          ) : null}
+        </AlertsSheet>
+      )}
     </div>
   );
 }

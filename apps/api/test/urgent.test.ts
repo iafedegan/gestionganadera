@@ -158,6 +158,8 @@ describe("una urgencia por animal y chat desde el aviso", () => {
     const again = (await send(otro, "Ya no se para")).json();
     expect(again.id).toBe(first.id);
     expect(again.messageCount).toBe(1);
+    // Quien se sumó al aviso también ve la conversación.
+    expect(await list(otro)).toMatchObject([{ id: first.id, mine: true }]);
 
     // Antes de confirmar ya se puede mandar la foto.
     const chat = `/v1/urgencias/${first.id}/mensajes`;

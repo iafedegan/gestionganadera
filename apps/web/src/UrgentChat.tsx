@@ -1,23 +1,28 @@
-import type { UrgentAlertDto, UrgentMessageDto } from "@ganaderia/contracts";
-import { ArrowUp, Camera, Phone, X } from "lucide-react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import type { UrgentMessageDto } from "@ganaderia/contracts";
+import { ArrowUp, Camera, ClipboardList, Phone, X } from "lucide-react";
+import { Fragment, useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { UrgentRecordSheet } from "./UrgentRecord";
 import { fechaHora } from "./labels";
 import { ApiError, NetworkError, api } from "./lib/api";
 import { type Media, prepareMedia } from "./lib/media";
 import { phoneNumber, smsLink } from "./lib/sms";
+import type { Thread } from "./lib/threads";
 import { useApp } from "./state";
 
-/** Chat entre quien reportó la urgencia y quien la atiende: texto, fotos y videos cortos. */
+/**
+ * Chat de las urgencias con una persona: cada aviso aparece como un caso, seguido de sus
+ * mensajes, fotos y videos. Se responde sobre el animal que se escoja.
+ */
 
 const EVERY = 4_000;
 
 export function UrgentChat({
-  alert,
+  thread,
   onClose,
   onAttend,
 }: {
-  alert: UrgentAlertDto;
+  thread: Thread;
   onClose(): void;
   /** El veterinario lee antes de confirmar y confirma desde aquí. */
   onAttend?(): void;
@@ -26,18 +31,32 @@ export function UrgentChat({
   const ref = useRef<HTMLDialogElement>(null);
   const list = useRef<HTMLDivElement>(null);
   const file = useRef<HTMLInputElement>(null);
-  const [items, setItems] = useState<UrgentMessageDto[]>([]);
+  const [messages, setMessages] = useState<Record<string, UrgentMessageDto[]>>({});
+  const [picked, setPicked] = useState<string | null>(null);
+  const [viewing, setViewing] = useState<string | null>(null);
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Un tema por animal: si hay varios avisos del mismo, se responde en el más reciente.
+  const topics = [...new Map(thread.alerts.map((a) => [a.animal?.tag ?? a.reason, a])).entries()];
+  const latest = thread.alerts.reduce((x, y) =>
+    (y.lastMessage?.createdAt ?? y.createdAt) > (x.lastMessage?.createdAt ?? x.createdAt) ? y : x,
+  );
+  const alert = thread.alerts.find((a) => a.id === picked) ?? latest;
+  const viewed = thread.alerts.find((a) => a.id === viewing)?.animal;
+  const ids = thread.alerts.map((a) => a.id).join(",");
+
   const load = useCallback(() => {
     if (!online || document.hidden) return;
-    api.urgentMessages(alert.id).then(
-      (r) => setItems(r.items),
+    Promise.all(
+      ids.split(",").map((id) => api.urgentMessages(id).then((r) => [id, r.items] as const)),
+    ).then(
+      (all) => setMessages(Object.fromEntries(all)),
       () => undefined,
     );
-  }, [alert.id, online]);
+  }, [ids, online]);
+  const total = Object.values(messages).reduce((n, m) => n + m.length, 0);
 
   useEffect(() => {
     ref.current?.showModal();
@@ -47,10 +66,10 @@ export function UrgentChat({
     const t = setInterval(load, EVERY);
     return () => clearInterval(t);
   }, [load]);
-  // biome-ignore lint/correctness/useExhaustiveDependencies: bajar al llegar un mensaje
+  // biome-ignore lint/correctness/useExhaustiveDependencies: bajar al llegar un mensaje o un aviso
   useEffect(() => {
     list.current?.scrollTo({ top: list.current.scrollHeight, behavior: "smooth" });
-  }, [items.length]);
+  }, [total, thread.alerts.length]);
 
   async function send(input: { body?: string; media?: Media }) {
     setBusy(true);
@@ -84,14 +103,21 @@ export function UrgentChat({
     setBusy(false);
   }
 
-  // Con quién se habla: quien reportó ve al veterinario; el veterinario, a quien reportó.
-  const other = alert.mine ? (alert.ackBy ?? "Su veterinario") : alert.authorName;
   const phone = phoneNumber(
     alert.mine ? alert.recipients.find((r) => r.name === alert.ackBy)?.phone : alert.authorPhone,
   );
 
   return createPortal(
-    <dialog ref={ref} className="uchat" onClose={onClose} aria-labelledby="uchat-title">
+    <dialog
+      ref={ref}
+      className="uchat"
+      // El cierre de la hoja de vida (o de este chat) no debe cerrar las ventanas de atrás.
+      onClose={(e) => {
+        e.stopPropagation();
+        if (e.target === e.currentTarget) onClose();
+      }}
+      aria-labelledby="uchat-title"
+    >
       <header>
         <button
           type="button"
@@ -102,10 +128,11 @@ export function UrgentChat({
           <X size={22} />
         </button>
         <div>
-          <h2 id="uchat-title">{other}</h2>
+          <h2 id="uchat-title">{thread.name}</h2>
           <small>
-            {alert.reason}
-            {alert.animal ? ` · ${alert.animal.tag}` : ""}
+            {thread.alerts.length === 1
+              ? `${alert.reason}${alert.animal ? ` · ${alert.animal.tag}` : ""}`
+              : `${thread.alerts.length} avisos`}
           </small>
         </div>
         <a
@@ -117,32 +144,52 @@ export function UrgentChat({
         </a>
       </header>
       <div className="uc-list" ref={list} aria-live="polite">
-        <p className="uc-system">
-          {alert.ackBy
-            ? `${alert.ackBy} atiende esta urgencia. Envíen fotos o videos cortos del animal.`
-            : alert.mine
-              ? `Aviso enviado a ${alert.recipients.map((r) => r.name).join(" y ") || "su equipo"}. Mientras confirman, mande fotos o videos del animal: ya los pueden ver.`
-              : `${alert.authorName} reportó: «${alert.message}». Aún nadie confirma.`}
-        </p>
-        {items.map((m) => {
-          const src = `/v1/urgencias/${alert.id}/mensajes/${m.id}/archivo`;
-          return (
-            <div key={m.id} className={m.mine ? "uc-msg mine" : "uc-msg"}>
-              {!m.mine && <strong>{m.authorName}</strong>}
-              {m.mediaType?.startsWith("image/") && (
-                <a href={src} target="_blank" rel="noopener noreferrer">
-                  <img src={src} alt="Foto enviada" />
-                </a>
+        {thread.alerts.map((a) => (
+          <Fragment key={a.id}>
+            <article className={a.ackBy ? "uc-case ok" : "uc-case"}>
+              <header>
+                <strong>
+                  {a.reason}
+                  {a.animal ? ` · ${a.animal.tag}` : ""}
+                </strong>
+                <small>{[a.farmName, fechaHora(a.createdAt)].filter(Boolean).join(" · ")}</small>
+              </header>
+              <p>«{a.message}»</p>
+              <span className="uc-state">
+                {a.ackBy ? `Atiende ${a.ackBy}` : "Esperando confirmación"}
+              </span>
+              {a.animal && (
+                <button type="button" onClick={() => setViewing(a.id)}>
+                  <ClipboardList size={16} aria-hidden="true" /> Hoja de vida y trazabilidad
+                </button>
               )}
-              {m.mediaType?.startsWith("video/") && (
-                // biome-ignore lint/a11y/useMediaCaption: video grabado en el potrero, sin subtítulos
-                <video src={src} controls playsInline preload="metadata" />
-              )}
-              {m.body && <p>{m.body}</p>}
-              <small>{fechaHora(m.createdAt)}</small>
-            </div>
-          );
-        })}
+            </article>
+            {messages[a.id]?.map((m) => {
+              const src = `/v1/urgencias/${a.id}/mensajes/${m.id}/archivo`;
+              return (
+                <div key={m.id} className={m.mine ? "uc-msg mine" : "uc-msg"}>
+                  {!m.mine && <strong>{m.authorName}</strong>}
+                  {m.mediaType?.startsWith("image/") && (
+                    <a href={src} target="_blank" rel="noopener noreferrer">
+                      <img src={src} alt="Foto enviada" />
+                    </a>
+                  )}
+                  {m.mediaType?.startsWith("video/") && (
+                    // biome-ignore lint/a11y/useMediaCaption: video grabado en el potrero, sin subtítulos
+                    <video src={src} controls playsInline preload="metadata" />
+                  )}
+                  {m.body && <p>{m.body}</p>}
+                  <small>{fechaHora(m.createdAt)}</small>
+                </div>
+              );
+            })}
+          </Fragment>
+        ))}
+        {thread.alerts.some((a) => a.mine && !a.ackBy) && (
+          <p className="uc-system">
+            Mientras confirman, mande fotos o videos del animal: ya los pueden ver.
+          </p>
+        )}
         {busy && <p className="uc-system">Enviando…</p>}
         {error && (
           <p className="uc-error" role="alert">
@@ -152,9 +199,28 @@ export function UrgentChat({
       </div>
       {onAttend && (
         <button type="button" className="uc-attend" onClick={onAttend}>
-          Voy a atender
+          {thread.pending.length > 1
+            ? `Voy a atender (${thread.pending.length} avisos)`
+            : "Voy a atender"}
         </button>
       )}
+      {topics.length > 1 && (
+        // biome-ignore lint/a11y/useSemanticElements: grupo de opciones sobre el campo de texto
+        <div className="uc-topics" role="group" aria-label="Responder sobre">
+          <span>Sobre:</span>
+          {topics.map(([label, a]) => (
+            <button
+              key={a.id}
+              type="button"
+              aria-pressed={label === (alert.animal?.tag ?? alert.reason)}
+              onClick={() => setPicked(a.id)}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      )}
+      {viewed && <UrgentRecordSheet animal={viewed} onClose={() => setViewing(null)} />}
       <form
         onSubmit={(e) => {
           e.preventDefault();

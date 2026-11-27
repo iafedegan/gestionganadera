@@ -82,7 +82,7 @@ const TABS = [
 export function UrgentRecordSheet(props: {
   animal: UrgentAnimalRecord;
   onClose(): void;
-  onAttend(): void;
+  onAttend?(): void;
 }) {
   const a = props.animal;
   const ref = useRef<HTMLDialogElement>(null);
@@ -174,11 +174,13 @@ export function UrgentRecordSheet(props: {
         {tab === "produccion" &&
           (output.length ? <Timeline events={output} /> : <p>Sin ordeños ni pesajes.</p>)}
       </div>
-      <footer className="urs-foot">
-        <button type="button" className="urg-btn urg-red" onClick={props.onAttend}>
-          <Send size={20} aria-hidden="true" /> Voy a atender
-        </button>
-      </footer>
+      {props.onAttend && (
+        <footer className="urs-foot">
+          <button type="button" className="urg-btn urg-red" onClick={props.onAttend}>
+            <Send size={20} aria-hidden="true" /> Voy a atender
+          </button>
+        </footer>
+      )}
     </dialog>
   );
 }

@@ -12,6 +12,9 @@ describe("detectEmergency", () => {
     expect(detectEmergency("Se me murió una novilla")).toBe("muerte o agonía");
     expect(detectEmergency("Tengo una urgencia")).toBe("urgencia reportada");
     expect(detectEmergency("¡Emergencia!")).toBe("urgencia reportada");
+    for (const typo of ["ugente", "Urjente", "emerjencia", "es ugente"])
+      expect(detectEmergency(typo), typo).toBe("urgencia reportada");
+    expect(detectEmergency("¿Qué dice la gente del precio vigente?")).toBeNull();
   });
 
   it("no alarma con preguntas normales o de prevención", () => {

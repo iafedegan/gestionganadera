@@ -11,13 +11,10 @@ import {
   Phone,
   RotateCw,
   Search,
-  Send,
   WifiOff,
 } from "lucide-react";
 import { type ReactNode, useCallback, useEffect, useRef, useState } from "react";
-import type { AlertItem } from "./Alerts";
 import { UrgentChat } from "./UrgentChat";
-import { UrgentRecordSheet } from "./UrgentRecord";
 import { useActiveFarm, useFarms } from "./animals";
 import { art } from "./art";
 import { CATEGORY_LABEL, fechaHora, todayLocal } from "./labels";
@@ -34,6 +31,7 @@ import {
 } from "./lib/notify";
 import { myOrgs } from "./lib/orgs";
 import { phoneNumber, smsLink, smsText } from "./lib/sms";
+import { type Thread, buildThreads, toAttend } from "./lib/threads";
 import {
   pending,
   saveTeam,
@@ -349,7 +347,19 @@ export function EmergencyCard(props: Herd & { alert: EmergencyState; onRetry(): 
           </button>
         )}
         {status === "enviado" && !done && <NotifyPrompt />}
-        {chat && alert && <UrgentChat alert={alert} onClose={() => setChat(false)} />}
+        {chat && alert && (
+          <UrgentChat
+            thread={{
+              key: alert.id,
+              name: alert.ackBy ?? "Su veterinario",
+              alerts: [alert],
+              pending: [],
+              preview: "",
+              at: alert.createdAt,
+            }}
+            onClose={() => setChat(false)}
+          />
+        )}
         {alert?.animal && (
           <p className="urg-note">
             <ClipboardList size={18} aria-hidden="true" /> Hoja de vida de {alert.animal.tag}{" "}
@@ -461,20 +471,25 @@ function markRead(a: UrgentAlertDto): void {
 }
 
 /**
- * Para quien atiende (veterinario, asesor o dueño). Las urgencias por confirmar salen en la
- * pantalla; las conversaciones van a las notificaciones. También despacha los avisos en cola.
+ * Urgencias en las notificaciones: una conversación por persona. Nada se pone sobre la pantalla;
+ * suena, avisa y queda en la campana. También despacha los avisos que quedaron en cola.
  */
-export function useUrgentCenter(): { node: ReactNode; messages: AlertItem[]; unread: number } {
+export function useUrgentCenter(): {
+  node: ReactNode;
+  threads: Thread[];
+  unread: number;
+  open(thread: Thread): void;
+} {
   const { orgId, online, notify } = useApp();
   const { items, reload } = useUrgentList(true);
-  const [viewing, setViewing] = useState<string | null>(null);
-  const open = items.filter((a) => a.canAck && !a.mine && !a.ackBy);
-  // Conversaciones: las que reporté (el chat abre desde el aviso) y las que estoy atendiendo.
-  const chats = items.filter((a) => a.mine || a.attending);
-  const [chatId, setChatId] = useState<string | null>(null);
-  const chat = items.find((a) => a.id === chatId);
+  const threads = buildThreads(items);
+  const pendingAlerts = items.filter(toAttend);
+  const chats = items.filter((a) => a.mine || a.attending || toAttend(a));
+  // Se recuerda un aviso de la conversación: su clave cambia cuando alguien confirma.
+  const [openId, setOpenId] = useState<string | null>(null);
+  const chat = threads.find((t) => t.alerts.some((a) => a.id === openId));
   useEffect(() => {
-    if (chat) markRead(chat);
+    for (const a of chat?.alerts ?? []) markRead(a);
   }, [chat]);
 
   // Un mensaje nuevo suena, sale en el sistema si la app está de fondo y abre su chat.
@@ -488,7 +503,7 @@ export function useUrgentCenter(): { node: ReactNode; messages: AlertItem[]; unr
       notify(`${m.authorName}: ${m.preview}`, "warn");
       if (document.hidden)
         void systemNotify(`Mensaje de ${m.authorName}`, m.preview, `chat-${a.id}`);
-      if (!document.querySelector("dialog[open]")) setChatId(a.id);
+      if (!document.querySelector("dialog[open]")) setOpenId(a.id);
       break;
     }
   }, [chats, notify]);
@@ -515,148 +530,89 @@ export function useUrgentCenter(): { node: ReactNode; messages: AlertItem[]; unr
     ).then(reload);
   }, [orgId, online, notify, reload]);
 
-  // Urgencia nueva para atender: sonido, vibración y notificación del sistema.
+  // Urgencia nueva para atender: sonido, vibración, aviso corto y notificación del sistema.
   useEffect(() => {
-    const fresh = open.filter((a) => !wasSeen(`aviso-${a.id}`));
-    if (fresh.length === 0) return;
-    for (const a of fresh) markSeen(`aviso-${a.id}`);
-    const a = fresh[0] as UrgentAlertDto;
+    const fresh = pendingAlerts.filter((a) => !wasSeen(`aviso-${a.id}`));
+    const a = fresh[0];
+    if (!a) return;
+    for (const x of fresh) markSeen(`aviso-${x.id}`);
     haptic(400);
     chime(true);
+    notify(`Urgencia de ${a.authorName}: ábrala en las notificaciones.`, "warn");
     void systemNotify(
       `Urgencia${a.animal ? ` · ${a.animal.tag}` : ""}`,
       `${a.authorName}: ${a.message}${a.organizationName ? ` (${a.organizationName})` : ""}`,
       `aviso-${a.id}`,
     );
-  }, [open]);
+  }, [pendingAlerts, notify]);
 
-  const unreadChats = chats.filter(isUnread).length;
+  const unread = threads.filter(isNew).length;
   useEffect(() => {
-    titleBadge(open.length + unreadChats);
+    titleBadge(unread);
     return () => titleBadge(0);
-  }, [open.length, unreadChats]);
+  }, [unread]);
 
-  const attend = (id: string) =>
-    void api.urgentAck(id).then(
+  const attend = (list: UrgentAlertDto[]) =>
+    void Promise.all(list.map((a) => api.urgentAck(a.id))).then(
       () => {
         notify("Confirmado: quien avisó ya lo ve.", "ok");
-        setViewing(null);
-        setChatId(id);
         reload();
       },
       () => notify("No se pudo confirmar. Revise la conexión.", "warn"),
     );
 
-  const shown = open.find((a) => a.id === viewing);
-  const messages: AlertItem[] = chats.map((a) => ({
-    id: a.id,
-    tone: a.ackBy ? "info" : "warn",
-    fresh: isUnread(a),
-    icon: <MessagesSquare size={22} />,
-    title: a.mine
-      ? a.ackBy
-        ? `Chat con ${a.ackBy}`
-        : `Urgencia${a.animal ? ` de ${a.animal.tag}` : ""}: esperando al veterinario`
-      : `Chat con ${a.authorName}`,
-    text: a.lastMessage
-      ? `${a.lastMessage.mine ? "Usted" : a.lastMessage.authorName}: ${a.lastMessage.preview}`
-      : a.ackBy
-        ? `${a.reason}${a.animal ? ` · ${a.animal.tag}` : ""}`
-        : "Puede enviar fotos y videos mientras confirman.",
-    go: () => setChatId(a.id),
-  }));
-  const node = (open.length > 0 || chat) && (
-    <div className="urgent-list">
-      {open.length > 0 && <NotifyPrompt />}
-      {open.map((a) => {
-        const phone = phoneNumber(a.authorPhone);
-        const last = a.animal?.events.find((e) => e.type === "salud");
+  const node = chat ? (
+    <UrgentChat
+      thread={chat}
+      onClose={() => setOpenId(null)}
+      {...(chat.pending.length > 0 ? { onAttend: () => attend(chat.pending) } : {})}
+    />
+  ) : null;
+  return { node, threads, unread, open: (t) => setOpenId(t.alerts.at(-1)?.id ?? null) };
+}
+
+/** Pendiente de confirmar o con algo sin leer. */
+const isNew = (t: Thread) => t.pending.length > 0 || t.alerts.some(isUnread);
+
+/** Las personas con urgencias, para la hoja de notificaciones. Al tocar se abre su chat. */
+export function ThreadList(props: { threads: Thread[]; onOpen(t: Thread): void }) {
+  if (props.threads.length === 0) return null;
+  return (
+    <ul className="threads" aria-label="Conversaciones">
+      {props.threads.map((t) => {
+        const animals = [...new Set(t.alerts.flatMap((a) => (a.animal ? [a.animal.tag] : [])))];
         return (
-          <section key={a.id} className="urg" role="alert">
-            <header className="urg-top">
-              <span className="urg-pulse" aria-hidden="true">
-                <AlertTriangle size={22} />
+          <li key={t.key}>
+            <button
+              type="button"
+              className={t.pending.length ? "th urgent" : isNew(t) ? "th new" : "th"}
+              onClick={() => {
+                haptic(8);
+                props.onOpen(t);
+              }}
+            >
+              <span className="th-av" aria-hidden="true">
+                {initials(t.name)}
               </span>
-              <div>
-                <strong>Urgencia: {a.reason}</strong>
-                <small>
-                  {ago(a.createdAt)}
-                  {a.farmName ? ` · ${a.farmName}` : ""}
-                </small>
-                {a.organizationName && <em className="urg-org">{a.organizationName}</em>}
-              </div>
-            </header>
-            <div className="urg-body">
-              <p className="urg-quote">
-                «{a.message}» <small>{a.authorName}</small>
-              </p>
-              {a.animal && (
-                <button type="button" className="urg-patient" onClick={() => setViewing(a.id)}>
-                  <img src={picture(a.animal.species)} alt="" />
-                  <span>
-                    <strong>{a.animal.tag}</strong>
-                    <small>
-                      {[
-                        CATEGORY_LABEL[a.animal.category],
-                        ageText(a.animal.birthDate, todayLocal()),
-                      ]
-                        .filter(Boolean)
-                        .join(" · ")}
-                    </small>
-                    {last && <small>Último manejo: {String(last.data.product ?? "")}</small>}
-                    <em>Ver hoja de vida y trazabilidad</em>
-                  </span>
-                  <ChevronRight size={20} aria-hidden="true" />
-                </button>
-              )}
-              <button type="button" className="urg-btn urg-red" onClick={() => attend(a.id)}>
-                <Send size={20} aria-hidden="true" />
-                <span>
-                  Voy a atender
-                  <small>Se abre el chat con {a.authorName.replace(/\s*\(.*\)$/, "")}</small>
-                </span>
-              </button>
-              {a.messageCount > 0 && (
-                <button type="button" className="urg-btn urg-soft" onClick={() => setChatId(a.id)}>
-                  <MessagesSquare size={18} aria-hidden="true" />
-                  Ver {a.messageCount === 1 ? "1 mensaje" : `${a.messageCount} mensajes`}
-                  {a.lastMessage && !a.lastMessage.mine ? ` · «${a.lastMessage.preview}»` : ""}
-                </button>
-              )}
-              <div className="urg-pair">
-                {phone && (
-                  <a className="urg-btn urg-soft" href={`tel:${phone}`}>
-                    <Phone size={18} aria-hidden="true" /> Llamar
-                  </a>
+              <span className="th-text">
+                <strong>{t.name}</strong>
+                <small>{t.preview}</small>
+                {animals.length > 0 && <em>{animals.join(" · ")}</em>}
+              </span>
+              <span className="th-meta">
+                <time>{ago(t.at)}</time>
+                {t.pending.length > 0 ? (
+                  <b>{t.pending.length > 1 ? `${t.pending.length} urgentes` : "Urgente"}</b>
+                ) : (
+                  isNew(t) && <span className="th-dot" />
                 )}
-                <a
-                  className="urg-btn urg-soft"
-                  href={smsLink(phone, `GanSmart: voy a atender la urgencia (${a.reason}).`)}
-                >
-                  <MessageSquare size={18} aria-hidden="true" /> Responder por SMS
-                </a>
-              </div>
-            </div>
-          </section>
+              </span>
+            </button>
+          </li>
         );
       })}
-      {chat && (
-        <UrgentChat
-          alert={chat}
-          onClose={() => setChatId(null)}
-          {...(chat.canAck && !chat.mine && !chat.ackBy ? { onAttend: () => attend(chat.id) } : {})}
-        />
-      )}
-      {shown?.animal && (
-        <UrgentRecordSheet
-          animal={shown.animal}
-          onClose={() => setViewing(null)}
-          onAttend={() => attend(shown.id)}
-        />
-      )}
-    </div>
+    </ul>
   );
-  return { node, messages, unread: messages.filter((m) => m.fresh).length };
 }
 
 /** Pide permiso para avisar con la notificación del sistema, una sola vez y con un toque. */

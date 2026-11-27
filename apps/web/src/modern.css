@@ -2217,3 +2217,164 @@ dialog.uchat[open] {
   box-shadow: 0 10px 24px -12px rgb(163 23 42 / 0.7);
   cursor: pointer;
 }
+
+/* ───── Conversaciones de urgencias en las notificaciones ───── */
+.threads {
+  list-style: none;
+  margin: 0 0 10px;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+.th {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 12px;
+  border: 1px solid #e1e8e3;
+  border-radius: 20px;
+  background: #fff;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.th.new {
+  border-color: #1f8a55;
+  background: #f0f9f3;
+}
+.th.urgent {
+  border-color: #e8a1a8;
+  background: #fff1f2;
+}
+.th-av {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: #0c4a30;
+  color: #fff;
+  font-weight: 800;
+}
+.th.urgent .th-av {
+  background: #b81d30;
+}
+.th-text {
+  display: grid;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+}
+.th-text strong {
+  line-height: 1.25;
+}
+.th-text :is(small, em) {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.th-text small {
+  color: var(--texto-suave, #5b6b63);
+}
+.th-text em {
+  font-size: 0.75rem;
+  font-style: normal;
+  font-weight: 700;
+  color: #0c4a30;
+}
+.th-meta {
+  flex: none;
+  display: grid;
+  justify-items: end;
+  gap: 6px;
+  font-size: 0.72rem;
+  color: var(--texto-suave, #5b6b63);
+}
+.th-meta b {
+  padding: 3px 9px;
+  border-radius: 999px;
+  background: #b81d30;
+  color: #fff;
+}
+.th-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #d92d3a;
+}
+.uchat .uc-case {
+  display: grid;
+  gap: 6px;
+  padding: 12px 14px;
+  border: 1px solid #edc0c5;
+  border-radius: 18px;
+  background: #fff5f5;
+}
+.uchat .uc-case.ok {
+  border-color: #cfe5d6;
+  background: #f4faf6;
+}
+/* La cabecera del caso no hereda la cabecera verde del chat. */
+.uchat .uc-case header {
+  display: grid;
+  gap: 2px;
+  padding: 0;
+  border-radius: 0;
+  background: none;
+  color: inherit;
+}
+.uc-case :is(small, p) {
+  margin: 0;
+}
+.uc-case small,
+.uc-state {
+  font-size: 0.76rem;
+  color: var(--texto-suave, #5b6b63);
+}
+.uc-state {
+  font-weight: 700;
+}
+.uc-case button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 42px;
+  border: 0;
+  border-radius: 12px;
+  background: #fff;
+  color: #0c4a30;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+.uc-topics {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 12px 8px;
+  overflow-x: auto;
+  font-size: 0.82rem;
+}
+.uc-topics button {
+  flex: none;
+  min-height: 34px;
+  padding: 0 14px;
+  border: 1.5px solid #cfdcd3;
+  border-radius: 999px;
+  background: #fff;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+.uc-topics button[aria-pressed="true"] {
+  border-color: #0c4a30;
+  background: #0c4a30;
+  color: #fff;
+}
+.uc-attend {
+  flex: none;
+}

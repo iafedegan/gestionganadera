@@ -19,9 +19,6 @@ import { useApp } from "./state";
 import { statusOf } from "./supplies";
 
 export interface AlertItem {
-  id?: string;
-  /** Sin leer. */
-  fresh?: boolean;
   tone: "error" | "warn" | "info";
   icon: ReactNode;
   title: string;
@@ -197,7 +194,16 @@ export function useAlerts(onOpenSync: () => void, onModule: (m: ModuleKey) => vo
 }
 
 /** Hoja inferior de la campana: lista de alertas, o «todo en orden». */
-export function AlertsSheet({ alerts, onClose }: { alerts: AlertItem[]; onClose(): void }) {
+export function AlertsSheet({
+  alerts,
+  onClose,
+  children,
+}: {
+  alerts: AlertItem[];
+  onClose(): void;
+  /** Lo que va primero: las conversaciones de las urgencias. */
+  children?: ReactNode;
+}) {
   return createPortal(
     <>
       <button
@@ -210,7 +216,8 @@ export function AlertsSheet({ alerts, onClose }: { alerts: AlertItem[]; onClose(
       <dialog open className="sheet-panel farm-sheet alerts-sheet" aria-label="Notificaciones">
         <span className="grabber" aria-hidden="true" />
         <h2>Notificaciones</h2>
-        {alerts.length === 0 ? (
+        {children}
+        {alerts.length === 0 && !children ? (
           <div className="empty-state ok">
             <CheckCircle2 size={34} aria-hidden="true" />
             <p>Todo en orden. No hay notificaciones por ahora.</p>
@@ -218,7 +225,7 @@ export function AlertsSheet({ alerts, onClose }: { alerts: AlertItem[]; onClose(
         ) : (
           <ul className="alert-rows">
             {alerts.map((a) => (
-              <li key={a.id ?? a.title} className={a.fresh ? "is-new" : undefined}>
+              <li key={a.title}>
                 <span className={`ar-icon ar-${a.tone}`}>{a.icon}</span>
                 <div className="ar-text">
                   <strong>{a.title}</strong>

@@ -127,8 +127,9 @@ async function lastMessage(q: Q, alertId: string, userId: string) {
     author_name: string;
     body: string | null;
     media_type: string | null;
+    created_at: Date | string;
   }>(
-    `SELECT m.id, m.author_id, u.display_name AS author_name, m.body, m.media_type
+    `SELECT m.id, m.author_id, u.display_name AS author_name, m.body, m.media_type, m.created_at
        FROM urgent_message m JOIN app_user u ON u.id = m.author_id
       WHERE m.alert_id = $1 ORDER BY m.created_at DESC LIMIT 1`,
     [alertId],
@@ -139,6 +140,7 @@ async function lastMessage(q: Q, alertId: string, userId: string) {
     authorName: m.author_name,
     mine: m.author_id === userId,
     preview: m.body?.slice(0, 80) ?? (m.media_type?.startsWith("video/") ? "Video" : "Foto"),
+    createdAt: iso(m.created_at),
   };
 }
 
@@ -148,6 +150,14 @@ async function messageCount(q: Q, alertId: string): Promise<number> {
     [alertId],
   );
   return Number(n?.n ?? 0);
+}
+
+async function hasWritten(q: Q, alertId: string, userId: string): Promise<boolean> {
+  const rows = await q("SELECT 1 FROM urgent_message WHERE alert_id = $1 AND author_id = $2", [
+    alertId,
+    userId,
+  ]);
+  return rows.length > 0;
 }
 
 async function toDto(
@@ -160,6 +170,7 @@ async function toDto(
   return {
     id: r.id,
     organizationId: orgId,
+    authorId: r.created_by,
     organizationName: memberships.find((m) => m.organizationId === orgId)?.organizationName ?? "",
     messageCount: await messageCount(q, r.id),
     lastMessage: await lastMessage(q, r.id, userId),
@@ -174,7 +185,10 @@ async function toDto(
     attending: r.ack_by === userId,
     ackAt: r.ack_at ? iso(r.ack_at) : null,
     recipients: await recipients(q, orgId, r.farm_id),
-    mine: r.created_by === userId,
+    // Quien se sumó a un aviso ajeno lo ve como propio, salvo que sea quien lo atiende.
+    mine:
+      r.created_by === userId ||
+      (!canAck(memberships, orgId) && (await hasWritten(q, r.id, userId))),
     canAck: canAck(memberships, orgId),
   };
 }
@@ -273,9 +287,19 @@ export async function listUrgent(
         ORDER BY a.created_at DESC LIMIT 20`,
       [orgId],
     );
+    // También participa quien sumó un mensaje (p. ej. al repetir el aviso de un animal).
+    const wrote = new Set(
+      (
+        await q<{ alert_id: string }>(
+          "SELECT DISTINCT alert_id FROM urgent_message WHERE author_id = $1",
+          [userId],
+        )
+      ).map((w) => w.alert_id),
+    );
     const mine = rows.filter(
       (r) =>
         r.created_by === userId ||
+        wrote.has(r.id) ||
         (attends && (scope === "ALL" || !r.farm_id || scope.includes(r.farm_id))),
     );
     const out: UrgentAlertDto[] = [];
@@ -341,7 +365,8 @@ async function chatAccess(
   const attends =
     canAck(memberships, r.organization_id) &&
     (scope === "ALL" || !r.farm_id || scope.includes(r.farm_id));
-  if (!member || !(r.created_by === userId || attends)) return { error: "SIN_ACCESO" };
+  if (!member || !(r.created_by === userId || attends || (await hasWritten(q, alertId, userId))))
+    return { error: "SIN_ACCESO" };
   return { confirmed: r.ack_by !== null };
 }
 
