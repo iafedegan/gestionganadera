@@ -37,6 +37,7 @@ import {
 } from "react";
 import { AlertsSheet, useAlerts } from "./Alerts";
 import { AssistantDialog } from "./Assistant";
+import { Avatar, AvatarPicker, useMyAvatar } from "./Avatar";
 import { CowBot } from "./CowBot";
 import { FarmIntel } from "./FarmIntel";
 import { FarmChip } from "./FarmPicker";
@@ -409,6 +410,30 @@ export function Login() {
 
 /* ───────────── Estructura ───────────── */
 
+/** Color y una frase corta de cada módulo en el menú del celular (mismo estilo de «Anotar»). */
+const MOD_LOOK: Partial<Record<ModuleKey, [string, string]>> = {
+  inicio: ["verde", "Cómo va hoy"],
+  animales: ["verde", "Su hato"],
+  expediente: ["ambar", "La finca"],
+  trazabilidad: ["verde", "Bosque"],
+  produccion: ["azul", "Leche y peso"],
+  reproduccion: ["ambar", "Crías"],
+  sanidad: ["rojo", "Vacunas"],
+  pasturas: ["verde", "Potreros"],
+  economia: ["violeta", "La plata"],
+  asistencia: ["azul", "Su técnico"],
+  configuracion: ["gris", "Fincas"],
+  noticias: ["azul", "Del sector"],
+  capacitacion: ["violeta", "Aprender"],
+  tienda: ["ambar", "Comprar"],
+  comunidad: ["rojo", "Preguntar"],
+  compras: ["ambar", "Insumos"],
+  ventas: ["violeta", "Entregas"],
+  personal: ["azul", "Equipo"],
+  activos: ["gris", "Equipos"],
+  contabilidad: ["violeta", "Facturas"],
+};
+
 function NavList(props: {
   active: ModuleKey;
   onPick(m: ModuleKey): void;
@@ -435,7 +460,7 @@ function NavList(props: {
                 <li key={m.key}>
                   <button
                     type="button"
-                    className={m.key === props.active ? "mod-tile active" : "mod-tile"}
+                    className={`mod-tile mt-${MOD_LOOK[m.key]?.[0] ?? "verde"}${m.key === props.active ? " active" : ""}`}
                     aria-current={m.key === props.active ? "page" : undefined}
                     onClick={() => props.onPick(m.key)}
                   >
@@ -443,6 +468,7 @@ function NavList(props: {
                       <ModIcon k={m.key} size={24} />
                     </span>
                     <span className="mod-label">{m.short}</span>
+                    <span className="mod-hint">{MOD_LOOK[m.key]?.[1]}</span>
                     {m.phase && !PROTO[m.key] && <small>Pronto</small>}
                   </button>
                 </li>
@@ -518,6 +544,7 @@ export function Shell(props: {
   const ptr = usePullToRefresh(() => syncNow().then(() => undefined), mobile);
   const moreSwipe = useSwipeDismiss<HTMLElement>(() => setMore(false));
   const [quickOpen, setQuickOpen] = useState(false);
+  const myPhoto = useMyAvatar();
   const [asking, setAsking] = useState(false);
 
   // El menú "Más" solo existe en celular: si la ventana se ensancha, se cierra.
@@ -655,9 +682,7 @@ export function Shell(props: {
                     setMore(true);
                   }}
                 >
-                  <span className="avatar" aria-hidden="true">
-                    {initials(name)}
-                  </span>
+                  <Avatar initials={initials(name)} src={myPhoto} />
                   <span className="um-badge" aria-hidden="true">
                     <Menu size={11} strokeWidth={3} />
                   </span>
@@ -670,9 +695,7 @@ export function Shell(props: {
                   aria-expanded={menuOpen}
                   onClick={() => setMenuOpen((v) => !v)}
                 >
-                  <span className="avatar" aria-hidden="true">
-                    {initials(name)}
-                  </span>
+                  <Avatar initials={initials(name)} src={myPhoto} />
                   <span className="user-text">
                     <strong>{name}</strong>
                     {role && <small>{ROLE_LABEL[role]}</small>}
@@ -694,6 +717,7 @@ export function Shell(props: {
                       <strong>{name}</strong>
                       {role && <small>{ROLE_LABEL[role]}</small>}
                       <small>{org}</small>
+                      <AvatarPicker initials={initials(name)} />
                     </div>
                     <button
                       type="button"
@@ -829,9 +853,7 @@ export function Shell(props: {
               </button>
             </div>
             <div className="account">
-              <span className="avatar" aria-hidden="true">
-                {initials(name)}
-              </span>
+              <AvatarPicker initials={initials(name)} />
               <span className="user-text">
                 <strong>{name}</strong>
                 {role && <small>{ROLE_LABEL[role]}</small>}

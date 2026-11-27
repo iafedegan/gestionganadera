@@ -13,6 +13,7 @@ import {
   X,
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
+import { Avatar, useMyAvatar } from "./Avatar";
 import { useFarms } from "./animals";
 import { CardHead } from "./components";
 import { ApiError, api } from "./lib/api";
@@ -84,6 +85,7 @@ function shareText(org: string, role: InviteRole, code: string) {
 
 /** Equipo de la organización: quién tiene acceso, invitaciones pendientes y nuevas invitaciones. */
 export function TeamPanel() {
+  const myPhoto = useMyAvatar();
   const { orgId, role, session, online, notify } = useApp();
   const farms = useFarms();
   const [team, setTeam] = useState<TeamDto | null>(null);
@@ -134,9 +136,11 @@ export function TeamPanel() {
           <ul className="team-list">
             {team.members.map((m) => (
               <li key={m.membershipId}>
-                <span className="avatar sm" aria-hidden="true">
-                  {initials(m.displayName)}
-                </span>
+                <Avatar
+                  className="sm"
+                  initials={initials(m.displayName)}
+                  src={m.isMe ? myPhoto : (m.avatar ?? null)}
+                />
                 <span className="tm-text">
                   <b>
                     {m.displayName}

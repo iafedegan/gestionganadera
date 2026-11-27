@@ -52,12 +52,13 @@ export async function getTeam(db: Db, orgId: string, me: string): Promise<TeamDt
       id: string;
       user_id: string;
       display_name: string;
+      avatar: string | null;
       email: string;
       role: Role;
       farm_id: string | null;
       valid_until: Date | null;
     }>(
-      `SELECT m.id, m.user_id, u.display_name, u.email, m.role, m.farm_id, m.valid_until
+      `SELECT m.id, m.user_id, u.display_name, u.email, u.avatar, m.role, m.farm_id, m.valid_until
          FROM membership m JOIN app_user u ON u.id = m.user_id
         WHERE m.organization_id = $1 AND (m.valid_until IS NULL OR m.valid_until > now())
         ORDER BY (m.role = 'propietario') DESC, u.display_name`,
@@ -76,6 +77,7 @@ export async function getTeam(db: Db, orgId: string, me: string): Promise<TeamDt
         membershipId: m.id,
         userId: m.user_id,
         displayName: m.display_name,
+        avatar: m.avatar,
         email: m.email,
         role: m.role,
         farmId: m.farm_id,

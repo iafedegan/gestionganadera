@@ -24,6 +24,7 @@ let dummyHash: Promise<string> | undefined;
 export const sha256 = (s: string) => createHash("sha256").update(s).digest("hex");
 
 export interface AuthUser {
+  avatar?: string | null;
   id: string;
   email: string;
   displayName: string;
@@ -82,6 +83,7 @@ export function toSessionDto(user: AuthUser, memberships: Membership[]): Session
     userId: user.id,
     email: user.email,
     displayName: user.displayName,
+    ...(user.avatar ? { avatar: user.avatar } : {}),
     memberships: memberships.map(({ validUntil: _v, ...m }) => m),
     offlineLeaseUntil: new Date(Date.now() + OFFLINE_LEASE_HOURS * 3_600_000).toISOString(),
     ...(user.onboardingPending ? { onboardingPending: true } : {}),
@@ -107,11 +109,12 @@ export async function login(
       id: string;
       email: string;
       display_name: string;
+      avatar: string | null;
       password_hash: string;
       disabled_at: Date | null;
       onboarding_pending: boolean;
     }>(
-      "SELECT id, email, display_name, password_hash, disabled_at, onboarding_pending FROM app_user WHERE email = $1",
+      "SELECT id, email, display_name, password_hash, disabled_at, onboarding_pending, avatar FROM app_user WHERE email = $1",
       [email],
     ),
   );
@@ -145,6 +148,7 @@ export async function login(
       id: row.id,
       email: row.email,
       displayName: row.display_name,
+      avatar: row.avatar,
       onboardingPending: row.onboarding_pending,
     },
     memberships,
@@ -172,8 +176,8 @@ async function openSession(
 export async function openDemoSession(db: Db, userId: string, userAgent: string | undefined) {
   const { token, memberships } = await openSession(db, userId, userAgent);
   const rows = await db.admin((q) =>
-    q<{ email: string; display_name: string; onboarding_pending: boolean }>(
-      "SELECT email, display_name, onboarding_pending FROM app_user WHERE id = $1",
+    q<{ email: string; display_name: string; onboarding_pending: boolean; avatar: string | null }>(
+      "SELECT email, display_name, onboarding_pending, avatar FROM app_user WHERE id = $1",
       [userId],
     ),
   );
@@ -183,6 +187,7 @@ export async function openDemoSession(db: Db, userId: string, userAgent: string 
     email: u?.email ?? "",
     displayName: u?.display_name ?? "",
     onboardingPending: u?.onboarding_pending ?? false,
+    avatar: u?.avatar ?? null,
   };
   return { token, user, memberships };
 }
@@ -257,8 +262,9 @@ export async function resolveSession(
       email: string;
       display_name: string;
       onboarding_pending: boolean;
+      avatar: string | null;
     }>(
-      `SELECT u.id, u.email, u.display_name, u.onboarding_pending
+      `SELECT u.id, u.email, u.display_name, u.onboarding_pending, u.avatar
          FROM session s JOIN app_user u ON u.id = s.user_id
         WHERE s.token_hash = $1 AND s.revoked_at IS NULL AND s.expires_at > now() AND u.disabled_at IS NULL`,
       [sha256(token)],
@@ -271,6 +277,7 @@ export async function resolveSession(
         email: u.email,
         displayName: u.display_name,
         onboardingPending: u.onboarding_pending,
+        avatar: u.avatar,
       },
       memberships: await loadMemberships(q, u.id),
     };

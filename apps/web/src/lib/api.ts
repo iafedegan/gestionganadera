@@ -1,4 +1,6 @@
 import type {
+  AiConfigDto,
+  AiConfigInput,
   AssistantReply,
   AssistantRequest,
   AulaCourseDto,
@@ -186,9 +188,16 @@ export const api = {
     request<FarmProfileDto>("GET", `/v1/profile?organizationId=${organizationId}`),
   saveProfile: (organizationId: string, profile: FarmProfileInput) =>
     request<FarmProfileDto>("PUT", `/v1/profile?organizationId=${organizationId}`, profile),
-  assistantStatus: () =>
-    request<{ enabled: boolean; dailyLimit: number }>("GET", "/v1/assistant/status"),
+  assistantStatus: (orgId: string) =>
+    request<{ enabled: boolean; dailyLimit: number }>(
+      "GET",
+      `/v1/assistant/status?organizationId=${orgId}`,
+    ),
   // El asistente puede tardar: se le da más tiempo y se leen sus errores 5xx con mensaje.
+  aiConfig: (orgId: string) =>
+    request<AiConfigDto>("GET", `/v1/assistant/config?organizationId=${orgId}`),
+  saveAiConfig: (input: AiConfigInput) =>
+    request<AiConfigDto>("PUT", "/v1/assistant/config", input),
   ask: (input: AssistantRequest) =>
     request<AssistantReply>("POST", "/v1/assistant", input, { timeoutMs: 120_000, keep5xx: true }),
   team: (organizationId: string) =>
@@ -261,6 +270,7 @@ export const api = {
     request<{ hidden: boolean }>("POST", `/v1/comunidad/${kind}/${id}/reporte`),
   logout: () => request<{ ok: true }>("POST", "/v1/auth/logout"),
   me: () => request<SessionDto>("GET", "/v1/auth/me"),
+  saveAvatar: (image: string | null) => request<SessionDto>("PUT", "/v1/me/avatar", { image }),
   demoUsers: () => request<DemoUserDto[]>("GET", "/v1/demo/users"),
   demoLogin: (key: string) => request<SessionDto>("POST", "/v1/demo/login", { key }),
   approxLocation: () => request<{ lat: number; lng: number }>("GET", "/v1/geo/approx"),

@@ -214,10 +214,10 @@ export function AssistantDialog(props: { initial: string | null; onClose(): void
   useEffect(() => {
     ref.current?.showModal();
     api
-      .assistantStatus()
+      .assistantStatus(orgId)
       .then((s) => setEnabled(s.enabled))
       .catch(() => setEnabled(null));
-  }, []);
+  }, [orgId]);
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: desplazar al final con cada mensaje
   useEffect(() => {
@@ -368,8 +368,8 @@ export function AssistantDialog(props: { initial: string | null; onClose(): void
 
           {off && (
             <p className="banner banner-info">
-              El asistente todavía no está activado. El administrador del sistema debe configurar la
-              clave de la IA en el servidor.
+              El asistente todavía no está activado. El propietario puede ponerle su clave de Google
+              Gemini en Configuración, sección «Inteligencia artificial».
             </p>
           )}
           {!online && !off && (

@@ -2,11 +2,15 @@ import { existsSync } from "node:fs";
 import cookie from "@fastify/cookie";
 import fastifyStatic from "@fastify/static";
 import {
+  type AiConfigDto,
+  AiConfigInput,
   AssistantRequest,
   AulaQuizAnswers,
+  AvatarInput,
   CommunityPostCreate,
   CommunityReplyCreate,
   CommunityTopic,
+  DEFAULT_GEMINI_MODEL,
   DataConsentInput,
   DataRequestInput,
   DemoLoginRequest,
@@ -31,6 +35,7 @@ import {
 import { can } from "@ganaderia/domain";
 import Fastify, { type FastifyInstance, type FastifyReply, type FastifyRequest } from "fastify";
 import { z } from "zod";
+import { checkGemini, geminiAsk, open as openKey, orgAi, seal } from "./aiKey.js";
 import {
   type AskFn,
   DAILY_LIMIT,
@@ -127,6 +132,10 @@ export interface AppOptions {
   forestFetch?: typeof fetch;
   /** Llamada al modelo del asistente. Por defecto usa ANTHROPIC_API_KEY; en pruebas se inyecta. */
   ask?: AskFn | null;
+  /** Llamadas a Google Gemini (inyectable en pruebas). */
+  geminiFetch?: typeof fetch;
+  /** Las cuentas de muestra pueden guardar su clave de IA. Nunca en un servidor público. */
+  demoSecrets?: boolean;
   /**
    * Conectores del ecosistema FEDEGÁN 5.0 (noticias, cursos, tienda, conocimiento del gremio).
    * Sin conector, esas rutas responden «no disponible» y el asistente usa solo la finca.
@@ -783,6 +792,24 @@ export async function buildApp(opts: AppOptions): Promise<FastifyInstance> {
       });
     return r;
   });
+  app.put("/v1/me/avatar", { preHandler: requireSession }, async (req, reply) => {
+    const a = req.auth as NonNullable<FastifyRequest["auth"]>;
+    const b = AvatarInput.safeParse(req.body);
+    if (!b.success)
+      return reply
+        .code(400)
+        .send({ error: ErrorCodes.VALIDACION, message: "La foto no es válida o pesa demasiado." });
+    // Las cuentas de muestra son públicas: su foto no se guarda en el servidor.
+    if (a.user.email.endsWith("@demo.ganaderia.local"))
+      return reply.code(403).send({
+        error: ErrorCodes.PERMISO_DENEGADO,
+        message: "En las cuentas de muestra la foto se guarda solo en este dispositivo.",
+      });
+    await db.admin((q) =>
+      q("UPDATE app_user SET avatar = $2 WHERE id = $1", [a.user.id, b.data.image]),
+    );
+    return toSessionDto({ ...a.user, avatar: b.data.image }, a.memberships);
+  });
   app.get("/v1/me/datos", { preHandler: requireSession }, async (req, reply) => {
     const a = req.auth as NonNullable<FastifyRequest["auth"]>;
     const data = await exportData(db, a.user, a.memberships);
@@ -1111,10 +1138,96 @@ export async function buildApp(opts: AppOptions): Promise<FastifyInstance> {
     },
   );
 
-  app.get("/v1/assistant/status", { preHandler: requireSession }, async () => ({
-    enabled: ask !== null,
-    dailyLimit: DAILY_LIMIT,
-  }));
+  app.get("/v1/assistant/status", { preHandler: requireSession }, async (req) => {
+    const a = req.auth as NonNullable<FastifyRequest["auth"]>;
+    const q = orgQuery.safeParse(req.query);
+    const mine =
+      q.success && a.memberships.some((m) => m.organizationId === q.data.organizationId)
+        ? await orgAi(db, q.data.organizationId)
+        : null;
+    return { enabled: ask !== null || mine !== null, dailyLimit: DAILY_LIMIT };
+  });
+
+  const aiConfig = async (orgId: string, canEdit: boolean): Promise<AiConfigDto> => {
+    const row = await orgAi(db, orgId);
+    const readable = row !== null && openKey(row.key_cipher) !== null;
+    return {
+      configured: readable,
+      last4: readable ? (row?.key_last4 ?? null) : null,
+      model: row?.model ?? DEFAULT_GEMINI_MODEL,
+      serverAssistant: ask !== null,
+      canEdit,
+    };
+  };
+  const isOwner = (a: NonNullable<FastifyRequest["auth"]>, orgId: string) =>
+    a.memberships.some((m) => m.organizationId === orgId && m.role === "propietario");
+
+  app.get("/v1/assistant/config", { preHandler: requireSession }, async (req, reply) => {
+    const a = req.auth as NonNullable<FastifyRequest["auth"]>;
+    const q = orgQuery.safeParse(req.query);
+    if (!q.success || !isOwner(a, q.data.organizationId))
+      return reply.code(403).send({
+        error: ErrorCodes.PERMISO_DENEGADO,
+        message: "Solo el propietario configura la IA.",
+      });
+    return aiConfig(q.data.organizationId, true);
+  });
+
+  app.put("/v1/assistant/config", { preHandler: requireSession }, async (req, reply) => {
+    const a = req.auth as NonNullable<FastifyRequest["auth"]>;
+    const body = AiConfigInput.safeParse(req.body);
+    if (!body.success)
+      return reply.code(400).send({
+        error: ErrorCodes.VALIDACION,
+        message: "Revise la clave y el nombre del modelo.",
+      });
+    const { organizationId: orgId, apiKey, model } = body.data;
+    if (!isOwner(a, orgId))
+      return reply.code(403).send({
+        error: ErrorCodes.PERMISO_DENEGADO,
+        message: "Solo el propietario configura la IA.",
+      });
+    if (a.user.email.endsWith("@demo.ganaderia.local") && !(opts.demoSecrets ?? false))
+      return reply.code(403).send({
+        error: ErrorCodes.PERMISO_DENEGADO,
+        message:
+          "Las cuentas de muestra son públicas: no se les puede guardar una clave. Use su propia cuenta.",
+      });
+    if (apiKey === null) {
+      await db.admin((q) => q("DELETE FROM org_ai WHERE organization_id = $1", [orgId]));
+    } else {
+      const check = await checkGemini(apiKey, model, opts.geminiFetch);
+      if (check !== "ok")
+        return reply.code(422).send({
+          error: ErrorCodes.VALIDACION,
+          message:
+            check === "clave"
+              ? "Google no aceptó la clave. Cópiela completa desde Google AI Studio."
+              : check === "modelo"
+                ? `El modelo «${model}» no está disponible para esa clave.`
+                : "No se pudo comprobar la clave con Google. Intente de nuevo.",
+        });
+      await db.admin((q) =>
+        q(
+          `INSERT INTO org_ai (organization_id, provider, key_cipher, key_last4, model, updated_by)
+           VALUES ($1,'gemini',$2,$3,$4,$5)
+           ON CONFLICT (organization_id) DO UPDATE
+             SET key_cipher = $2, key_last4 = $3, model = $4, updated_by = $5, updated_at = now()`,
+          [orgId, seal(apiKey), apiKey.slice(-4), model, a.user.id],
+        ),
+      );
+    }
+    await db.tenant(
+      orgId,
+      (q) =>
+        appendAudit(q, orgId, {
+          userId: a.user.id,
+          action: apiKey === null ? "ia.clave.quitar" : "ia.clave.guardar",
+        }),
+      { write: true },
+    );
+    return aiConfig(orgId, true);
+  });
 
   app.post("/v1/assistant", { preHandler: requireSession }, async (req, reply) => {
     const a = req.auth as NonNullable<FastifyRequest["auth"]>;
@@ -1128,7 +1241,11 @@ export async function buildApp(opts: AppOptions): Promise<FastifyInstance> {
       return reply
         .code(403)
         .send({ error: ErrorCodes.PERMISO_DENEGADO, message: "Sin acceso a la organización." });
-    if (!ask)
+    // La clave de la ganadería tiene prioridad sobre el asistente del servidor.
+    const own = await orgAi(db, orgId);
+    const ownKey = own ? openKey(own.key_cipher) : null;
+    const model = own && ownKey ? geminiAsk(ownKey, own.model, opts.geminiFetch) : ask;
+    if (!model)
       return reply.code(503).send({
         error: ErrorCodes.ASISTENTE_NO_CONFIGURADO,
         message: "El asistente todavía no está activado en este servidor.",
@@ -1150,7 +1267,7 @@ export async function buildApp(opts: AppOptions): Promise<FastifyInstance> {
         : Promise.resolve([] as KnowledgeHit[]),
     ]);
     try {
-      const r = await ask({
+      const r = await model({
         system: SYSTEM_PROMPT,
         messages: buildMessages(body.data, context, knowledge),
       });

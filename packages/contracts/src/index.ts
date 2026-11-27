@@ -468,6 +468,7 @@ export interface TeamMemberDto {
   farmId: string | null;
   validUntil: string | null;
   isMe: boolean;
+  avatar?: string | null;
 }
 
 export interface TeamDto {
@@ -657,7 +658,47 @@ export interface SessionDto {
   offlineLeaseUntil: string;
   /** Cuenta recién creada que aún no completa el asistente inicial. */
   onboardingPending?: boolean;
+  /** Foto de perfil (data URL pequeña). */
+  avatar?: string;
 }
+
+export const DEFAULT_GEMINI_MODEL = "gemini-flash-latest";
+
+/** Clave propia de Gemini de la ganadería; apiKey null la quita. */
+export const AiConfigInput = z.object({
+  organizationId: z.string().uuid(),
+  apiKey: z
+    .string()
+    .trim()
+    .regex(/^[A-Za-z0-9_.-]{20,200}$/)
+    .nullable(),
+  model: z
+    .string()
+    .trim()
+    .regex(/^gemini-[a-z0-9.-]{1,60}$/)
+    .default(DEFAULT_GEMINI_MODEL),
+});
+export type AiConfigInput = z.input<typeof AiConfigInput>;
+
+export interface AiConfigDto {
+  configured: boolean;
+  /** Últimos 4 caracteres de la clave guardada; la clave nunca vuelve a la aplicación. */
+  last4: string | null;
+  model: string;
+  /** El servidor ya trae un asistente propio. */
+  serverAssistant: boolean;
+  canEdit: boolean;
+}
+
+/** Foto de perfil ya recortada en el dispositivo; null la quita. */
+export const AvatarInput = z.object({
+  image: z
+    .string()
+    .max(200_000)
+    .regex(/^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/]+={0,2}$/)
+    .nullable(),
+});
+export type AvatarInput = z.infer<typeof AvatarInput>;
 
 export const ProductionFocus = z.enum(["leche", "carne", "doble_proposito"]);
 export type ProductionFocus = z.infer<typeof ProductionFocus>;

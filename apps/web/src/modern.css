@@ -533,3 +533,267 @@
     transform: none;
   }
 }
+
+/* ═════ Menú de módulos con el mismo estilo de «Anotar» ═════ */
+@media (max-width: 900px) {
+  .sheet-panel .mod-grid .mod-tile {
+    --mt: var(--verde-t);
+    --mi: var(--verde-i);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 6px;
+    width: 100%;
+    height: 100%;
+    min-height: 112px;
+    padding: 14px 4px 10px;
+    border: 1px solid color-mix(in srgb, var(--mi) 18%, transparent);
+    border-radius: 18px;
+    background: #fff;
+    box-shadow: 0 1px 2px rgb(5 16 11 / 0.05);
+    transition: transform 300ms cubic-bezier(0.34, 1.56, 0.64, 1), background 150ms ease;
+  }
+  .sheet-panel .mod-grid .mod-tile:active {
+    transform: scale(0.94);
+    background: var(--mt);
+  }
+  .sheet-panel .mod-grid .mod-tile .mod-icon {
+    display: grid;
+    place-items: center;
+    width: 50px;
+    height: 50px;
+    border-radius: 16px;
+    background: var(--mt);
+    color: var(--mi);
+  }
+  .sheet-panel .mod-grid .mod-tile .mod-icon svg {
+    width: 26px;
+    height: 26px;
+    color: var(--mi);
+  }
+  .sheet-panel .mod-grid .mod-tile .mod-label {
+    color: var(--texto, #1b2a22);
+    font-weight: 700;
+    line-height: 1.2;
+  }
+  .sheet-panel .mod-grid .mod-hint {
+    color: var(--texto-suave, #5b6b63);
+    font-size: 0.74rem;
+    line-height: 1.2;
+    text-align: center;
+  }
+  .sheet-panel .mod-grid .mod-tile.active {
+    border: 2px solid var(--mi);
+    background: color-mix(in srgb, var(--mt) 70%, #fff);
+  }
+  .sheet-panel .mod-grid .mod-tile.active .mod-icon {
+    background: var(--mi);
+    color: #fff;
+  }
+  .sheet-panel .mod-grid .mod-tile.active .mod-icon svg {
+    color: #fff;
+  }
+  .sheet-panel .mod-grid .mt-azul {
+    --mt: var(--azul-t);
+    --mi: var(--azul-i);
+  }
+  .sheet-panel .mod-grid .mt-rojo {
+    --mt: #fde7e8;
+    --mi: #c62c38;
+  }
+  .sheet-panel .mod-grid .mt-ambar {
+    --mt: var(--ambar-t);
+    --mi: var(--ambar-i);
+  }
+  .sheet-panel .mod-grid .mt-violeta {
+    --mt: var(--violeta-t);
+    --mi: var(--violeta-i);
+  }
+  .sheet-panel .mod-grid .mt-gris {
+    --mt: #e9ecea;
+    --mi: #4a544f;
+  }
+}
+
+/* ═════ Foto de perfil ═════ */
+.avatar img {
+  width: 100%;
+  height: 100%;
+  border-radius: inherit;
+  object-fit: cover;
+}
+.avatar-pick {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.ap-photo {
+  position: relative;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+}
+.ap-photo .avatar {
+  width: 64px;
+  height: 64px;
+  font-size: 1.2rem;
+}
+.ap-cam {
+  position: absolute;
+  right: -2px;
+  bottom: -2px;
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  border: 2px solid #fff;
+  background: #0c4a30;
+  color: #fff;
+}
+.ap-remove {
+  order: 3;
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border: 0;
+  border-radius: 12px;
+  background: #fde7e8;
+  color: #b42531;
+  cursor: pointer;
+}
+.um-head .avatar-pick {
+  margin-top: 8px;
+}
+
+/* ═════ Configuración: listas cerradas ═════ */
+.folds {
+  display: grid;
+  gap: 10px;
+}
+.fold {
+  --ft: var(--verde-t);
+  --fi: var(--verde-i);
+  border: 1px solid var(--borde, #e3e9e4);
+  border-radius: 20px;
+  background: #fff;
+  box-shadow: 0 1px 3px rgb(16 40 28 / 0.05);
+  overflow: hidden;
+}
+.fold:not(:has(> .fold-body > *)) {
+  display: none;
+}
+.fold > summary {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-height: 76px;
+  padding: 12px 16px;
+  list-style: none;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.fold > summary::-webkit-details-marker {
+  display: none;
+}
+.fold > summary:focus-visible {
+  outline: 3px solid var(--azul, #0f6bc4);
+  outline-offset: -3px;
+}
+.fold-ic {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  border-radius: 16px;
+  background: var(--ft);
+  color: var(--fi);
+}
+.fold-text {
+  flex: 1;
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+.fold-text strong {
+  font-size: 1.05rem;
+}
+.fold-text small {
+  color: var(--texto-suave, #5b6b63);
+  font-size: 0.85rem;
+}
+.fold-go {
+  flex: none;
+  color: var(--texto-suave, #5b6b63);
+  transition: transform 220ms ease;
+}
+.fold[open] > summary {
+  border-bottom: 1px solid var(--borde, #e3e9e4);
+}
+.fold[open] .fold-go {
+  transform: rotate(180deg);
+}
+.fold[open] > .fold-body {
+  animation: dash-rise 280ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+/* El título ya está en la fila: dentro no se repite, solo quedan las acciones. */
+.folds .fold-body > .card {
+  margin: 0;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  animation: none;
+}
+.folds .fold-body > .card > .ch > .ch-icon,
+.folds .fold-body > .card > .ch > .ch-text > h2 {
+  display: none;
+}
+.fold-azul {
+  --ft: var(--azul-t);
+  --fi: var(--azul-i);
+}
+.fold-ambar {
+  --ft: var(--ambar-t);
+  --fi: var(--ambar-i);
+}
+.fold-violeta {
+  --ft: var(--violeta-t);
+  --fi: var(--violeta-i);
+}
+.fold-gris {
+  --ft: #e9ecea;
+  --fi: #4a544f;
+}
+
+/* ═════ Clave de la IA ═════ */
+.ai-form {
+  display: grid;
+  gap: 12px;
+  margin: 12px 0;
+}
+.ai-form label {
+  display: grid;
+  gap: 6px;
+  font-weight: 700;
+}
+.ai-form input {
+  min-height: 50px;
+  width: 100%;
+}
+.ai-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 44px;
+  font-weight: 700;
+}
+.ai-state {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
