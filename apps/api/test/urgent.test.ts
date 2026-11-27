@@ -138,3 +138,44 @@ describe("avisos urgentes al veterinario", () => {
     expect((await say(other, { body: "hola" })).statusCode).toBe(403);
   });
 });
+
+describe("una urgencia por animal y chat desde el aviso", () => {
+  it("dos avisos del mismo animal se juntan, el chat abre ya y llega en «mias»", async () => {
+    await db.admin((q) => q("DELETE FROM urgent_alert"));
+    const [a] = await db.admin((q) =>
+      q<{ id: string }>("SELECT id FROM animal WHERE tag = 'PR-1' AND organization_id = $1", [org]),
+    );
+    const op = await login("operario@u.local");
+    const otro = await login("otro@u.local");
+    const send = (cookie: string, message: string) =>
+      app.inject({
+        method: "POST",
+        url: "/v1/urgencias",
+        headers: { ...H, cookie },
+        payload: { organizationId: org, animalId: a?.id, reason: "cojera", message },
+      });
+    const first = (await send(op, "Cojea")).json();
+    const again = (await send(otro, "Ya no se para")).json();
+    expect(again.id).toBe(first.id);
+    expect(again.messageCount).toBe(1);
+
+    // Antes de confirmar ya se puede mandar la foto.
+    const chat = `/v1/urgencias/${first.id}/mensajes`;
+    const pre = await app.inject({
+      method: "POST",
+      url: chat,
+      headers: { ...H, cookie: op },
+      payload: { body: "Le mando foto" },
+    });
+    expect(pre.statusCode).toBe(201);
+
+    const vet = await login("vet@u.local");
+    const mias = (
+      await app.inject({ url: "/v1/urgencias/mias", headers: { ...H, cookie: vet } })
+    ).json();
+    expect(mias.organizations).toEqual([org]);
+    expect(mias.items).toMatchObject([
+      { id: first.id, organizationName: "Urgencias", messageCount: 2, ackBy: null },
+    ]);
+  });
+});

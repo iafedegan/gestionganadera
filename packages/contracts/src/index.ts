@@ -745,6 +745,10 @@ export interface UrgentMessageDto {
 }
 
 export interface UrgentAlertDto {
+  organizationId: string;
+  organizationName: string;
+  /** Mensajes del chat, incluidas fotos y videos. */
+  messageCount: number;
   /** Último mensaje del chat, para avisar que llegó algo nuevo. */
   lastMessage: { id: string; authorName: string; mine: boolean; preview: string } | null;
   /** La persona de la sesión es quien confirmó que atiende. */

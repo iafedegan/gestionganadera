@@ -75,6 +75,8 @@ interface AppState {
     input: RegisterInvitedRequest,
   ): Promise<{ ok: true } | { ok: false; message: string }>;
   acceptInvitation(code: string): Promise<{ ok: true } | { ok: false; message: string }>;
+  /** Vuelve a pedir los accesos al servidor (p. ej. si lo agregaron a otra ganadería). */
+  reloadSession(): Promise<void>;
   /** Pasa a trabajar en otra de las ganaderías de la persona. */
   switchOrg(orgId: string): void;
   logout(): Promise<void>;
@@ -350,6 +352,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
+  const reloadSession = useCallback(async () => {
+    try {
+      const s = await api.me();
+      saveSession(s);
+      setSession(s);
+    } catch {
+      /* sin red: se reintenta después */
+    }
+  }, []);
+
   const userId = stored?.userId;
   const switchOrg: AppState["switchOrg"] = useCallback(
     (id) => {
@@ -462,6 +474,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       registerInvited,
       acceptInvitation,
       switchOrg,
+      reloadSession,
       logout,
       syncNow,
       refresh,
@@ -488,6 +501,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       registerInvited,
       acceptInvitation,
       switchOrg,
+      reloadSession,
       logout,
       syncNow,
       refresh,

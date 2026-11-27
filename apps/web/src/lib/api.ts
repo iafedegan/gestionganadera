@@ -203,6 +203,8 @@ export const api = {
     request<FarmProfileDto>("PUT", `/v1/profile?organizationId=${organizationId}`, profile),
   urgent: (orgId: string) =>
     request<{ items: UrgentAlertDto[] }>("GET", `/v1/urgencias?organizationId=${orgId}`),
+  urgentMine: () =>
+    request<{ items: UrgentAlertDto[]; organizations: string[] }>("GET", "/v1/urgencias/mias"),
   urgentMessages: (id: string) =>
     request<{ items: UrgentMessageDto[] }>("GET", `/v1/urgencias/${id}/mensajes`),
   urgentSend: (id: string, input: UrgentMessageCreate) =>

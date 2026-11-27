@@ -120,6 +120,7 @@ import {
   addUrgentMessage,
   createUrgent,
   listMessages,
+  listMyUrgent,
   listUrgent,
   urgentMedia,
   urgentTeam,
@@ -1197,6 +1198,15 @@ export async function buildApp(opts: AppOptions): Promise<FastifyInstance> {
         .code(403)
         .send({ error: ErrorCodes.PERMISO_DENEGADO, message: "Sin acceso a la organización." });
     return { items: await listUrgent(db, a.user.id, a.memberships, q.data.organizationId) };
+  });
+
+  // Todas las ganaderías de la persona: así llega aunque su app no sepa aún que la agregaron.
+  app.get("/v1/urgencias/mias", { preHandler: requireSession }, async (req) => {
+    const a = req.auth as NonNullable<FastifyRequest["auth"]>;
+    return {
+      items: await listMyUrgent(db, a.user.id, a.memberships),
+      organizations: [...new Set(a.memberships.map((m) => m.organizationId))],
+    };
   });
 
   app.get("/v1/urgencias/equipo", { preHandler: requireSession }, async (req, reply) => {

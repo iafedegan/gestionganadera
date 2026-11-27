@@ -12,7 +12,16 @@ import { useApp } from "./state";
 
 const EVERY = 4_000;
 
-export function UrgentChat({ alert, onClose }: { alert: UrgentAlertDto; onClose(): void }) {
+export function UrgentChat({
+  alert,
+  onClose,
+  onAttend,
+}: {
+  alert: UrgentAlertDto;
+  onClose(): void;
+  /** El veterinario lee antes de confirmar y confirma desde aquí. */
+  onAttend?(): void;
+}) {
   const { online } = useApp();
   const ref = useRef<HTMLDialogElement>(null);
   const list = useRef<HTMLDivElement>(null);
@@ -76,7 +85,7 @@ export function UrgentChat({ alert, onClose }: { alert: UrgentAlertDto; onClose(
   }
 
   // Con quién se habla: quien reportó ve al veterinario; el veterinario, a quien reportó.
-  const other = alert.mine ? (alert.ackBy ?? "Veterinario") : alert.authorName;
+  const other = alert.mine ? (alert.ackBy ?? "Su veterinario") : alert.authorName;
   const phone = phoneNumber(
     alert.mine ? alert.recipients.find((r) => r.name === alert.ackBy)?.phone : alert.authorPhone,
   );
@@ -109,7 +118,11 @@ export function UrgentChat({ alert, onClose }: { alert: UrgentAlertDto; onClose(
       </header>
       <div className="uc-list" ref={list} aria-live="polite">
         <p className="uc-system">
-          {alert.ackBy} atiende esta urgencia. Envíen fotos o videos cortos del animal.
+          {alert.ackBy
+            ? `${alert.ackBy} atiende esta urgencia. Envíen fotos o videos cortos del animal.`
+            : alert.mine
+              ? `Aviso enviado a ${alert.recipients.map((r) => r.name).join(" y ") || "su equipo"}. Mientras confirman, mande fotos o videos del animal: ya los pueden ver.`
+              : `${alert.authorName} reportó: «${alert.message}». Aún nadie confirma.`}
         </p>
         {items.map((m) => {
           const src = `/v1/urgencias/${alert.id}/mensajes/${m.id}/archivo`;
@@ -137,6 +150,11 @@ export function UrgentChat({ alert, onClose }: { alert: UrgentAlertDto; onClose(
           </p>
         )}
       </div>
+      {onAttend && (
+        <button type="button" className="uc-attend" onClick={onAttend}>
+          Voy a atender
+        </button>
+      )}
       <form
         onSubmit={(e) => {
           e.preventDefault();

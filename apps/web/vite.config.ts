@@ -13,7 +13,7 @@ export default defineConfig({
       // «autoUpdate»: el service worker nuevo se activa de inmediato; el registro va en lib/appUpdate.
       registerType: "autoUpdate",
       injectRegister: false,
-      includeAssets: ["logo.png", "apple-touch-icon.png"],
+      includeAssets: ["logo.png", "apple-touch-icon.png", "sw-avisos.js"],
       manifest: {
         name: "GanSmart",
         short_name: "GanSmart",
@@ -40,6 +40,8 @@ export default defineConfig({
         maximumFileSizeToCacheInBytes: 6 * 1024 * 1024,
         navigateFallback: "/app/index.html",
         navigateFallbackDenylist: [/^\/v1\//],
+        // Al tocar una notificación de urgencia se vuelve a la aplicación.
+        importScripts: ["sw-avisos.js"],
       },
     }),
   ],

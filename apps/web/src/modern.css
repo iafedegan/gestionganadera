@@ -2163,3 +2163,57 @@ dialog.uchat[open] {
     max-height: 100dvh;
   }
 }
+
+/* ───── Urgencias: avisos del sistema y chat desde el aviso ───── */
+.notify-ask {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  border: 1px solid #f3d27a;
+  border-radius: 18px;
+  background: #fff8e1;
+  color: #5b4300;
+}
+.notify-ask > span {
+  display: grid;
+  flex: 1;
+  gap: 2px;
+}
+.notify-ask small {
+  color: #7a5d10;
+}
+.urg-org {
+  display: inline-block;
+  margin-top: 4px;
+  padding: 2px 10px;
+  border-radius: 999px;
+  background: rgb(255 255 255 / 0.22);
+  font-size: 0.78rem;
+  font-style: normal;
+  font-weight: 700;
+}
+.urg-btn > span {
+  display: grid;
+  gap: 2px;
+  text-align: left;
+}
+.urg-btn > span small {
+  font-weight: 500;
+  opacity: 0.85;
+}
+.urg-chat {
+  justify-content: flex-start;
+}
+.uc-attend {
+  margin: 0 12px 8px;
+  min-height: 52px;
+  border: 0;
+  border-radius: 16px;
+  background: linear-gradient(135deg, #d93645, #a3172a);
+  color: #fff;
+  font: inherit;
+  font-weight: 800;
+  box-shadow: 0 10px 24px -12px rgb(163 23 42 / 0.7);
+  cursor: pointer;
+}

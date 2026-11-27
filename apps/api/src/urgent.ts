@@ -142,6 +142,14 @@ async function lastMessage(q: Q, alertId: string, userId: string) {
   };
 }
 
+async function messageCount(q: Q, alertId: string): Promise<number> {
+  const [n] = await q<{ n: string }>(
+    "SELECT count(*) AS n FROM urgent_message WHERE alert_id = $1",
+    [alertId],
+  );
+  return Number(n?.n ?? 0);
+}
+
 async function toDto(
   q: Q,
   r: Row,
@@ -151,6 +159,9 @@ async function toDto(
 ): Promise<UrgentAlertDto> {
   return {
     id: r.id,
+    organizationId: orgId,
+    organizationName: memberships.find((m) => m.organizationId === orgId)?.organizationName ?? "",
+    messageCount: await messageCount(q, r.id),
     lastMessage: await lastMessage(q, r.id, userId),
     animal: r.animal_id ? await animalRecord(q, r.animal_id) : null,
     farmName: r.farm_name,
@@ -200,28 +211,51 @@ export async function createUrgent(
       ]);
       if (!f) return { error: "NO_EXISTE" as const };
     }
-    // Repetir la misma urgencia en pocos minutos no crea otro aviso.
-    let [row] = await q<{ id: string }>(
-      `SELECT id FROM urgent_alert WHERE organization_id = $1 AND created_by = $2 AND reason = $3
-         AND animal_id IS NOT DISTINCT FROM $4::uuid
-         AND ack_at IS NULL AND created_at > now() - interval '10 minutes'`,
-      [orgId, userId, input.reason, animalId],
+    // Un animal tiene una sola urgencia abierta: si alguien vuelve a avisar, se suma a esa
+    // (y lo que escribió queda en el chat). Sin animal, se agrupa lo de la misma persona.
+    let [row] = await q<{ id: string; message: string }>(
+      animalId
+        ? `SELECT id, message FROM urgent_alert WHERE organization_id = $1 AND animal_id = $2
+             AND ack_at IS NULL AND created_at > now() - interval '6 hours'
+           ORDER BY created_at DESC LIMIT 1`
+        : `SELECT id, message FROM urgent_alert WHERE organization_id = $1 AND animal_id IS NULL
+             AND created_by = $2 AND farm_id IS NOT DISTINCT FROM $3::uuid
+             AND ack_at IS NULL AND created_at > now() - interval '30 minutes'
+           ORDER BY created_at DESC LIMIT 1`,
+      animalId ? [orgId, animalId] : [orgId, userId, farmId],
     );
+    if (row && input.message.trim() && input.message.trim() !== row.message.trim())
+      await q("INSERT INTO urgent_message (alert_id, author_id, body) VALUES ($1,$2,$3)", [
+        row.id,
+        userId,
+        input.message.trim().slice(0, 2000),
+      ]);
     if (!row) {
       const [n] = await q<{ n: string }>(
         "SELECT count(*) AS n FROM urgent_alert WHERE organization_id = $1 AND created_at > now() - interval '1 day'",
         [orgId],
       );
       if (Number(n?.n ?? 0) >= PER_DAY) return { error: "LIMITE" as const };
-      [row] = await q<{ id: string }>(
+      [row] = await q<{ id: string; message: string }>(
         `INSERT INTO urgent_alert (organization_id, farm_id, created_by, reason, message, animal_id)
-         VALUES ($1,$2,$3,$4,$5,$6) RETURNING id`,
+         VALUES ($1,$2,$3,$4,$5,$6) RETURNING id, message`,
         [orgId, farmId, userId, input.reason, input.message, animalId],
       );
     }
     const [full] = await q<Row>(`${SQL} WHERE a.id = $1`, [row?.id]);
     return toDto(q, full as Row, orgId, userId, memberships);
   });
+}
+
+/** Los avisos de todas las ganaderías de la persona, según sus accesos de hoy en el servidor. */
+export async function listMyUrgent(
+  db: Db,
+  userId: string,
+  memberships: Membership[],
+): Promise<UrgentAlertDto[]> {
+  const orgs = [...new Set(memberships.map((m) => m.organizationId))];
+  const all = await Promise.all(orgs.map((o) => listUrgent(db, userId, memberships, o)));
+  return all.flat().sort((a, b) => b.createdAt.localeCompare(a.createdAt));
 }
 
 /** Avisos de las últimas 48 horas que la persona puede ver: los suyos o los que puede atender. */
@@ -268,8 +302,12 @@ export async function ackUrgent(
       (r.farm_id && scope !== "ALL" && !scope.includes(r.farm_id))
     )
       return { error: "SIN_ACCESO" as const };
+    // También se confirman los avisos repetidos del mismo animal.
     await q(
-      "UPDATE urgent_alert SET ack_by = $2, ack_at = now() WHERE id = $1 AND ack_at IS NULL",
+      `UPDATE urgent_alert SET ack_by = $2, ack_at = now()
+        WHERE ack_at IS NULL AND (id = $1 OR (animal_id IS NOT NULL AND (organization_id, animal_id) =
+          (SELECT organization_id, animal_id FROM urgent_alert WHERE id = $1)
+          AND created_at > now() - interval '6 hours'))`,
       [id, userId],
     );
     return { ok: true as const };
@@ -349,9 +387,8 @@ export async function addUrgentMessage(
 ): Promise<{ ok: true } | ChatFail> {
   return db.admin(async (q) => {
     const access = await chatAccess(q, alertId, userId, memberships);
+    // El chat existe desde el aviso: quien reporta puede mandar fotos mientras confirman.
     if ("error" in access) return access;
-    // El chat se abre cuando alguien confirma que atiende.
-    if (!access.confirmed) return { error: "SIN_CONFIRMAR" as const };
     const [n] = await q<{ total: string; media: string }>(
       "SELECT count(*) AS total, count(media_type) AS media FROM urgent_message WHERE alert_id = $1",
       [alertId],
