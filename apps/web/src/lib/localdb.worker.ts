@@ -330,7 +330,10 @@ async function openDb(userId: string): Promise<void> {
   if (!poolPromise) {
     poolPromise = sqlite3InitModule()
       .then((sqlite3) =>
-        sqlite3.installOpfsSAHPoolVfs({ name: "ganaderia-pool", clearOnInit: false }),
+        sqlite3.installOpfsSAHPoolVfs({
+          name: "ganaderia-pool",
+          clearOnInit: false,
+        }),
       )
       .catch((err) => {
         poolPromise = null;

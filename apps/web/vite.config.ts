@@ -10,7 +10,9 @@ export default defineConfig({
   plugins: [
     react(),
     VitePWA({
-      registerType: "prompt",
+      // «autoUpdate»: el service worker nuevo se activa de inmediato; el registro va en lib/appUpdate.
+      registerType: "autoUpdate",
+      injectRegister: false,
       includeAssets: ["logo.png", "apple-touch-icon.png"],
       manifest: {
         name: "GanSmart",
@@ -30,6 +32,9 @@ export default defineConfig({
         ],
       },
       workbox: {
+        // Sin esto la versión nueva se queda esperando a que se cierren todas las pestañas.
+        skipWaiting: true,
+        clientsClaim: true,
         // Todo el shell, las fuentes y el motor SQLite quedan disponibles sin red.
         globPatterns: ["**/*.{js,css,html,svg,png,wasm,woff,woff2}"],
         maximumFileSizeToCacheInBytes: 6 * 1024 * 1024,

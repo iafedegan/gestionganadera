@@ -128,6 +128,7 @@ describe("avisos urgentes al veterinario", () => {
       { body: "Mire la foto", mine: true },
       { mediaType: "image/jpeg", mine: false },
     ]);
+    expect(await list(op)).toMatchObject([{ lastMessage: { mine: false, preview: "Foto" } }]);
     const file = `${chat}/${msgs[1].id}/archivo`;
     const got = await app.inject({ url: file, headers: { cookie: op, range: "bytes=0-3" } });
     expect(got.statusCode).toBe(206);

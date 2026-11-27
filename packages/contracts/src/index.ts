@@ -731,6 +731,8 @@ export interface UrgentMessageDto {
 }
 
 export interface UrgentAlertDto {
+  /** Último mensaje del chat, para avisar que llegó algo nuevo. */
+  lastMessage: { id: string; authorName: string; mine: boolean; preview: string } | null;
   /** La persona de la sesión es quien confirmó que atiende. */
   attending: boolean;
   animal: UrgentAnimalRecord | null;

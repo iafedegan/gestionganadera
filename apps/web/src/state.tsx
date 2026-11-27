@@ -16,6 +16,7 @@ import {
   useState,
 } from "react";
 import { ApiError, NetworkError, api } from "./lib/api";
+import { errorText } from "./lib/errorText";
 import { localdb } from "./lib/localdb";
 import { isDemoOrg, setDataScope } from "./lib/scope";
 import {
@@ -211,7 +212,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         if (!(err instanceof NetworkError)) {
           return {
             ok: false as const,
-            message: err instanceof Error ? err.message : "Error inesperado.",
+            message: errorText(err),
           };
         }
       }
@@ -242,10 +243,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         if (msg === "CLAVE_INCORRECTA")
           return { ok: false as const, message: "Contraseña incorrecta." };
         if (msg.startsWith("ALMACENAMIENTO"))
-          return {
-            ok: false as const,
-            message: "La aplicación ya está abierta en otra pestaña o ventana.",
-          };
+          return { ok: false as const, message: errorText(err) };
         return { ok: false as const, message: "No se pudo abrir la copia local." };
       }
       setSession(stored);
@@ -275,7 +273,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
           };
         return {
           ok: false as const,
-          message: err instanceof Error ? err.message : "Error inesperado.",
+          message: errorText(err),
         };
       }
     },
@@ -296,7 +294,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
           return { ok: false as const, message: "Necesita conexión a internet." };
         return {
           ok: false as const,
-          message: err instanceof Error ? err.message : "Error inesperado.",
+          message: errorText(err),
         };
       }
     },

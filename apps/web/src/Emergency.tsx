@@ -59,7 +59,7 @@ export interface Herd {
   events: LocalAnimalEvent[];
 }
 
-const EVERY = 15_000;
+const EVERY = 8_000;
 const picture = (species: string) => art(species === "bufalino" ? "ficha-buffalo" : "ficha-cow");
 const initials = (name: string) =>
   name
@@ -388,6 +388,22 @@ export function EmergencyCard(props: Herd & { alert: EmergencyState; onRetry(): 
   );
 }
 
+const seenKey = (id: string) => `gg.vet.visto.${id}`;
+function wasSeen(id: string): boolean {
+  try {
+    return localStorage.getItem(seenKey(id)) !== null;
+  } catch {
+    return true;
+  }
+}
+function markSeen(id: string): void {
+  try {
+    localStorage.setItem(seenKey(id), "1");
+  } catch {
+    /* sin almacenamiento */
+  }
+}
+
 /** Para quien atiende (veterinario, asesor o dueño). También despacha los avisos en cola. */
 export function UrgentBanner() {
   const { orgId, online, notify } = useApp();
@@ -399,6 +415,19 @@ export function UrgentBanner() {
   const chats = items.filter((a) => a.ackBy && (a.mine || a.attending));
   const [chatId, setChatId] = useState<string | null>(null);
   const chat = chats.find((a) => a.id === chatId);
+
+  // Un mensaje nuevo se anuncia y abre su chat, salvo que haya otra ventana abierta.
+  useEffect(() => {
+    for (const a of chats) {
+      const m = a.lastMessage;
+      if (!m || m.mine || wasSeen(m.id)) continue;
+      haptic(300);
+      notify(`${m.authorName}: ${m.preview}`, "warn");
+      markSeen(m.id);
+      if (!document.querySelector("dialog[open]")) setChatId(a.id);
+      break;
+    }
+  }, [chats, notify]);
 
   useEffect(() => {
     if (!orgId || !online) return;
@@ -444,6 +473,21 @@ export function UrgentBanner() {
   if (open.length === 0 && chats.length === 0) return null;
   return (
     <div className="urgent-list">
+      {/* Las conversaciones en curso van primero: allí llegan los mensajes. */}
+      {chats.map((a) => (
+        <button key={a.id} type="button" className="uc-bar" onClick={() => setChatId(a.id)}>
+          <MessagesSquare size={20} aria-hidden="true" />
+          <span>
+            <strong>Chat con {a.mine ? a.ackBy : a.authorName}</strong>
+            <small>
+              {a.lastMessage
+                ? `${a.lastMessage.mine ? "Usted" : "Respondió"}: ${a.lastMessage.preview}`
+                : `${a.reason}${a.animal ? ` · ${a.animal.tag}` : ""}`}
+            </small>
+          </span>
+          <ChevronRight size={20} aria-hidden="true" />
+        </button>
+      ))}
       {open.map((a) => {
         const phone = phoneNumber(a.authorPhone);
         const last = a.animal?.events.find((e) => e.type === "salud");
@@ -504,19 +548,6 @@ export function UrgentBanner() {
           </section>
         );
       })}
-      {chats.map((a) => (
-        <button key={a.id} type="button" className="uc-bar" onClick={() => setChatId(a.id)}>
-          <MessagesSquare size={20} aria-hidden="true" />
-          <span>
-            <strong>Chat con {a.mine ? a.ackBy : a.authorName}</strong>
-            <small>
-              {a.reason}
-              {a.animal ? ` · ${a.animal.tag}` : ""}
-            </small>
-          </span>
-          <ChevronRight size={20} aria-hidden="true" />
-        </button>
-      ))}
       {chat && <UrgentChat alert={chat} onClose={() => setChatId(null)} />}
       {shown?.animal && (
         <UrgentRecordSheet

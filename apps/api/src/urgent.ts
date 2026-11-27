@@ -120,6 +120,28 @@ const SQL = `SELECT a.id, a.farm_id, f.name AS farm_name, a.created_by, u.displa
 const canAck = (m: Membership[], orgId: string) =>
   m.some((x) => x.organizationId === orgId && ACK.includes(x.role));
 
+async function lastMessage(q: Q, alertId: string, userId: string) {
+  const [m] = await q<{
+    id: string;
+    author_id: string;
+    author_name: string;
+    body: string | null;
+    media_type: string | null;
+  }>(
+    `SELECT m.id, m.author_id, u.display_name AS author_name, m.body, m.media_type
+       FROM urgent_message m JOIN app_user u ON u.id = m.author_id
+      WHERE m.alert_id = $1 ORDER BY m.created_at DESC LIMIT 1`,
+    [alertId],
+  );
+  if (!m) return null;
+  return {
+    id: m.id,
+    authorName: m.author_name,
+    mine: m.author_id === userId,
+    preview: m.body?.slice(0, 80) ?? (m.media_type?.startsWith("video/") ? "Video" : "Foto"),
+  };
+}
+
 async function toDto(
   q: Q,
   r: Row,
@@ -129,6 +151,7 @@ async function toDto(
 ): Promise<UrgentAlertDto> {
   return {
     id: r.id,
+    lastMessage: await lastMessage(q, r.id, userId),
     animal: r.animal_id ? await animalRecord(q, r.animal_id) : null,
     farmName: r.farm_name,
     authorName: r.author_name,
