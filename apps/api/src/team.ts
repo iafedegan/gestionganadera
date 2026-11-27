@@ -6,6 +6,8 @@ import type {
   InviteRole,
   Role,
   TeamDto,
+  VetAdd,
+  VetOption,
 } from "@ganaderia/contracts";
 import { appendAudit } from "./audit.js";
 import type { AuthUser } from "./auth.js";
@@ -87,6 +89,68 @@ export async function getTeam(db: Db, orgId: string, me: string): Promise<TeamDt
       invitations: invitations.filter((i) => !i.accepted_at).map(invitationDto),
     };
   });
+}
+
+// Las cuentas de muestra son públicas: solo ven (y son vistas por) otras cuentas de muestra.
+const VETS = `SELECT u.id, u.display_name FROM app_user u
+   WHERE (u.email LIKE '%@demo.ganaderia.local') = $1
+     AND EXISTS (SELECT 1 FROM membership m WHERE m.user_id = u.id AND m.role = 'veterinario')`;
+const isDemo = (user: AuthUser) => user.email.endsWith("@demo.ganaderia.local");
+
+/** Veterinarios registrados en la plataforma, marcando los que ya están en este equipo. */
+export async function listVets(db: Db, user: AuthUser, orgId: string): Promise<VetOption[]> {
+  return db.admin(async (q) => {
+    const rows = await q<{ id: string; display_name: string; in_team: boolean }>(
+      `SELECT v.id, v.display_name, EXISTS (
+          SELECT 1 FROM membership t WHERE t.user_id = v.id AND t.organization_id = $2
+             AND (t.valid_until IS NULL OR t.valid_until > now())) AS in_team
+         FROM (${VETS}) v WHERE v.id <> $3 ORDER BY v.display_name LIMIT 200`,
+      [isDemo(user), orgId, user.id],
+    );
+    return rows.map((r) => ({ userId: r.id, displayName: r.display_name, inTeam: r.in_team }));
+  });
+}
+
+/** Da acceso de veterinario a una persona registrada. No cambia el papel de quien ya está. */
+export async function addVet(db: Db, user: AuthUser, input: VetAdd): Promise<boolean> {
+  const { organizationId: orgId, userId } = input;
+  const added = await db.admin(async (q) => {
+    const [vet] = await q(`SELECT 1 FROM (${VETS}) v WHERE v.id = $2`, [isDemo(user), userId]);
+    if (!vet || userId === user.id) return false;
+    const mine = await q<{ id: string; active: boolean }>(
+      `SELECT id, (valid_until IS NULL OR valid_until > now()) AS active
+         FROM membership WHERE user_id = $1 AND organization_id = $2`,
+      [userId, orgId],
+    );
+    if (mine.some((m) => m.active)) return false;
+    const until = input.accessDays ? new Date(Date.now() + input.accessDays * 864e5) : null;
+    const old = mine[0];
+    if (old)
+      await q(
+        "UPDATE membership SET role = 'veterinario', farm_id = NULL, valid_until = $2 WHERE id = $1",
+        [old.id, until],
+      );
+    else
+      await q(
+        "INSERT INTO membership (user_id, organization_id, role, valid_until) VALUES ($1,$2,'veterinario',$3)",
+        [userId, orgId, until],
+      );
+    return true;
+  });
+  if (added)
+    await db.tenant(
+      orgId,
+      (q) =>
+        appendAudit(q, orgId, {
+          userId: user.id,
+          action: "team.add_vet",
+          entity: "user",
+          entityId: userId,
+          detail: { accessDays: input.accessDays ?? null },
+        }),
+      { write: true },
+    );
+  return added;
 }
 
 export type CreateInvitationResult =

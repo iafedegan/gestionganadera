@@ -33,6 +33,7 @@ import {
   TechMessageCreate,
   UrgentAlertCreate,
   UrgentMessageCreate,
+  VetAdd,
 } from "@ganaderia/contracts";
 import { can } from "@ganaderia/domain";
 import Fastify, { type FastifyInstance, type FastifyReply, type FastifyRequest } from "fastify";
@@ -105,8 +106,10 @@ import {
 import { createFarm, listFarms, pull, push, updateFarm } from "./sync.js";
 import {
   acceptInvitation,
+  addVet,
   createInvitation,
   getTeam,
+  listVets,
   previewInvitation,
   removeMember,
   revokeInvitation,
@@ -442,6 +445,29 @@ export async function buildApp(opts: AppOptions): Promise<FastifyInstance> {
     const a = teamGuard(req, reply, q.data.organizationId);
     if (!a) return reply;
     return getTeam(db, q.data.organizationId, a.user.id);
+  });
+
+  app.get("/v1/team/veterinarios", { preHandler: requireSession }, async (req, reply) => {
+    const q = orgQuery.safeParse(req.query);
+    if (!q.success)
+      return reply.code(400).send({ error: "VALIDACION", message: "Organización requerida." });
+    const a = teamGuard(req, reply, q.data.organizationId);
+    if (!a) return reply;
+    return { items: await listVets(db, a.user, q.data.organizationId) };
+  });
+
+  app.post("/v1/team/veterinarios", { preHandler: requireSession }, async (req, reply) => {
+    const body = VetAdd.safeParse(req.body);
+    if (!body.success)
+      return reply.code(400).send({ error: "VALIDACION", message: "Datos inválidos." });
+    const a = teamGuard(req, reply, body.data.organizationId);
+    if (!a) return reply;
+    if (!(await addVet(db, a.user, body.data)))
+      return reply.code(400).send({
+        error: "NO_PERMITIDO",
+        message: "Esa persona ya está en su equipo o no es veterinaria.",
+      });
+    return reply.code(201).send({ ok: true });
   });
 
   app.post("/v1/team/invitations", { preHandler: requireSession }, async (req, reply) => {

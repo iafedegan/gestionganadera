@@ -183,6 +183,41 @@ describe("cuentas de muestra", () => {
     expect(orgs.size).toBe(1);
   });
 
+  it("el dueño ve los veterinarios registrados y agrega uno a su equipo", async () => {
+    await enter(on, "rol_veterinario");
+    const owner = await enter(on, "grande");
+    const organizationId = owner.json().memberships[0].organizationId;
+    const cookie = cookieOf(owner);
+    const list = async () =>
+      (
+        await on.inject({
+          url: `/v1/team/veterinarios?organizationId=${organizationId}`,
+          headers: { ...H, cookie },
+        })
+      ).json().items as { userId: string; displayName: string; inTeam: boolean }[];
+    const valeria = (await list()).find((v) => v.displayName.startsWith("Valeria"));
+    expect(valeria?.inTeam).toBe(false);
+    expect(JSON.stringify(await list())).not.toContain("@");
+    const add = () =>
+      on.inject({
+        method: "POST",
+        url: "/v1/team/veterinarios",
+        headers: { ...H, cookie },
+        payload: { organizationId, userId: valeria?.userId },
+      });
+    expect((await add()).statusCode).toBe(201);
+    expect((await add()).statusCode).toBe(400);
+    expect((await list()).find((v) => v.userId === valeria?.userId)?.inTeam).toBe(true);
+    expect((await enter(on, "rol_veterinario")).json().memberships).toHaveLength(2);
+    // Un operario no puede consultar la lista.
+    const other = await enter(on, "rol_operario");
+    const denied = await on.inject({
+      url: `/v1/team/veterinarios?organizationId=${other.json().memberships[0].organizationId}`,
+      headers: { ...H, cookie: cookieOf(other) },
+    });
+    expect(denied.statusCode).toBe(403);
+  });
+
   it("nadie puede iniciar sesión con contraseña en una cuenta de muestra", async () => {
     await enter(on, "pequeno");
     for (const password of ["demo", "demo-pequeno", "123456", "Password1"]) {

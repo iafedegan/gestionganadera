@@ -447,6 +447,20 @@ export const InvitationCreate = z.object({
 });
 export type InvitationCreate = z.infer<typeof InvitationCreate>;
 
+/** Veterinario ya registrado, para escogerlo al armar el equipo. Solo el nombre: sin correo. */
+export interface VetOption {
+  userId: string;
+  displayName: string;
+  inTeam: boolean;
+}
+
+export const VetAdd = z.object({
+  organizationId: z.string().uuid(),
+  userId: z.string().uuid(),
+  accessDays: z.number().int().min(1).max(730).optional(),
+});
+export type VetAdd = z.infer<typeof VetAdd>;
+
 export interface InvitationDto {
   id: string;
   role: InviteRole;

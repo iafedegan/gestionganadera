@@ -1,4 +1,4 @@
-import type { InvitationDto, InviteRole, Role, TeamDto } from "@ganaderia/contracts";
+import type { InvitationDto, InviteRole, Role, TeamDto, VetOption } from "@ganaderia/contracts";
 import { can } from "@ganaderia/domain";
 import {
   Check,
@@ -235,7 +235,7 @@ function InviteDialog(props: {
   farms: { id: string; name: string }[];
   onClose(): void;
 }) {
-  const { orgId } = useApp();
+  const { orgId, notify } = useApp();
   const ref = useRef<HTMLDialogElement>(null);
   const [who, setWho] = useState<InviteRole | null>(null);
   const [label, setLabel] = useState("");
@@ -321,8 +321,20 @@ function InviteDialog(props: {
                   })}
                 </div>
               </section>
+              {who === "veterinario" && (
+                <VetPicker
+                  days={days}
+                  onAdded={(name) => {
+                    notify(`${name} ya hace parte de su equipo.`, "ok");
+                    ref.current?.close();
+                  }}
+                />
+              )}
               {who && (
                 <section className="fsec">
+                  {who === "veterinario" && (
+                    <h3 className="fsec-t">¿No aparece? Invite con un código</h3>
+                  )}
                   <div className="kf-grid">
                     <label htmlFor="inv-label">
                       Nombre de la persona
@@ -445,5 +457,99 @@ function InviteDialog(props: {
         </div>
       </div>
     </dialog>
+  );
+}
+
+/** Veterinarios registrados: se busca por nombre y se agrega de una vez, sin código. */
+function VetPicker(props: { days: number; onAdded(name: string): void }) {
+  const { orgId } = useApp();
+  const [vets, setVets] = useState<VetOption[] | null>(null);
+  const [search, setSearch] = useState("");
+  const [busy, setBusy] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const box = useRef<HTMLElement>(null);
+
+  useEffect(() => {
+    api.vets(orgId).then(
+      (r) => setVets(r.items),
+      () => setError("Necesita conexión para ver los veterinarios."),
+    );
+  }, [orgId]);
+
+  // En el celular la lista queda debajo de las opciones: se lleva a la vista al llegar.
+  useEffect(() => {
+    if (vets) box.current?.scrollIntoView({ block: "start" });
+  }, [vets]);
+
+  const plain = (t: string) =>
+    t
+      .normalize("NFD")
+      .replace(/\p{Diacritic}/gu, "")
+      .toLowerCase();
+  const shown = vets?.filter((v) => plain(v.displayName).includes(plain(search.trim())));
+
+  async function add(v: VetOption) {
+    if (!window.confirm(`¿Dar acceso a ${v.displayName}? Verá la información de sus fincas.`))
+      return;
+    setBusy(v.userId);
+    setError(null);
+    try {
+      await api.addVet({
+        organizationId: orgId,
+        userId: v.userId,
+        ...(props.days > 0 ? { accessDays: props.days } : {}),
+      });
+      props.onAdded(v.displayName);
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : "Necesita conexión para agregar.");
+      setBusy("");
+    }
+  }
+
+  return (
+    <section className="fsec vet-pick" ref={box}>
+      <h3 className="fsec-t">Veterinarios registrados</h3>
+      <p className="hint">
+        Al agregarlo tendrá acceso{" "}
+        {DAYS.find((d) => d.v === props.days)?.l === "Sin vencimiento"
+          ? "sin vencimiento"
+          : `por ${DAYS.find((d) => d.v === props.days)?.l}`}
+        . El tiempo se cambia más abajo.
+      </p>
+      {(vets?.length ?? 0) > 5 && (
+        <label>
+          Buscar por nombre
+          <input value={search} onChange={(e) => setSearch(e.target.value)} autoComplete="off" />
+        </label>
+      )}
+      {!vets && !error && <p className="hint">Buscando…</p>}
+      {shown?.length === 0 && <p className="hint">No hay veterinarios con ese nombre.</p>}
+      <ul className="team-list">
+        {shown?.map((v) => (
+          <li key={v.userId}>
+            <Avatar className="sm" initials={initials(v.displayName)} src={null} />
+            <span className="tm-text">
+              <b>{v.displayName}</b>
+              <small>{v.inTeam ? "Ya está en su equipo" : "Veterinario"}</small>
+            </span>
+            {!v.inTeam && (
+              <button
+                type="button"
+                className="btn btn-primary btn-sm"
+                disabled={busy !== ""}
+                onClick={() => void add(v)}
+              >
+                Agregar
+              </button>
+            )}
+          </li>
+        ))}
+      </ul>
+      {error && (
+        <p role="alert" className="login-alert">
+          {error}
+        </p>
+      )}
+    </section>
   );
 }

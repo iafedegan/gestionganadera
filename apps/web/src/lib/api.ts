@@ -56,6 +56,8 @@ import type {
   UrgentMessageCreate,
   UrgentMessageDto,
   UrgentRecipient,
+  VetAdd,
+  VetOption,
 } from "@ganaderia/contracts";
 
 /** Sin respuesta del servidor: no hay red o el servidor no está disponible. */
@@ -187,6 +189,12 @@ export const api = {
     request<SessionDto>("POST", "/v1/auth/register-invited", input),
   previewInvitation: (code: string) =>
     request<InvitationPreview>("GET", `/v1/invitations/${encodeURIComponent(code)}`),
+  vets: (organizationId: string) =>
+    request<{ items: VetOption[] }>(
+      "GET",
+      `/v1/team/veterinarios?organizationId=${organizationId}`,
+    ),
+  addVet: (input: VetAdd) => request<{ ok: true }>("POST", "/v1/team/veterinarios", input),
   acceptInvitation: (code: string) =>
     request<SessionDto>("POST", "/v1/invitations/accept", { code }),
   profile: (organizationId: string) =>
