@@ -15,6 +15,16 @@ const format = () =>
     ? null
     : pickVoiceFormat((m) => MediaRecorder.isTypeSupported(m));
 
+/** Qué hacer según por qué no abrió el micrófono. */
+export function micError(name: string): string {
+  if (name === "NotAllowedError" || name === "SecurityError")
+    return "El micrófono está bloqueado. Toque el ícono junto a la dirección, permita el micrófono y recargue. En Mac revise también Ajustes del Sistema › Privacidad y seguridad › Micrófono.";
+  if (name === "NotFoundError") return "No se encontró ningún micrófono en este equipo.";
+  if (name === "NotReadableError")
+    return "Otra aplicación está usando el micrófono. Ciérrela e intente de nuevo.";
+  return "No se pudo abrir el micrófono. Intente de nuevo.";
+}
+
 export function useVoiceNote(opts: { onRecorded(blob: Blob): void; onError(msg: string): void }) {
   const [startedAt, setStartedAt] = useState<number | null>(null);
   const [seconds, setSeconds] = useState(0);
@@ -41,8 +51,8 @@ export function useVoiceNote(opts: { onRecorded(blob: Blob): void; onError(msg: 
       stream = await navigator.mediaDevices.getUserMedia({
         audio: { echoCancellation: true, noiseSuppression: true },
       });
-    } catch {
-      cb.current.onError("Permita el micrófono para grabar notas de voz.");
+    } catch (e) {
+      cb.current.onError(micError((e as Error).name));
       return;
     }
     const r = new MediaRecorder(stream, { mimeType: mime, audioBitsPerSecond: 32_000 });

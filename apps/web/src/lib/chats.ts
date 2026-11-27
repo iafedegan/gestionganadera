@@ -8,6 +8,13 @@ export interface ChatRow extends Thread {
   unread: number;
 }
 
+/**
+ * La persona se quitó de la lista (se borró su chat) y no ha pasado nada después: no se muestra,
+ * salvo al buscarla. Vuelve sola cuando escribe o llega una urgencia suya.
+ */
+export const removedRow = (r: ChatRow): boolean =>
+  r.contact?.clearedAt != null && r.at === "" && r.pending.length === 0;
+
 export function buildChats(
   contacts: ChatContact[],
   threads: Thread[],

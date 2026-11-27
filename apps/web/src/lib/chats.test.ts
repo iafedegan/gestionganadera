@@ -1,6 +1,6 @@
 import type { ChatContact, UrgentAlertDto } from "@ganaderia/contracts";
 import { describe, expect, it } from "vitest";
-import { buildChats } from "./chats";
+import { buildChats, removedRow } from "./chats";
 import { type Thread, buildThreads } from "./threads";
 
 const contact = (userId: string, at: string | null, unread = 0): ChatContact => ({
@@ -62,5 +62,19 @@ describe("lista de chats", () => {
     const attended = buildThreads([alert("vieja", "2026-01-01", "Yo")]);
     const [empty] = buildChats([cleared], attended, () => 0);
     expect(empty).toMatchObject({ alerts: [], preview: "", at: "" });
+  });
+
+  it("quien se quitó de la lista no aparece hasta que vuelve a escribir", () => {
+    const quitada = { ...contact("ana", null), clearedAt: "2026-01-02" };
+    const [row] = buildChats([quitada], [], () => 0);
+    expect(row && removedRow(row)).toBe(true);
+    const escribio = {
+      ...contact("ana", "2026-01-03"),
+      clearedAt: "2026-01-02",
+    };
+    const [back] = buildChats([escribio], [], () => 0);
+    expect(back && removedRow(back)).toBe(false);
+    const [nunca] = buildChats([contact("beto", null)], [], () => 0);
+    expect(nunca && removedRow(nunca)).toBe(false);
   });
 });

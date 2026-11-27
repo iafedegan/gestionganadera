@@ -1,5 +1,5 @@
 import type { ChatContact, Role } from "@ganaderia/contracts";
-import { Search, X } from "lucide-react";
+import { Search, Trash2, X } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { ask } from "./Ask";
@@ -9,7 +9,7 @@ import { markThreadRead, unreadAlerts, useUrgentCenter } from "./Emergency";
 import { SwipeRow } from "./SwipeRow";
 import { UrgentChat } from "./UrgentChat";
 import { api } from "./lib/api";
-import { type ChatRow, buildChats } from "./lib/chats";
+import { type ChatRow, buildChats, removedRow } from "./lib/chats";
 import { chime, systemNotify, titleBadge } from "./lib/notify";
 import { haptic } from "./native";
 import { useApp } from "./state";
@@ -54,9 +54,11 @@ function when(iso: string): string {
 const about = (r: ChatRow) =>
   r.contact ? `${ROLE[r.contact.role]} · ${r.contact.organizationName}` : "";
 
-/** Se borra un chat con una persona que tenga algo escrito; una urgencia sin atender, no. */
-export const deletable = (r: ChatRow) =>
-  r.contact !== null && r.at !== "" && r.pending.length === 0;
+/**
+ * Toda fila de una persona se puede deslizar: si hay mensajes se borran para quien desliza; si
+ * no, la persona sale de la lista. Con una urgencia sin atender se explica qué hacer.
+ */
+export const removable = (r: ChatRow) => r.contact !== null;
 
 export function useChatCenter() {
   const { session, online, notify } = useApp();
@@ -122,24 +124,48 @@ export function useChatCenter() {
     return () => titleBadge(0);
   }, [unread]);
 
+  const openRow = useCallback((r: ChatRow) => {
+    const alertId = r.alerts.at(-1)?.id;
+    setOpen({ key: r.key, ...(alertId ? { alertId } : {}) });
+  }, []);
+
   /** Borra el chat para esta persona, después de confirmarlo. */
   const remove = useCallback(
     async (r: ChatRow): Promise<boolean> => {
       if (!r.contact) return false;
+      // Una urgencia sin confirmar no se esconde: primero alguien tiene que atenderla.
+      if (r.pending.length > 0) {
+        const go = await ask({
+          title: "Primero atienda la urgencia",
+          message:
+            "Esta conversación tiene una urgencia sin confirmar. Ábrala y toque «Voy a atender»; después la puede borrar.",
+          confirm: "Abrir conversación",
+          cancel: "Ahora no",
+        });
+        if (go) openRow(r);
+        return false;
+      }
       if (!online) {
         notify("Sin conexión: el chat se puede borrar cuando vuelva la señal.", "warn");
         return false;
       }
       const name = r.name.replace(/\s*\(.*\)$/, "");
-      if (
-        !(await ask({
-          title: `¿Borrar el chat con ${name}?`,
-          message: `Se borra solo para usted: ${name} conserva sus mensajes.`,
-          confirm: "Borrar chat",
-          danger: true,
-        }))
-      )
-        return false;
+      const ok = await ask(
+        r.at
+          ? {
+              title: `¿Borrar el chat con ${name}?`,
+              message: `Se borra solo para usted: ${name} conserva sus mensajes.`,
+              confirm: "Borrar chat",
+              danger: true,
+            }
+          : {
+              title: `¿Quitar a ${name} de sus chats?`,
+              message: "Vuelve a aparecer si le escribe. Para escribirle, búsquelo arriba.",
+              confirm: "Quitar",
+              danger: true,
+            },
+      );
+      if (!ok) return false;
       try {
         await api.chatClear(r.contact.userId);
       } catch {
@@ -149,7 +175,7 @@ export function useChatCenter() {
       load();
       return true;
     },
-    [online, notify, load],
+    [online, notify, load, openRow],
   );
 
   const node = row ? (
@@ -157,7 +183,7 @@ export function useChatCenter() {
       key={row.key}
       thread={row}
       since={row.contact?.clearedAt ?? null}
-      {...(deletable(row) ? { onDelete: () => remove(row) } : {})}
+      {...(removable(row) && row.pending.length === 0 ? { onDelete: () => remove(row) } : {})}
       {...(row.contact ? { subtitle: about(row) } : {})}
       onClose={() => {
         setOpen(null);
@@ -172,10 +198,7 @@ export function useChatCenter() {
     rows,
     unread,
     remove,
-    open: (r: ChatRow) => {
-      const alertId = r.alerts.at(-1)?.id;
-      setOpen({ key: r.key, ...(alertId ? { alertId } : {}) });
-    },
+    open: openRow,
   };
 }
 
@@ -186,6 +209,8 @@ export function ChatRows(props: {
   onDismiss?(r: ChatRow): unknown;
   /** Qué filas se pueden deslizar; por defecto, todas. */
   canDismiss?(r: ChatRow): boolean;
+  /** Borrar pregunta antes: la fila espera la respuesta y en PC lleva su botón de papelera. */
+  confirm?: boolean;
 }) {
   return (
     <ul className="chats" aria-label="Conversaciones">
@@ -219,8 +244,23 @@ export function ChatRows(props: {
           </button>
         );
         return props.onDismiss && (props.canDismiss?.(r) ?? true) ? (
-          <SwipeRow key={r.key} onDismiss={() => props.onDismiss?.(r)}>
+          <SwipeRow
+            key={r.key}
+            onDismiss={() => props.onDismiss?.(r)}
+            {...(props.confirm ? { confirm: true } : {})}
+          >
             {row}
+            {props.confirm && (
+              <button
+                type="button"
+                className="ch-del"
+                aria-label={`Borrar el chat con ${r.name}`}
+                title="Borrar chat"
+                onClick={() => void props.onDismiss?.(r)}
+              >
+                <Trash2 size={18} />
+              </button>
+            )}
           </SwipeRow>
         ) : (
           <li key={r.key}>{row}</li>
@@ -254,7 +294,10 @@ export function ChatsDialog(props: {
     ref.current?.showModal();
   }, []);
   const term = plain(search.trim());
-  const shown = props.rows.filter(
+  // Quien se quitó de la lista solo aparece al buscarlo.
+  const listed = term ? props.rows : props.rows.filter((r) => !removedRow(r));
+  const hidden = props.rows.length - listed.length;
+  const shown = listed.filter(
     (r) =>
       (filter === "todos" ||
         (filter === "urgentes" ? r.pending.length > 0 : r.unread > 0 || r.pending.length > 0)) &&
@@ -319,13 +362,23 @@ export function ChatsDialog(props: {
           rows={shown}
           onOpen={props.onOpen}
           onDismiss={props.onDelete}
-          canDismiss={deletable}
+          canDismiss={removable}
+          confirm
         />
         {shown.length === 0 && (
           <p className="ch-empty">
             {props.rows.length === 0
               ? "Cuando tenga personas en su equipo, aparecerán aquí."
-              : "No hay conversaciones con ese filtro."}
+              : hidden > 0 && filter === "todos" && !term
+                ? "No tiene chats abiertos. Busque arriba a una persona del equipo para escribirle."
+                : "No hay conversaciones con ese filtro."}
+          </p>
+        )}
+        {hidden > 0 && shown.length > 0 && filter === "todos" && !term && (
+          <p className="ch-hint">
+            {hidden === 1
+              ? "1 persona quitada de la lista: búsquela arriba para escribirle."
+              : `${hidden} personas quitadas de la lista: búsquelas arriba para escribirles.`}
           </p>
         )}
       </div>

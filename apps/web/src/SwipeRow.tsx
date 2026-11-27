@@ -2,24 +2,39 @@ import { Trash2 } from "lucide-react";
 import { type PointerEvent, type ReactNode, useRef, useState } from "react";
 import { haptic } from "./native";
 
+/** Lo que queda a la vista del rojo «Borrar» mientras se confirma. */
+const HOLD = 112;
+
 /**
- * Fila que se borra al deslizarla hacia un lado (o con la tecla Supr). Si `onDismiss` responde
- * `false` (p. ej. no se confirmó), la fila vuelve a su sitio.
+ * Fila que se borra al deslizarla hacia un lado (o con la tecla Supr). Con `confirm`, la fila se
+ * queda corrida mostrando «Borrar» mientras se pregunta; si `onDismiss` responde `false`
+ * (no se confirmó o no se puede), vuelve a su sitio.
  */
 export function SwipeRow(props: {
   children: ReactNode;
   /** Devuelve (o promete) `false` para cancelar. */
   onDismiss(): unknown;
+  /** La acción pregunta antes de borrar: la fila no se va hasta tener la respuesta. */
+  confirm?: boolean;
 }) {
   const [dx, setDx] = useState(0);
   const [gone, setGone] = useState(false);
   const start = useRef<{ x: number; y: number; on: boolean } | null>(null);
   const dragged = useRef(false);
 
-  const remove = (side: number) => {
-    haptic(15);
+  const leave = (side: number) => {
     setGone(true);
     setDx(side * window.innerWidth);
+  };
+  const remove = async (side: number) => {
+    haptic(15);
+    if (props.confirm) {
+      setDx(side * HOLD);
+      if ((await props.onDismiss()) === false) setDx(0);
+      else leave(side);
+      return;
+    }
+    leave(side);
     window.setTimeout(async () => {
       if ((await props.onDismiss()) !== false) return;
       setGone(false);
@@ -34,7 +49,7 @@ export function SwipeRow(props: {
     const moved = e.clientX - start.current.x;
     start.current = null;
     if (Math.abs(moved) > Math.min(110, e.currentTarget.offsetWidth * 0.35))
-      remove(Math.sign(moved));
+      void remove(Math.sign(moved));
     else setDx(0);
   };
 
@@ -71,7 +86,7 @@ export function SwipeRow(props: {
         dragged.current = false;
       }}
       onKeyDown={(e) => {
-        if (e.key === "Delete" || e.key === "Backspace") remove(-1);
+        if (e.key === "Delete" || e.key === "Backspace") void remove(-1);
       }}
     >
       {dx !== 0 && (

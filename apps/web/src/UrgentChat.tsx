@@ -278,12 +278,13 @@ export function UrgentChat({
           </p>
         )}
         {busy && <p className="uc-system">Enviando…</p>}
-        {error && (
-          <p className="uc-error" role="alert">
-            {error}
-          </p>
-        )}
       </div>
+      {/* Fuera de la lista: el aviso se ve aunque la conversación sea larga. */}
+      {error && (
+        <p className="uc-error" role="alert">
+          {error}
+        </p>
+      )}
       {onAttend && (
         <button type="button" className="uc-attend" onClick={onAttend}>
           {thread.pending.length > 1
