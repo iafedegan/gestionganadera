@@ -154,6 +154,12 @@ describe("cuentas de muestra", () => {
       headers: { ...H, cookie: cookieOf(await enter(on, "vet_grande")) },
     });
     expect(inbox.json().items).toMatchObject([{ canAck: true }]);
+
+    // Si alguien le quitó el acceso en la muestra, al volver a entrar lo recupera.
+    await db.admin((q) =>
+      q("UPDATE membership SET valid_until = now() WHERE user_id = $1", [vet.userId]),
+    );
+    expect((await enter(on, "vet_grande")).json().memberships).toHaveLength(1);
   });
 
   it("cada perfil por rol entra a la ganadería completa con su rol, sin duplicarse", async () => {

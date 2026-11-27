@@ -505,13 +505,12 @@ export async function ensureDemoRole(
         orgId,
         spec.role,
       ]);
-    // Si la muestra se creó antes con otro rol, se pone al día.
+    // La muestra se pone al día: otro rol anterior, o un acceso que alguien quitó.
     else
-      await q("UPDATE membership SET role = $3 WHERE user_id = $1 AND organization_id = $2", [
-        userId,
-        orgId,
-        spec.role,
-      ]);
+      await q(
+        "UPDATE membership SET role = $3, valid_until = NULL WHERE user_id = $1 AND organization_id = $2",
+        [userId, orgId, spec.role],
+      );
     return { userId: userId as string };
   });
 }
