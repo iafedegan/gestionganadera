@@ -78,9 +78,11 @@ import {
   DEMO_ROLES,
   DEMO_SPECS,
   DEMO_STAFF,
+  DEMO_VETS,
   demoRoleSpec,
   demoSpec,
   demoStaffSpec,
+  demoVetSpec,
 } from "./demoData.js";
 import { type Aula, AulaError, type Ecosistema, type KnowledgeHit } from "./ecosistema.js";
 import {
@@ -266,6 +268,7 @@ export async function buildApp(opts: AppOptions): Promise<FastifyInstance> {
     return [
       ...list(DEMO_ROLES, "Por rol en la finca"),
       ...list(DEMO_SPECS, "Propietario, según su ganadería"),
+      ...list(DEMO_VETS, "Veterinaria que recibe urgencias"),
       ...list(DEMO_STAFF, "Gremio"),
     ];
   });
@@ -277,7 +280,8 @@ export async function buildApp(opts: AppOptions): Promise<FastifyInstance> {
     const spec = body.success ? demoSpec(body.data.key) : undefined;
     const staffSpec = body.success ? demoStaffSpec(body.data.key) : undefined;
     const roleSpec = body.success ? demoRoleSpec(body.data.key) : undefined;
-    if (!spec && !staffSpec && !roleSpec)
+    const vetSpec = body.success ? demoVetSpec(body.data.key) : undefined;
+    if (!spec && !staffSpec && !roleSpec && !vetSpec)
       return reply
         .code(400)
         .send({ error: "VALIDACION", message: "Esa cuenta de muestra no existe." });
@@ -292,7 +296,9 @@ export async function buildApp(opts: AppOptions): Promise<FastifyInstance> {
         ? await ensureDemo(db, spec)
         : roleSpec
           ? await ensureDemoRole(db, demoSpec("completo") as NonNullable<typeof spec>, roleSpec)
-          : await ensureDemoStaff(db, staffSpec as NonNullable<typeof staffSpec>);
+          : vetSpec
+            ? await ensureDemoRole(db, demoSpec(vetSpec.org) as NonNullable<typeof spec>, vetSpec)
+            : await ensureDemoStaff(db, staffSpec as NonNullable<typeof staffSpec>);
       const s = await openDemoSession(db, userId, req.headers["user-agent"]);
       reply.setCookie(COOKIE, s.token, {
         httpOnly: true,
@@ -615,12 +621,20 @@ export async function buildApp(opts: AppOptions): Promise<FastifyInstance> {
     return { ok: true };
   });
 
+  // Asistente del servidor: la clave vive en las variables del entorno (p. ej. en Vercel).
+  const geminiKey = process.env.GEMINI_API_KEY?.trim();
   const ask =
     opts.ask !== undefined
       ? opts.ask
-      : process.env.ANTHROPIC_API_KEY
-        ? claudeAsk(process.env.ANTHROPIC_API_KEY)
-        : null;
+      : geminiKey
+        ? geminiAsk(
+            geminiKey,
+            process.env.GEMINI_MODEL?.trim() || DEFAULT_GEMINI_MODEL,
+            opts.geminiFetch,
+          )
+        : process.env.ANTHROPIC_API_KEY
+          ? claudeAsk(process.env.ANTHROPIC_API_KEY)
+          : null;
 
   const eco = opts.ecosistema ?? null;
   const postLimit = new PostLimit();

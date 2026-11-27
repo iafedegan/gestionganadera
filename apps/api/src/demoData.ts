@@ -30,7 +30,7 @@ export interface DemoFarmSpec {
 export interface DemoTeamMember {
   email: string;
   displayName: string;
-  role: "admin_entidad" | "operario" | "tecnico";
+  role: "admin_entidad" | "operario" | "tecnico" | "veterinario";
   /** Índice de la finca a la que queda limitado; null = todas. */
   farm: number | null;
 }
@@ -307,7 +307,7 @@ export const DEMO_SPECS: DemoSpec[] = [
       {
         email: `demo-grande-vet@${DOMAIN}`,
         displayName: "Dra. Camila Torres (veterinaria)",
-        role: "tecnico",
+        role: "veterinario",
         farm: null,
       },
     ],
@@ -1280,4 +1280,21 @@ export const DEMO_ROLES: DemoRoleSpec[] = [
   ),
 ];
 
+/**
+ * La veterinaria de «Ganadero grande». Las urgencias de esa ganadería le llegan solo a ella,
+ * así que también necesita su ingreso de muestra para confirmarlas y chatear.
+ */
+export const DEMO_VETS: (DemoRoleSpec & { org: string })[] = [
+  {
+    key: "vet_grande",
+    org: "grande",
+    role: "veterinario",
+    label: "Dra. Camila Torres",
+    displayName: "Dra. Camila Torres (veterinaria)",
+    description: "Recibe las urgencias de «Ganadero grande» y chatea con quien avisa.",
+    email: `demo-grande-vet@${DOMAIN}`,
+  },
+];
+
 export const demoRoleSpec = (key: string) => DEMO_ROLES.find((s) => s.key === key);
+export const demoVetSpec = (key: string) => DEMO_VETS.find((s) => s.key === key);

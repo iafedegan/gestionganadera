@@ -47,6 +47,7 @@ describe("cuentas de muestra", () => {
       "mediano",
       "grande",
       "completo",
+      "vet_grande",
       "secretario",
     ]);
     // Ningún correo (el «@» de TECNIG@N es parte del nombre, no una dirección).
@@ -130,6 +131,29 @@ describe("cuentas de muestra", () => {
       ),
     );
     expect(Number(m?.n)).toBe(1);
+  });
+
+  it("la veterinaria de «Ganadero grande» entra a esa ganadería", async () => {
+    const vet = (await enter(on, "vet_grande")).json();
+    const owner = (await enter(on, "grande")).json();
+    expect(vet.memberships).toHaveLength(1);
+    expect(vet.memberships[0].role).toBe("veterinario");
+    expect(vet.memberships[0].organizationId).toBe(owner.memberships[0].organizationId);
+
+    // El aviso que se envía en esa ganadería le llega a ella y puede confirmarlo.
+    const organizationId = owner.memberships[0].organizationId;
+    const sent = await on.inject({
+      method: "POST",
+      url: "/v1/urgencias",
+      headers: { ...H, cookie: cookieOf(await enter(on, "grande")) },
+      payload: { organizationId, reason: "sangrado", message: "Sangra mucho" },
+    });
+    expect(sent.statusCode, sent.body).toBe(201);
+    const inbox = await on.inject({
+      url: `/v1/urgencias?organizationId=${organizationId}`,
+      headers: { ...H, cookie: cookieOf(await enter(on, "vet_grande")) },
+    });
+    expect(inbox.json().items).toMatchObject([{ canAck: true }]);
   });
 
   it("cada perfil por rol entra a la ganadería completa con su rol, sin duplicarse", async () => {

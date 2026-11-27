@@ -474,7 +474,7 @@ export async function ensureDemoStaff(db: Db, spec: DemoStaffSpec): Promise<{ us
   });
 }
 
-/** Crea (una vez) la persona del equipo con ese rol en la ganadería de muestra completa. */
+/** Crea (una vez) la persona del equipo con ese rol en una ganadería de muestra. */
 export async function ensureDemoRole(
   db: Db,
   org: DemoSpec,
@@ -501,6 +501,13 @@ export async function ensureDemoRole(
     ]);
     if (!m)
       await q("INSERT INTO membership (user_id, organization_id, role) VALUES ($1,$2,$3)", [
+        userId,
+        orgId,
+        spec.role,
+      ]);
+    // Si la muestra se creó antes con otro rol, se pone al día.
+    else
+      await q("UPDATE membership SET role = $3 WHERE user_id = $1 AND organization_id = $2", [
         userId,
         orgId,
         spec.role,

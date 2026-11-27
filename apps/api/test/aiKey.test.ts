@@ -1,5 +1,5 @@
 import type { FastifyInstance } from "fastify";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { open, seal } from "../src/aiKey.js";
 import { buildApp } from "../src/app.js";
 import { hashPassword } from "../src/auth.js";
@@ -72,6 +72,31 @@ beforeAll(async () => {
 afterAll(async () => {
   await app.close();
   await db.close();
+});
+
+describe("clave de Gemini en las variables del servidor", () => {
+  it("activa el asistente sin que nadie escriba una clave", async () => {
+    vi.stubEnv("GEMINI_API_KEY", KEY);
+    const server = await buildApp({ db, geminiFetch: fakeFetch });
+    vi.unstubAllEnvs();
+    const login = await server.inject({
+      method: "POST",
+      url: "/v1/auth/login",
+      headers: H,
+      payload: { email: "operario@ia.local", password: PASSWORD },
+    });
+    const cookie = `sid=${login.cookies.find((c) => c.name === "sid")?.value}`;
+    const res = await server.inject({
+      method: "POST",
+      url: "/v1/assistant",
+      headers: { ...H, cookie },
+      payload: { organizationId: org, question: "¿Cómo va la finca?" },
+    });
+    expect(res.statusCode, res.body).toBe(200);
+    expect(res.json().answer).toBe("Todo bien en la finca.");
+    expect(seen.at(-1)?.key).toBe(KEY);
+    await server.close();
+  });
 });
 
 describe("clave propia de Gemini", () => {
