@@ -8,7 +8,9 @@ import { EmergencyCard, useEmergencyAlert } from "./Emergency";
 import { EscalateDialog } from "./Extension";
 import { useActiveFarm, useFarms } from "./animals";
 import { ApiError, NetworkError, api } from "./lib/api";
+import { isDemoEmail } from "./lib/avatar";
 import { getSoil, getWeather, texture, thi } from "./lib/farmIntel";
+import { localAi } from "./lib/localAi";
 import { useApp } from "./state";
 
 /**
@@ -196,7 +198,9 @@ export function AssistantCard() {
 }
 
 export function AssistantDialog(props: { initial: string | null; onClose(): void }) {
-  const { orgId, online } = useApp();
+  const { orgId, online, session } = useApp();
+  const ownAi = session && isDemoEmail(session.email) ? localAi(session.userId) : null;
+  const hasOwnAi = ownAi !== null;
   const farms = useFarms();
   const active = useActiveFarm();
   const farm =
@@ -221,9 +225,9 @@ export function AssistantDialog(props: { initial: string | null; onClose(): void
     ref.current?.showModal();
     api
       .assistantStatus(orgId)
-      .then((s) => setEnabled(s.enabled))
+      .then((s) => setEnabled(s.enabled || hasOwnAi))
       .catch(() => setEnabled(null));
-  }, [orgId]);
+  }, [orgId, hasOwnAi]);
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: desplazar al final con cada mensaje
   useEffect(() => {
@@ -258,7 +262,13 @@ export function AssistantDialog(props: { initial: string | null; onClose(): void
           setTimeout(() => r({}), 4000),
         ),
       ]);
-      const r = await api.ask({ organizationId: orgId, question: q, history, ...signals });
+      const r = await api.ask({
+        organizationId: orgId,
+        question: q,
+        history,
+        ...signals,
+        ...(ownAi ? { ownAi } : {}),
+      });
       const done: Turn[] = [
         ...next,
         { role: "assistant", text: r.answer, ...(r.sources?.length ? { sources: r.sources } : {}) },

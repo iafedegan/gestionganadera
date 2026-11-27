@@ -1,8 +1,10 @@
-import type { AiConfigDto } from "@ganaderia/contracts";
+import { type AiConfigDto, DEFAULT_GEMINI_MODEL, OwnAi } from "@ganaderia/contracts";
 import { CheckCircle2, ExternalLink, Sparkles, Trash2 } from "lucide-react";
 import { type FormEvent, useEffect, useState } from "react";
 import { CardHead } from "./components";
 import { ApiError, NetworkError, api } from "./lib/api";
+import { isDemoEmail } from "./lib/avatar";
+import { localAi, setLocalAi } from "./lib/localAi";
 import { useApp } from "./state";
 
 const msg = (e: unknown) =>
@@ -14,7 +16,11 @@ const msg = (e: unknown) =>
 
 /** Clave de Google Gemini para el asistente. Solo la ve y la cambia el propietario. */
 export function AiCard() {
-  const { orgId, role, online, notify } = useApp();
+  const { orgId, role, online, notify, session } = useApp();
+  // En las cuentas de muestra la clave queda en el dispositivo, nunca en el servidor.
+  const onDevice = session ? isDemoEmail(session.email) : false;
+  const userId = session?.userId;
+  const [local, setLocal] = useState(() => (session ? localAi(session.userId) : null));
   const [cfg, setCfg] = useState<AiConfigDto | null>(null);
   const [key, setKey] = useState("");
   const [model, setModel] = useState("");
@@ -26,17 +32,35 @@ export function AiCard() {
     api.aiConfig(orgId).then(
       (c) => {
         setCfg(c);
-        setModel(c.model);
+        setModel((onDevice && userId ? localAi(userId)?.model : null) ?? c.model);
       },
       (e) => setError(msg(e)),
     );
-  }, [orgId, role, online]);
+  }, [orgId, role, online, onDevice, userId]);
 
   if (role !== "propietario") return null;
+  const configured = onDevice ? local !== null : Boolean(cfg?.configured);
+  const last4 = onDevice ? local?.apiKey.slice(-4) : cfg?.last4;
 
   async function save(apiKey: string | null) {
     setBusy(true);
     setError(null);
+    if (onDevice && session) {
+      try {
+        const ai = apiKey ? { apiKey, model: model.trim() || DEFAULT_GEMINI_MODEL } : null;
+        if (ai && !OwnAi.safeParse(ai).success) setError("Revise la clave y el nombre del modelo.");
+        else {
+          setLocalAi(session.userId, ai);
+          setLocal(ai);
+          setKey("");
+          notify(ai ? "Clave guardada en este celular." : "Clave quitada.", "ok");
+        }
+      } catch {
+        setError("Este navegador no deja guardar datos.");
+      }
+      setBusy(false);
+      return;
+    }
     try {
       const c = await api.saveAiConfig({
         organizationId: orgId,
@@ -60,11 +84,11 @@ export function AiCard() {
         title="Inteligencia artificial"
         sub="Ponga su clave de Google Gemini para activar el asistente."
       />
-      {cfg?.configured ? (
+      {configured ? (
         <p className="banner banner-info ai-state">
           <CheckCircle2 size={18} aria-hidden="true" />
           <span>
-            Gemini activo. Clave terminada en <strong>••••{cfg.last4}</strong>.
+            Gemini activo. Clave terminada en <strong>••••{last4}</strong>.
           </span>
         </p>
       ) : (
@@ -82,7 +106,7 @@ export function AiCard() {
         }}
       >
         <label>
-          {cfg?.configured ? "Nueva clave de API" : "Clave de API de Gemini"}
+          {configured ? "Nueva clave de API" : "Clave de API de Gemini"}
           <input
             type="password"
             value={key}
@@ -114,7 +138,7 @@ export function AiCard() {
         >
           {busy ? "Comprobando con Google…" : "Guardar clave"}
         </button>
-        {cfg?.configured && (
+        {configured && (
           <button
             type="button"
             className="btn btn-ghost btn-block"
@@ -134,8 +158,10 @@ export function AiCard() {
         Crear una clave en Google AI Studio <ExternalLink size={14} aria-hidden="true" />
       </a>
       <p className="hint">
-        La clave se guarda cifrada en el servidor y no vuelve a mostrarse. Al usar el asistente, la
-        pregunta y un resumen de los datos de su finca se envían a Google.
+        {onDevice
+          ? "Cuenta de muestra: la clave se guarda solo en este celular; quítela si lo comparte."
+          : "La clave se guarda cifrada en el servidor y no vuelve a mostrarse."}{" "}
+        Al usar el asistente, la pregunta y un resumen de los datos de su finca se envían a Google.
       </p>
     </article>
   );

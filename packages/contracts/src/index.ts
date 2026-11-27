@@ -1096,7 +1096,21 @@ export type ErrorCode = (typeof ErrorCodes)[keyof typeof ErrorCodes];
 
 /* ───────────── Asistente con IA ───────────── */
 
+/** Clave de Gemini que el dispositivo guarda y envía solo para esa pregunta; el servidor no la guarda. */
+export const OwnAi = z.object({
+  apiKey: z
+    .string()
+    .trim()
+    .regex(/^[A-Za-z0-9_.-]{20,200}$/),
+  model: z
+    .string()
+    .trim()
+    .regex(/^gemini-[a-z0-9.-]{1,60}$/),
+});
+export type OwnAi = z.infer<typeof OwnAi>;
+
 export const AssistantRequest = z.object({
+  ownAi: OwnAi.optional(),
   organizationId: uuid,
   question: z.string().trim().min(2).max(1500),
   /** Últimos turnos de la conversación, solo texto. */

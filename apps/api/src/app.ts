@@ -1244,13 +1244,20 @@ export async function buildApp(opts: AppOptions): Promise<FastifyInstance> {
     // La clave de la ganadería tiene prioridad sobre el asistente del servidor.
     const own = await orgAi(db, orgId);
     const ownKey = own ? openKey(own.key_cipher) : null;
-    const model = own && ownKey ? geminiAsk(ownKey, own.model, opts.geminiFetch) : ask;
+    // Clave que viene con la pregunta (guardada en el dispositivo): se usa y se olvida.
+    const device = body.data.ownAi;
+    const model = device
+      ? geminiAsk(device.apiKey, device.model, opts.geminiFetch)
+      : own && ownKey
+        ? geminiAsk(ownKey, own.model, opts.geminiFetch)
+        : ask;
     if (!model)
       return reply.code(503).send({
         error: ErrorCodes.ASISTENTE_NO_CONFIGURADO,
         message: "El asistente todavía no está activado en este servidor.",
       });
-    if (!(await takeQuota(db, orgId)))
+    // El cupo diario cuida la clave del servidor y la de la ganadería, no la de cada persona.
+    if (!body.data.ownAi && !(await takeQuota(db, orgId)))
       return reply.code(429).send({
         error: ErrorCodes.LIMITE_DIARIO,
         message: `Su ganadería ya hizo las ${DAILY_LIMIT} preguntas de hoy. Mañana puede seguir.`,
@@ -1283,6 +1290,11 @@ export async function buildApp(opts: AppOptions): Promise<FastifyInstance> {
       return { answer, remaining: Math.max(0, DAILY_LIMIT - (u?.questions ?? 0)) };
     } catch (err) {
       req.log.error(err, "asistente");
+      if (body.data.ownAi)
+        return reply.code(502).send({
+          error: ErrorCodes.ASISTENTE_ERROR,
+          message: "Google no respondió con su clave. Revísela en Configuración.",
+        });
       return reply.code(502).send({
         error: ErrorCodes.ASISTENTE_ERROR,
         message: "El asistente no respondió. Intente de nuevo en un momento.",

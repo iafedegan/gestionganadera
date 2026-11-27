@@ -113,4 +113,22 @@ describe("clave propia de Gemini", () => {
 
     expect((await save(cookie, null)).json().configured).toBe(false);
   });
+
+  it("usa la clave que envía el dispositivo sin guardarla", async () => {
+    const cookie = await login("dueno@ia.local");
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/assistant",
+      headers: { ...H, cookie },
+      payload: {
+        organizationId: org,
+        question: "¿Cómo va la finca?",
+        ownAi: { apiKey: KEY, model: "gemini-flash-latest" },
+      },
+    });
+    expect(res.statusCode, res.body).toBe(200);
+    expect(seen.at(-1)?.key).toBe(KEY);
+    expect(seen.at(-1)?.body).not.toContain(KEY);
+    expect(await db.admin((q) => q("SELECT 1 FROM org_ai"))).toHaveLength(0);
+  });
 });
