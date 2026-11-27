@@ -337,7 +337,7 @@ describe("rutas del ecosistema", () => {
     expect(res.statusCode).toBe(503);
   });
 
-  it("el asistente recibe las notas del gremio y devuelve solo las citadas", async () => {
+  it("el asistente habla solo de la finca: no recibe noticias ni fuentes externas", async () => {
     const res = await app.inject({
       method: "POST",
       url: "/v1/assistant",
@@ -345,11 +345,9 @@ describe("rutas del ecosistema", () => {
       payload: { organizationId: orgA, question: "¿Cómo controlo la garrapata?" },
     });
     expect(res.statusCode).toBe(200);
-    expect(prompts.at(-1)).toContain("<conocimiento_gremio>");
-    expect(prompts.at(-1)).toContain("[1] Cómo controlar la garrapata");
-    expect(res.json().sources).toEqual([
-      { n: 1, title: "Cómo controlar la garrapata", url: "https://x.co/g", kind: "articulo" },
-    ]);
+    expect(prompts.at(-1)).toContain("<datos_finca>");
+    expect(prompts.at(-1)).not.toContain("<conocimiento_gremio>");
+    expect(res.json().sources).toBeUndefined();
   });
 });
 

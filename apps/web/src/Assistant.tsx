@@ -27,7 +27,8 @@ const SUGGESTIONS = [
   "¿Qué partos vienen en los próximos dos meses?",
   "¿Qué animales están en retiro de leche o carne?",
   "Con mi tipo de suelo, ¿qué debo tener en cuenta en los potreros?",
-  "¿Cómo controlo la garrapata sin crear resistencia?",
+  "¿Qué ajustes le haría a mi hato este mes?",
+  "¿Cómo mejoro la rotación y la carga de mis potreros?",
 ];
 
 const histKey = (org: string) => `gg.asis.${org}`;
@@ -171,8 +172,8 @@ export function AssistantCard() {
         <div>
           <h2>Pregúntele a su finca</h2>
           <p>
-            Responde con los datos de su hato, el clima, el suelo y el conocimiento del gremio en
-            CONtexto Ganadero. Orienta; no reemplaza al veterinario.
+            Su super ganadero: analiza los datos de sus fincas y propone ajustes al hato y a los
+            potreros. No reemplaza al veterinario.
           </p>
         </div>
       </div>
@@ -362,7 +363,7 @@ export function AssistantDialog(props: { initial: string | null; onClose(): void
               <span />
               <span />
               <span />
-              <small>Revisando su hato, el clima y CONtexto Ganadero…</small>
+              <small>Revisando su hato, sus potreros y el clima…</small>
             </output>
           )}
 

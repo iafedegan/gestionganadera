@@ -1255,21 +1255,19 @@ export async function buildApp(opts: AppOptions): Promise<FastifyInstance> {
         error: ErrorCodes.LIMITE_DIARIO,
         message: `Su ganadería ya hizo las ${DAILY_LIMIT} preguntas de hoy. Mañana puede seguir.`,
       });
-    // El conocimiento del gremio se busca a la vez que se arma el resumen de la finca;
-    // si CONtexto Ganadero no responde, el asistente sigue solo con los datos de la finca.
-    const [context, knowledge] = await Promise.all([
-      farmContext(db, orgId, a.memberships, body.data, Date.now(), body.data.question),
-      eco
-        ? eco.knowledge(body.data.question).catch((err): KnowledgeHit[] => {
-            req.log.warn(err, "conocimiento del gremio no disponible");
-            return [];
-          })
-        : Promise.resolve([] as KnowledgeHit[]),
-    ]);
+    // El asistente habla solo de las fincas: no se le entregan noticias ni otras fuentes.
+    const context = await farmContext(
+      db,
+      orgId,
+      a.memberships,
+      body.data,
+      Date.now(),
+      body.data.question,
+    );
     try {
       const r = await model({
         system: SYSTEM_PROMPT,
-        messages: buildMessages(body.data, context, knowledge),
+        messages: buildMessages(body.data, context),
       });
       await recordTokens(db, orgId, r.inputTokens, r.outputTokens);
       const [u] = await db.admin((q) =>
@@ -1282,15 +1280,7 @@ export async function buildApp(opts: AppOptions): Promise<FastifyInstance> {
         r.refused || !r.text
           ? "No puedo ayudar con esa pregunta. Si se trata de la salud de un animal, consulte a su veterinario."
           : r.text;
-      // Solo se devuelven las fuentes que la respuesta realmente cita.
-      const cited = knowledge.filter((k) => answer.includes(`[${k.n}]`));
-      return {
-        answer,
-        remaining: Math.max(0, DAILY_LIMIT - (u?.questions ?? 0)),
-        ...(cited.length
-          ? { sources: cited.map(({ n, title, url, kind }) => ({ n, title, url, kind })) }
-          : {}),
-      };
+      return { answer, remaining: Math.max(0, DAILY_LIMIT - (u?.questions ?? 0)) };
     } catch (err) {
       req.log.error(err, "asistente");
       return reply.code(502).send({
