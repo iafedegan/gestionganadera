@@ -427,3 +427,4 @@ export * from "./exportDocs";
 export * from "./expediente";
 export * from "./trazabilidad";
 export * from "./exportForms";
+export * from "./emergency.js";

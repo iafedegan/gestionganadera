@@ -1,7 +1,10 @@
 import type { AssistantRequest, KnowledgeSourceDto } from "@ganaderia/contracts";
+import { detectEmergency } from "@ganaderia/domain";
 import { ArrowUp, BookOpen, Sparkles, Stethoscope, Trash2, X } from "lucide-react";
 import { type ReactNode, useEffect, useRef, useState } from "react";
+import { AnswerVisuals, useHerdSnapshot } from "./AssistantVisuals";
 import { CowBot } from "./CowBot";
+import { EmergencyCard, useEmergencyAlert } from "./Emergency";
 import { EscalateDialog } from "./Extension";
 import { useActiveFarm, useFarms } from "./animals";
 import { ApiError, NetworkError, api } from "./lib/api";
@@ -210,6 +213,8 @@ export function AssistantDialog(props: { initial: string | null; onClose(): void
   const [enabled, setEnabled] = useState<boolean | null>(null);
   const [remaining, setRemaining] = useState<number | null>(null);
   const sentInitial = useRef(false);
+  const snapshot = useHerdSnapshot();
+  const emergency = useEmergencyAlert();
   const [escalate, setEscalate] = useState<{ question: string; aiAnswer: string } | null>(null);
 
   useEffect(() => {
@@ -222,20 +227,37 @@ export function AssistantDialog(props: { initial: string | null; onClose(): void
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: desplazar al final con cada mensaje
   useEffect(() => {
-    listRef.current?.scrollTo({ top: listRef.current.scrollHeight, behavior: "smooth" });
-  }, [turns.length, busy]);
+    const list = listRef.current;
+    if (!list) return;
+    // Una respuesta nueva se lee desde su comienzo, no desde el final.
+    const last = list.querySelector<HTMLElement>(".asis-msg:last-of-type");
+    const top =
+      !busy && turns.at(-1)?.role === "assistant" && last
+        ? last.offsetTop - list.offsetTop - 8
+        : list.scrollHeight;
+    list.scrollTo({ top, behavior: "smooth" });
+  }, [turns.length, busy, emergency.alert?.status]);
 
   async function send(question: string) {
     const q = question.trim();
     if (q.length < 2 || busy) return;
     setError(null);
+    // La urgencia se atiende primero y aparte: no depende de que la IA conteste.
+    const reason = detectEmergency(q);
+    if (reason) void emergency.send(reason, q);
     const history = turns.slice(-10).map(({ role, text }) => ({ role, text }));
     const next = [...turns, { role: "user" as const, text: q }];
     setTurns(next);
     setDraft("");
     setBusy(true);
     try {
-      const signals = await farmSignals(farm?.latitude ?? null, farm?.longitude ?? null);
+      // El clima y el suelo ayudan, pero no se espera por ellos más de unos segundos.
+      const signals = await Promise.race([
+        farmSignals(farm?.latitude ?? null, farm?.longitude ?? null),
+        new Promise<Pick<AssistantRequest, "weather" | "soil">>((r) =>
+          setTimeout(() => r({}), 4000),
+        ),
+      ]);
       const r = await api.ask({ organizationId: orgId, question: q, history, ...signals });
       const done: Turn[] = [
         ...next,
@@ -269,6 +291,7 @@ export function AssistantDialog(props: { initial: string | null; onClose(): void
   const clear = () => {
     setTurns([]);
     saveHistory(orgId, []);
+    emergency.clear();
     setError(null);
   };
 
@@ -292,7 +315,18 @@ export function AssistantDialog(props: { initial: string | null; onClose(): void
           >
             <X size={20} />
           </button>
-          <h2 id="asis-title">Asistente de la finca</h2>
+          <div className="asis-who">
+            <span className="asis-face">
+              <CowBot size={34} />
+            </span>
+            <div>
+              <h2 id="asis-title">Su super ganadero</h2>
+              <small>
+                {!online ? "Sin señal" : off ? "Sin activar" : "En línea"}
+                {farms.length > 1 ? ` · ${farms.length} fincas` : farm ? ` · ${farm.name}` : ""}
+              </small>
+            </div>
+          </div>
           {turns.length > 0 && (
             <button
               type="button"
@@ -341,6 +375,7 @@ export function AssistantDialog(props: { initial: string | null; onClose(): void
             // biome-ignore lint/suspicious/noArrayIndexKey: la conversación solo crece al final
             <div key={i} className={t.role === "user" ? "asis-msg me" : "asis-msg ai"}>
               {t.role === "user" ? <p>{t.text}</p> : <Rich text={t.text} />}
+              {t.role === "assistant" && <AnswerVisuals answer={t.text} snapshot={snapshot} />}
               {t.sources && t.sources.length > 0 && <Sources items={t.sources} />}
               {t.role === "assistant" && i === turns.length - 1 && !busy && (
                 // Segundo nivel de la extensión: si la respuesta no basta, la consulta pasa al técnico.
@@ -365,6 +400,17 @@ export function AssistantDialog(props: { initial: string | null; onClose(): void
               <span />
               <small>Revisando su hato, sus potreros y el clima…</small>
             </output>
+          )}
+
+          {emergency.alert && (
+            <EmergencyCard
+              alert={emergency.alert}
+              onAuthorize={() => void emergency.authorize()}
+              onRetry={() => {
+                const a = emergency.alert;
+                if (a) void emergency.send(a.reason, a.question);
+              }}
+            />
           )}
 
           {off && (
@@ -395,7 +441,7 @@ export function AssistantDialog(props: { initial: string | null; onClose(): void
             value={draft}
             rows={1}
             maxLength={1500}
-            placeholder={off ? "Asistente no disponible" : "Escriba su pregunta…"}
+            placeholder={off ? "Asistente no disponible" : "Cuénteme o pregunte…"}
             aria-label="Su pregunta"
             disabled={off}
             onChange={(e) => setDraft(e.target.value)}

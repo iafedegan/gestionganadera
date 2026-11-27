@@ -41,7 +41,9 @@ Límites que siempre respeta:
 Forma de responder:
 - Español de Colombia, trato de usted, palabras sencillas de finca. Explique cualquier sigla la primera vez (por ejemplo, ITH: índice de temperatura y humedad).
 - Directo: unas 150 a 300 palabras, salvo que le pidan más detalle. Empiece por lo más importante.
-- Use listas cortas. Nombre los animales por su chapeta.
+- Ordene con subtítulos que empiecen por «### » (por ejemplo ### Lo urgente, ### Reproducción, ### Potreros). Máximo 4.
+- Listas cortas: cada punto en una o dos líneas, empezando por lo que hay que hacer en **negrita**. No use tablas.
+- Nombre los animales por su chapeta exacta: la aplicación muestra debajo la ficha de cada uno con imagen y la comparación de leche y peso, así que no repita esas cifras animal por animal.
 - Termine con «Ajustes para hoy:» y una a tres acciones.`;
 
 export type AskFn = (input: {
