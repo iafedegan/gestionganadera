@@ -1184,3 +1184,170 @@ dialog.asis-dialog .asis-quota {
 .asis-msg .av ul.av-farms {
   padding: 0;
 }
+
+/* ═════ Ingreso en celular y tablet ═════ */
+@media (max-width: 900px) {
+  main.login:not(.is-register) {
+    display: flex;
+    flex-direction: column;
+    min-height: 100dvh;
+    overflow-x: clip;
+    background: #eef3ef;
+  }
+  main.login:not(.is-register) > .login-hero {
+    flex: none;
+    gap: 12px;
+    padding: calc(20px + env(safe-area-inset-top)) 22px 0;
+  }
+  main.login:not(.is-register) .login-hero h2 {
+    font-size: clamp(1.6rem, 7vw, 2.4rem);
+    line-height: 1.12;
+  }
+  main.login:not(.is-register) .login-hero-body ul,
+  main.login:not(.is-register) .hero-badge {
+    display: none;
+  }
+  /* Una sola columna que nunca se sale de la pantalla; todo con margen a los lados. */
+  main.login:not(.is-register) > .login-panel {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 14px;
+    width: 100%;
+    margin: -22px 0 0;
+    padding: 20px 18px calc(28px + env(safe-area-inset-bottom));
+    border-radius: 28px 28px 0 0;
+    background: #eef3ef;
+  }
+  main.login:not(.is-register) .login-panel > * {
+    width: 100%;
+    max-width: 480px;
+    min-width: 0;
+    margin: 0 auto;
+  }
+  main.login:not(.is-register) .install-nudge {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 12px 12px 12px 16px;
+    border: 1px solid #dde6df;
+    border-radius: 20px;
+    background: #fff;
+  }
+  main.login:not(.is-register) .install-nudge > div {
+    flex: 1;
+    min-width: 0;
+  }
+  main.login:not(.is-register) .install-nudge > .btn {
+    flex: none;
+    width: auto;
+  }
+  main.login:not(.is-register) .install-nudge > .icon-btn {
+    flex: none;
+  }
+  main.login:not(.is-register) .login-card {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 16px;
+    padding: 22px 18px;
+    border: 1px solid #dde6df;
+    border-radius: 24px;
+    background: #fff;
+    box-shadow: 0 16px 36px -26px rgb(8 51 31 / 0.5);
+  }
+  main.login:not(.is-register) .login-card h1 {
+    margin: 2px 0 4px;
+    font-size: 1.75rem;
+    color: var(--titulo, #0c4a30);
+  }
+  main.login:not(.is-register) .lc-head .kicker {
+    margin: 0;
+    color: var(--verde-i);
+    font-size: 0.78rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+  main.login:not(.is-register) .field-label {
+    font-weight: 700;
+    color: var(--texto, #1b2a22);
+  }
+  main.login:not(.is-register) .field-box {
+    min-height: 56px;
+    border: 1.5px solid #dde6df;
+    border-radius: 18px;
+    background: #f6f9f7;
+  }
+  main.login:not(.is-register) .field-box:focus-within {
+    border-color: #1f8a55;
+    background: #fff;
+    box-shadow: 0 0 0 4px rgb(31 138 85 / 0.18);
+  }
+  main.login:not(.is-register) .field-box input {
+    min-width: 0;
+    border: 0;
+    background: transparent;
+    box-shadow: none;
+  }
+  main.login:not(.is-register) .btn-xl {
+    min-height: 56px;
+    border-radius: 18px;
+    font-size: 1.08rem;
+  }
+  main.login:not(.is-register) .lc-note {
+    margin: 0;
+    border-radius: 18px;
+  }
+  main.login:not(.is-register) .lc-demo {
+    margin: 4px 0 0;
+    padding: 16px 0 0;
+    border: 0;
+    border-top: 1px solid #dde6df;
+    background: transparent;
+  }
+  main.login:not(.is-register) .lc-demo ul {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 8px;
+  }
+  main.login:not(.is-register) .lc-demo-btn {
+    width: 100%;
+    min-height: 60px;
+    border: 1px solid #dde6df;
+    border-radius: 16px;
+    background: #f6f9f7;
+    transition: transform 300ms cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+  main.login:not(.is-register) .lc-demo-btn:active {
+    transform: scale(0.97);
+  }
+}
+/* Tablet: portada más alta y la tarjeta centrada, con las cuentas de muestra de a dos. */
+@media (min-width: 600px) and (max-width: 900px) {
+  main.login:not(.is-register) > .login-hero {
+    min-height: 300px;
+    justify-content: space-between;
+    padding-inline: 40px;
+  }
+  main.login:not(.is-register) .login-hero h2 {
+    max-width: 22ch;
+  }
+  main.login:not(.is-register) > .login-panel {
+    margin-top: -56px;
+    padding-inline: 32px;
+    background: transparent;
+  }
+  main.login:not(.is-register) .login-panel > * {
+    max-width: 580px;
+  }
+  main.login:not(.is-register) .login-card {
+    padding: 32px;
+  }
+  main.login:not(.is-register) .lc-demo ul {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  main.login:not(.is-register) .lc-demo ul li:has(.lc-demo-group) {
+    grid-column: 1 / -1;
+  }
+}
