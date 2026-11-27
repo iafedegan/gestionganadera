@@ -48,6 +48,7 @@ import {
   farmContext,
   recordTokens,
   takeQuota,
+  urgentReason,
 } from "./assistant.js";
 import { appendAudit, verifyAuditChain } from "./audit.js";
 import {
@@ -1513,11 +1514,14 @@ export async function buildApp(opts: AppOptions): Promise<FastifyInstance> {
           [orgId],
         ),
       );
+      const left = Math.max(0, DAILY_LIMIT - (u?.questions ?? 0));
+      const urgent = r.refused ? null : urgentReason(r.text);
+      if (urgent) return { answer: "", urgent, remaining: left };
       const answer =
         r.refused || !r.text
           ? "No puedo ayudar con esa pregunta. Si se trata de la salud de un animal, consulte a su veterinario."
           : r.text;
-      return { answer, remaining: Math.max(0, DAILY_LIMIT - (u?.questions ?? 0)) };
+      return { answer, remaining: left };
     } catch (err) {
       req.log.error(err, "asistente");
       if (body.data.ownAi)

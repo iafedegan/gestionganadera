@@ -244,6 +244,20 @@ export function AssistantDialog(props: { initial: string | null; onClose(): void
     list.scrollTo({ top, behavior: "smooth" });
   }, [turns.length, busy, asking, emergency.alert?.status]);
 
+  /** En una emergencia la IA no contesta: se avisa al veterinario. */
+  function raise(reason: string, q: string, kept: Turn[]) {
+    saveHistory(orgId, kept);
+    emergency.clear();
+    // Si ya nombró el arete se envía de una vez; si no, se pregunta cuál es.
+    const [tag] = tagsIn(
+      q,
+      snapshot.herd.map((a) => a.tag),
+    );
+    const animal = snapshot.herd.find((a) => a.tag === tag);
+    if (animal) void emergency.send(reason, q, { id: animal.id, tag: animal.tag });
+    else setAsking({ reason, message: q });
+  }
+
   async function send(question: string) {
     const q = question.trim();
     if (q.length < 2 || busy) return;
@@ -251,20 +265,10 @@ export function AssistantDialog(props: { initial: string | null; onClose(): void
     // La urgencia se atiende primero y aparte: no depende de que la IA conteste.
     const reason = detectEmergency(q);
     if (reason) {
-      // En una emergencia la IA no contesta: se avisa al veterinario.
       const kept: Turn[] = [...turns, { role: "user", text: q }];
       setTurns(kept);
-      saveHistory(orgId, kept);
       setDraft("");
-      emergency.clear();
-      // Si ya nombró el arete se envía de una vez; si no, se pregunta cuál es.
-      const [tag] = tagsIn(
-        q,
-        snapshot.herd.map((a) => a.tag),
-      );
-      const animal = snapshot.herd.find((a) => a.tag === tag);
-      if (animal) void emergency.send(reason, q, { id: animal.id, tag: animal.tag });
-      else setAsking({ reason, message: q });
+      raise(reason, q, kept);
       return;
     }
     emergency.clear();
@@ -292,9 +296,13 @@ export function AssistantDialog(props: { initial: string | null; onClose(): void
         ...next,
         { role: "assistant", text: r.answer, ...(r.sources?.length ? { sources: r.sources } : {}) },
       ];
-      setTurns(done);
-      saveHistory(orgId, done);
       setRemaining(r.remaining);
+      // La IA también decide: si es una urgencia no responde, se avisa.
+      if (r.urgent) raise(r.urgent, q, next);
+      else {
+        setTurns(done);
+        saveHistory(orgId, done);
+      }
     } catch (e) {
       // La pregunta vuelve a la caja para reintentar sin escribirla de nuevo.
       setTurns(turns);

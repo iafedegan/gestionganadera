@@ -1276,6 +1276,8 @@ export interface KnowledgeSourceDto {
 
 export interface AssistantReply {
   answer: string;
+  /** El asistente decidió que es una urgencia: no responde y se avisa al veterinario. */
+  urgent?: string;
   /** Preguntas que le quedan hoy a la ganadería. */
   remaining: number;
   /** Notas de CONtexto Ganadero entregadas al asistente; la respuesta las cita como [n]. */

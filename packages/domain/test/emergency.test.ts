@@ -15,6 +15,21 @@ describe("detectEmergency", () => {
     for (const typo of ["ugente", "Urjente", "emerjencia", "es ugente"])
       expect(detectEmergency(typo), typo).toBe("urgencia reportada");
     expect(detectEmergency("¿Qué dice la gente del precio vigente?")).toBeNull();
+    for (const [said, reason] of [
+      ["Mi vaca tiene fiebre y tiembla", "fiebre"],
+      ["La novilla está temblando", "temblores"],
+      ["El ternero está orinando rojo", "sangre en orina o diarrea"],
+      ["La CE-004 amaneció decaída", "animal decaído"],
+      ["La vaca no ha botado la placenta", "problema de parto"],
+      ["Tiene la ubre muy caliente", "ubre inflamada"],
+    ])
+      expect(detectEmergency(said as string), said).toBe(reason);
+    for (const q of [
+      "¿Qué vacas han tenido fiebre este año?",
+      "¿Cuántos animales tienen fiebre aftosa vacunada?",
+      "¿Cómo se maneja la fiebre de leche?",
+    ])
+      expect(detectEmergency(q), q).toBeNull();
   });
 
   it("no alarma con preguntas normales o de prevención", () => {

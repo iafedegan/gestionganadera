@@ -2,6 +2,7 @@ import type { FastifyInstance } from "fastify";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { open, seal } from "../src/aiKey.js";
 import { buildApp } from "../src/app.js";
+import { urgentReason } from "../src/assistant.js";
 import { hashPassword } from "../src/auth.js";
 import { type Db, createPgliteDb } from "../src/db.js";
 
@@ -72,6 +73,15 @@ beforeAll(async () => {
 afterAll(async () => {
   await app.close();
   await db.close();
+});
+
+describe("la IA decide si es una urgencia", () => {
+  it("reconoce su línea de urgencia y no confunde una respuesta normal", () => {
+    expect(urgentReason("URGENCIA: Fiebre y temblores.")).toBe("fiebre y temblores");
+    expect(urgentReason("**URGENCIA:** posible intoxicación")).toBe("posible intoxicación");
+    expect(urgentReason("### Lo urgente\n- Revise las vacas")).toBeNull();
+    expect(urgentReason("No hay urgencia: todo va bien")).toBeNull();
+  });
 });
 
 describe("clave de Gemini en las variables del servidor", () => {
