@@ -218,14 +218,41 @@ describe("cuentas de muestra", () => {
     });
     expect(region.json()).toMatchObject({ tecnigan: "TECNIG@N de Casanare" });
 
-    // Correrlo otra vez (otro arranque del servidor) no duplica nada.
-    await addRichDemo(
-      db,
-      demoSpec("grande") as NonNullable<ReturnType<typeof demoSpec>>,
-      owner.userId,
-      orgId,
-    );
+    // Sin tiempo, solo hace lo rápido y avisa que falta; nada se duplica.
+    const spec = demoSpec("grande") as NonNullable<ReturnType<typeof demoSpec>>;
+    expect(await addRichDemo(db, spec, owner.userId, orgId, 0)).toBe(false);
     expect(await counts()).toEqual(first);
+
+    // Un ingreso que se cortó dejó un insumo sin lotes: el siguiente lo completa.
+    const sal = await db.admin(async (q) => {
+      await q(
+        "UPDATE supply SET name = 'Sal mineralizada 8 % (anterior)' WHERE organization_id = $1 AND name = 'Sal mineralizada 8 %'",
+        [orgId],
+      );
+      const [s] = await q<{ id: string }>(
+        `INSERT INTO supply (id, organization_id, name, category, unit, min_stock, created_by, created_at)
+         VALUES (gen_random_uuid(), $1, 'Sal mineralizada 8 %', 'suplemento', 'bulto', 30, $2, now() - interval '10 minutes')
+         RETURNING id`,
+        [orgId, owner.userId],
+      );
+      return s?.id;
+    });
+    expect(await addRichDemo(db, spec, owner.userId, orgId)).toBe(true);
+    const [again] = await db.admin((q) =>
+      q<{ n: string }>("SELECT count(*) AS n FROM stock_movement WHERE supply_id = $1", [sal]),
+    );
+    expect(Number(again?.n)).toBeGreaterThan(4);
+    const after = await counts();
+    expect({ ...after, insumos: 0, movimientos: 0 }).toEqual({
+      ...first,
+      insumos: 0,
+      movimientos: 0,
+    });
+    expect(after.insumos).toBe(first.insumos + 1);
+
+    // Correrlo otra vez (otro arranque del servidor) no duplica nada.
+    await addRichDemo(db, spec, owner.userId, orgId);
+    expect(await counts()).toEqual(after);
   }, 120_000);
 
   it("cada perfil por rol entra a la ganadería completa con su rol, sin duplicarse", async () => {

@@ -444,27 +444,45 @@ async function addSupplies(db: Db, spec: DemoSpec, userId: string, orgId: string
 }
 
 const ready = new Map<string, Promise<{ userId: string; orgId: string }>>();
+/** Cuentas cuyos datos completos ya quedaron (en este servidor) y las que se están completando. */
+const richDone = new Set<string>();
+const richRunning = new Map<string, Promise<void>>();
 
 /** Crea la cuenta de muestra la primera vez y devuelve su usuario. */
-export function ensureDemo(db: Db, spec: DemoSpec): Promise<{ userId: string; orgId: string }> {
-  const cached = ready.get(spec.key);
-  if (cached) return cached;
-  const p = create(db, spec)
-    .then(async (r) => {
-      await addSupplies(db, spec, r.userId, r.orgId).catch(() => undefined);
-      // Cada parte revisa si ya existe: también completa las cuentas que ya estaban creadas.
-      if (spec.rich)
-        await addRichDemo(db, spec, r.userId, r.orgId).catch((err) =>
-          console.error("datos de muestra completos", err),
-        );
-      return r;
-    })
-    .catch((err) => {
-      ready.delete(spec.key);
-      throw err;
-    });
-  ready.set(spec.key, p);
-  return p;
+export async function ensureDemo(
+  db: Db,
+  spec: DemoSpec,
+): Promise<{ userId: string; orgId: string }> {
+  let p = ready.get(spec.key);
+  if (!p) {
+    p = create(db, spec)
+      .then(async (r) => {
+        await addSupplies(db, spec, r.userId, r.orgId).catch(() => undefined);
+        return r;
+      })
+      .catch((err) => {
+        ready.delete(spec.key);
+        throw err;
+      });
+    ready.set(spec.key, p);
+  }
+  const r = await p;
+  // Datos completos con tope de tiempo: lo que no alcance sigue en el próximo ingreso. Cada
+  // parte revisa si ya existe, así que también completa las cuentas que ya estaban creadas.
+  if (spec.rich && !richDone.has(spec.key)) {
+    let run = richRunning.get(spec.key);
+    if (!run) {
+      run = addRichDemo(db, spec, r.userId, r.orgId)
+        .then((complete) => {
+          if (complete) richDone.add(spec.key);
+        })
+        .catch((err) => console.error("datos de muestra completos", err))
+        .finally(() => richRunning.delete(spec.key));
+      richRunning.set(spec.key, run);
+    }
+    await run;
+  }
+  return r;
 }
 
 /** Crea (una vez) la cuenta del Secretario Técnico de muestra; no pertenece a ninguna ganadería. */

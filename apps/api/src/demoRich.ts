@@ -23,12 +23,20 @@ const ago = (today: string, n: number) => {
 const at = (today: string, n: number, hour = 9) =>
   `${ago(today, n)}T${String(hour).padStart(2, "0")}:15:00Z`;
 
+/**
+ * Completa la cuenta con un tope de tiempo (el ingreso no puede pasar de 30 s en Vercel). Primero
+ * lo rápido (asistencia, comunidad, mapas y bosque) y al final la bodega, insumo por insumo.
+ * Responde si quedó completo; si no, el siguiente ingreso sigue donde quedó.
+ */
 export async function addRichDemo(
   db: Db,
   spec: DemoSpec,
   userId: string,
   orgId: string,
-): Promise<void> {
+  budgetMs = 12_000,
+): Promise<boolean> {
+  const deadline = Date.now() + budgetMs;
+  const left = () => Date.now() < deadline;
   const today = todayIn();
   const farms = await db.tenant(orgId, (q) =>
     q<{ id: string; code: string }>("SELECT id, code FROM farm ORDER BY code"),
@@ -53,24 +61,15 @@ export async function addRichDemo(
       validUntil: null,
     },
   ];
-  await push(
-    db,
-    user,
-    memberships,
-    orgId,
-    "muestra",
-    await supplies(db, orgId, today, spec, farmOf),
-  );
-  await push(
-    db,
-    user,
-    memberships,
-    orgId,
-    "muestra",
-    await alertLots(db, orgId, today, spec, farmOf),
-  );
-  await push(db, user, memberships, orgId, "muestra", await maps(db, orgId, spec, farmOf));
+  const send = async (cmds: unknown[]) =>
+    cmds.length > 0 ? (await push(db, user, memberships, orgId, "muestra", cmds)).results : [];
+
+  await send(await maps(db, orgId, spec, farmOf));
   await forest(db, orgId, userId, spec, farmOf);
+  if (!(await supplies(db, orgId, today, spec, farmOf, send, left))) return false;
+  if (!left()) return false;
+  await send(await alertLots(db, orgId, today, spec, farmOf));
+  return true;
 }
 
 /* ───────────── Secretario Técnico de la región ───────────── */
@@ -771,11 +770,9 @@ async function supplies(
   today: string,
   spec: DemoSpec,
   farmOf: (code: string) => string | null,
-): Promise<unknown[]> {
-  const existing = await db.tenant(orgId, (q) =>
-    q<{ name: string }>("SELECT lower(name) AS name FROM supply"),
-  );
-  const have = new Set(existing.map((r) => r.name));
+  send: (cmds: unknown[]) => Promise<{ status: string }[]>,
+  left: () => boolean,
+): Promise<boolean> {
   const env = (type: string, payload: Record<string, unknown>) => ({
     id: uuidv7(),
     type,
@@ -783,12 +780,27 @@ async function supplies(
     payload,
   });
   const farmIds = spec.farms.map((f) => farmOf(f.code));
-  const cmds: unknown[] = [];
   for (const [k, row] of CATALOG.entries()) {
+    if (!left()) return false;
     const [name, category, unit, minStock, cost, buy, weekly, life, supplier, uses] = row;
-    if (have.has(name.toLowerCase())) continue;
-    const id = uuidv7();
-    cmds.push(env("supply.create", { id, name, category, unit, minStock }));
+    // Ya tiene lotes: listo. Recién creado por otro ingreso que sigue trabajando: no tocarlo.
+    // Creado hace rato y sin lotes (un ingreso que se cortó): se completa.
+    const [found] = await db.tenant(orgId, (q) =>
+      q<{ id: string; fresh: boolean; moves: number }>(
+        `SELECT s.id, s.created_at > now() - interval '2 minutes' AS fresh,
+                (SELECT count(*) FROM stock_movement m WHERE m.supply_id = s.id)::int AS moves
+           FROM supply s WHERE lower(s.name) = lower($1)`,
+        [name],
+      ),
+    );
+    if (found && (found.moves > 0 || found.fresh)) continue;
+    let id = found?.id;
+    if (!id) {
+      id = uuidv7();
+      const [res] = await send([env("supply.create", { id, name, category, unit, minStock })]);
+      if (res?.status !== "accepted") continue;
+    }
+    const cmds: unknown[] = [];
     for (const fi of uses) {
       const farmId = farmIds[fi];
       if (!farmId) continue;
@@ -845,8 +857,9 @@ async function supplies(
         );
       }
     }
+    await send(cmds);
   }
-  return cmds;
+  return true;
 }
 
 /**
@@ -982,6 +995,7 @@ async function forest(
   farmOf: (code: string) => string | null,
 ): Promise<void> {
   await db.admin(async (q) => {
+    await q("SELECT pg_advisory_xact_lock($1)", [LOCK + 1]);
     for (const [i, f] of spec.farms.entries()) {
       const farmId = farmOf(f.code);
       if (!farmId) continue;
