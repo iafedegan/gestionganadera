@@ -2,7 +2,7 @@ import { Check, ChevronDown, Search } from "lucide-react";
 import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { VoiceAssistant } from "./VoiceAssistant";
 import { CardHead } from "./components";
-import { dataScope, demoOnly } from "./lib/scope";
+import { dataScope, demoOnly, seedFor } from "./lib/scope";
 
 export { demoOnly, isDemoOrg, isDemoScope, setDataScope } from "./lib/scope";
 import type { VoiceField } from "./lib/voice";
@@ -62,7 +62,7 @@ export function useStore<T>(key: string, seed: T[]): [T[], (r: T) => void, () =>
     }
   };
   return [
-    [...extra, ...demoOnly(seed)],
+    [...extra, ...demoOnly(seedFor(key, seed))],
     (r) =>
       setExtra((p) => {
         const n = [r, ...p];

@@ -2855,3 +2855,283 @@ dialog.ask-dialog::backdrop {
     animation: none;
   }
 }
+
+/* ═════ Inicio del dueño: siempre en una sola pantalla, sea cual sea el alto ═════
+   Mientras se ve el tablero, la columna principal mide exactamente la pantalla; los recuadros
+   se reparten el alto que queda y sus cifras y textos se ajustan al tamaño de cada uno. */
+.main:has(.page-dash) {
+  height: 100dvh;
+  min-height: 0;
+}
+.main:has(.page-dash) > .content {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.main:has(.page-dash) > .content > .screen {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.page-dash {
+  flex: 1 1 auto;
+  width: 100%;
+  min-height: 0;
+  grid-template-rows: auto auto minmax(0, 1fr);
+}
+.page-dash .dash-grid {
+  min-height: 0;
+  grid-auto-rows: minmax(0, 1fr);
+}
+.page-dash .dash-tile {
+  min-height: 0;
+  container-type: size;
+}
+.page-dash .dt-value {
+  font-size: clamp(1.15rem, min(23cqh, 20cqw), 2.9rem);
+}
+/* Recuadros bajos: primero se va la línea de la leche, luego las barras y por último la
+   segunda línea de la frase. */
+@container (max-height: 132px) {
+  .dt-spark {
+    display: none;
+  }
+}
+@container (max-height: 112px) {
+  .dt-meter,
+  .dt-meter-row,
+  .dt-heat {
+    display: none;
+  }
+}
+@container (max-height: 104px) {
+  .dt-note {
+    -webkit-line-clamp: 1;
+  }
+}
+@container (max-height: 66px) {
+  .dt-note {
+    display: none;
+  }
+}
+/* Pantallas verticales grandes (tableta de pie): dos columnas, para que los recuadros no queden
+   altos y vacíos. */
+@media (min-width: 600px) and (orientation: portrait) {
+  .page-dash .dash-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+/* Pantallas bajas (teléfonos pequeños, ventanas cortas): encabezado y resumen más compactos. */
+@media (max-height: 760px) {
+  .page-dash {
+    gap: 10px;
+  }
+  .page-dash .dash-head h1 {
+    font-size: clamp(1.2rem, 4.8vw, 1.6rem);
+  }
+  .page-dash .dash-health {
+    gap: 8px;
+    padding: 10px 12px;
+  }
+  .page-dash .dash-grid {
+    gap: 8px;
+  }
+  .page-dash .dash-tile {
+    padding: 10px 12px;
+  }
+}
+@media (max-height: 640px) {
+  .page-dash .dash-date {
+    display: none;
+  }
+}
+
+/* ═════ Proyección: lo que viene en la finca ═════ */
+.dash-actions {
+  flex: none;
+  display: flex;
+  gap: 8px;
+}
+.dash-ask.dash-proj {
+  background: #fff;
+  color: #0c4a30;
+  border: 1px solid color-mix(in srgb, #0c4a30 18%, transparent);
+  box-shadow: none;
+}
+.dash-ask.dash-proj::after {
+  display: none;
+}
+.proj-demo {
+  margin: -6px 0 12px;
+}
+.proj-chart {
+  position: relative;
+  outline-offset: 4px;
+  touch-action: pan-y;
+}
+.proj-chart:focus-visible {
+  outline: 2px solid #0f6bc4;
+  border-radius: 8px;
+}
+.proj-chart svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  overflow: visible;
+}
+.pc-grid {
+  stroke: #e6ece8;
+  stroke-width: 1;
+}
+.pc-axis {
+  fill: var(--texto-suave, #5b6b63);
+  font-size: 11px;
+}
+.pc-line {
+  fill: none;
+  stroke: #0f6bc4;
+  stroke-width: 2;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+.pc-line.pc-est {
+  stroke-dasharray: 6 5;
+}
+.pc-band {
+  fill: #0f6bc4;
+  opacity: 0.1;
+}
+.pc-today,
+.pc-cross {
+  stroke: #9aa8a0;
+  stroke-width: 1;
+}
+.pc-dot {
+  fill: #0f6bc4;
+  stroke: #fff;
+  stroke-width: 2;
+}
+.pc-end,
+.pc-cap {
+  fill: var(--texto, #1b2a22);
+  font-size: 12px;
+  font-weight: 700;
+}
+.pc-conf {
+  fill: #1f8a55;
+}
+.pc-pos {
+  fill: url(#pc-hatch);
+}
+.pc-pos-fill {
+  fill: #e0a100;
+}
+.pc-hatch {
+  stroke: #fff;
+  stroke-width: 2;
+  opacity: 0.55;
+}
+.pc-hit {
+  fill: transparent;
+}
+.pc-col {
+  cursor: default;
+  outline: none;
+}
+.pc-col.on .pc-conf,
+.pc-col.on .pc-pos {
+  filter: brightness(1.12);
+}
+.pc-col:focus-visible .pc-hit {
+  fill: rgb(15 107 196 / 0.06);
+}
+.pc-legend {
+  display: flex;
+  gap: 16px;
+  margin: 0 0 6px;
+  font-size: 0.85rem;
+  color: var(--texto-suave, #5b6b63);
+}
+.pc-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.pc-legend i {
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+}
+.lg-conf {
+  background: #1f8a55;
+}
+.lg-pos {
+  background: repeating-linear-gradient(45deg, #e0a100 0 3px, #f0d080 3px 5px);
+}
+.pc-tip {
+  position: absolute;
+  top: 8px;
+  z-index: 2;
+  display: grid;
+  gap: 2px;
+  min-width: 150px;
+  max-width: 230px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: #fff;
+  box-shadow: 0 10px 24px -12px rgb(5 16 11 / 0.45), 0 0 0 1px rgb(5 16 11 / 0.08);
+  pointer-events: none;
+  font-size: 0.85rem;
+  color: var(--texto-suave, #5b6b63);
+}
+.pc-tip strong {
+  color: var(--texto, #1b2a22);
+  font-size: 1rem;
+}
+.proj-table {
+  margin-top: 10px;
+  font-size: 0.9rem;
+}
+.proj-table summary {
+  cursor: pointer;
+  color: #0c4a30;
+  font-weight: 600;
+}
+.proj-table table {
+  width: 100%;
+  margin-top: 8px;
+  border-collapse: collapse;
+}
+.proj-table :is(th, td) {
+  padding: 6px 4px;
+  border-bottom: 1px solid #edf1ee;
+  text-align: left;
+  font-weight: 400;
+}
+.proj-table thead th {
+  font-weight: 700;
+  color: var(--texto-suave, #5b6b63);
+}
+.proj-how {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding-left: 18px;
+  color: var(--texto-suave, #5b6b63);
+  line-height: 1.45;
+}
+.proj-how b {
+  color: var(--texto, #1b2a22);
+}
+@media (max-width: 599px) {
+  .dash-actions .dash-ask .da-text {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+  }
+}

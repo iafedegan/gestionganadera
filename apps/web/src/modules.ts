@@ -41,6 +41,7 @@ import { type Permission, can } from "@ganaderia/domain";
 
 export type ModuleKey =
   | "inicio"
+  | "proyeccion"
   | "animales"
   | "expediente"
   | "trazabilidad"
@@ -87,6 +88,7 @@ export interface ModuleDef {
 
 export const MODULES: ModuleDef[] = [
   { key: "inicio", label: "Inicio", short: "Inicio", icon: Home },
+  { key: "proyeccion", label: "Proyección", short: "Proyección", icon: TrendingUp },
   { key: "animales", label: "Animales", short: "Animales", icon: PawPrint },
   { key: "expediente", label: "Expediente de la finca", short: "Expediente", icon: FolderOpen },
   { key: "trazabilidad", label: "Trazabilidad y bosque", short: "Trazabilidad", icon: Trees },
@@ -507,6 +509,7 @@ const REQUIRES: Partial<Record<ModuleKey, Permission>> = {
  * Módulos de cada rol: solo lo que esa persona usa en su trabajo. El propietario y el
  * administrador ven todos los que sus permisos admiten.
  *
+ * - Proyección (lo que viene: partos, secados, leche): para quien planea el trabajo; el operario no.
  * - Mayordomo: el día a día de la finca (hato, ordeño, potreros, bodega) y los compromisos de
  *   las visitas técnicas. No compra en la tienda ni ve noticias o la comunidad de productores.
  * - Veterinario: historia clínica, reproducción y la producción como señal clínica (caída de
@@ -519,6 +522,7 @@ const REQUIRES: Partial<Record<ModuleKey, Permission>> = {
 const ROLE_MODULES: Partial<Record<Role, readonly ModuleKey[]>> = {
   mayordomo: [
     "inicio",
+    "proyeccion",
     "animales",
     "produccion",
     "reproduccion",
@@ -531,6 +535,7 @@ const ROLE_MODULES: Partial<Record<Role, readonly ModuleKey[]>> = {
   ],
   veterinario: [
     "inicio",
+    "proyeccion",
     "animales",
     "sanidad",
     "reproduccion",
@@ -549,6 +554,7 @@ const ROLE_MODULES: Partial<Record<Role, readonly ModuleKey[]>> = {
   ],
   tecnico: [
     "inicio",
+    "proyeccion",
     "animales",
     "expediente",
     "trazabilidad",

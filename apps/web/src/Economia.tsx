@@ -1,6 +1,7 @@
 import { Coins, PiggyBank, Receipt, TrendingUp } from "lucide-react";
 import { useMemo, useState } from "react";
 import { PageHead } from "./components";
+import { richOr } from "./erpRich";
 import { BUDGET as BUDGET_DEMO, MOV_SEED, type Mov, milkHistory } from "./herd";
 import {
   type AlertItem,
@@ -59,7 +60,7 @@ const TONES: Tone[] = [
 
 export function EconomiaScreen() {
   // Datos de ejemplo solo en la cuenta demo; las cuentas reales empiezan vacías.
-  const BUDGET = demoOnly(BUDGET_DEMO);
+  const BUDGET = demoOnly(richOr("budget", BUDGET_DEMO));
   const { notify } = useApp();
   const [movs, add, reset] = useStore<Mov>("movs-eco", MOV_SEED);
   const [tab, setTab] = useState<Tab>("panel");

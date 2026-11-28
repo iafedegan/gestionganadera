@@ -11,6 +11,9 @@ import { OnboardingWizard } from "./Onboarding";
 import { PasturasScreen } from "./Pasturas";
 import { PersonalScreen } from "./Personal";
 import { ProduccionScreen } from "./Produccion";
+import { ProyeccionScreen } from "./Proyeccion";
+// Registra los datos de ejemplo completos de la cuenta grande de muestra.
+import "./erpRich";
 import { ReproduccionScreen } from "./Reproduccion";
 import { HAS_ROLE_HOME, RoleHome } from "./RoleHome";
 import { SanidadScreen } from "./Sanidad";
@@ -39,6 +42,7 @@ const SCREENS: Partial<Record<ModuleKey, (go: (m: ModuleKey) => void) => ReactNo
   reproduccion: () => <ReproduccionScreen />,
   sanidad: () => <SanidadScreen />,
   pasturas: () => <PasturasScreen />,
+  proyeccion: () => <ProyeccionScreen />,
   economia: () => <EconomiaScreen />,
   asistencia: () => <ExtensionScreen />,
   ventas: () => <VentasScreen />,

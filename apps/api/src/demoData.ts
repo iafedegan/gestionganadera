@@ -51,6 +51,11 @@ export interface DemoSpec {
   milkDays: number;
   supplies: boolean;
   map: boolean;
+  /**
+   * Todos los módulos llenos: asistencia técnica, comunidad, bodega en todas las fincas, linderos,
+   * potreros y revisión de bosque (ver `demoRich.ts`).
+   */
+  rich?: boolean;
   team: DemoTeamMember[];
   pendingInvitation: boolean;
   profile: FarmProfileInput | null;
@@ -291,6 +296,7 @@ export const DEMO_SPECS: DemoSpec[] = [
     milkDays: 14,
     supplies: true,
     map: false,
+    rich: true,
     team: [
       {
         email: `demo-grande-admin@${DOMAIN}`,

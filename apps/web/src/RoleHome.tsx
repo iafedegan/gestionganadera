@@ -14,6 +14,7 @@ import {
   Sprout,
   Stethoscope,
   Trees,
+  TrendingUp,
   Users,
 } from "lucide-react";
 import { useEffect, useState } from "react";
@@ -49,6 +50,12 @@ const ACTIONS: Record<string, Action[]> = {
     { module: "compras", label: "Bodega", hint: "Insumos y consumos", icon: Package },
     { module: "reproduccion", label: "Reproducción", hint: "Celos y partos", icon: Baby },
     { module: "sanidad", label: "Sanidad", hint: "Vacunas y tratamientos", icon: ShieldPlus },
+    {
+      module: "proyeccion",
+      label: "Lo que viene",
+      hint: "Partos, secados, leche",
+      icon: TrendingUp,
+    },
   ],
   veterinario: [
     {
@@ -60,6 +67,7 @@ const ACTIONS: Record<string, Action[]> = {
     { module: "reproduccion", label: "Diagnóstico", hint: "Palpaciones y partos", icon: Baby },
     { module: "animales", label: "Buscar animal", hint: "Hoja de vida", icon: PawPrint },
     { module: "asistencia", label: "Recomendaciones", hint: "Asistencia técnica", icon: Users },
+    { module: "proyeccion", label: "Lo que viene", hint: "Partos y secados", icon: TrendingUp },
   ],
   operario: [
     { module: "produccion", label: "Ordeño y peso", hint: "Anote lo de hoy", icon: Milk },
@@ -77,6 +85,7 @@ const ACTIONS: Record<string, Action[]> = {
     { module: "trazabilidad", label: "Trazabilidad", hint: "Lindero y bosque", icon: Trees },
     { module: "asistencia", label: "Asistencia", hint: "Consultas y recomendaciones", icon: Users },
     { module: "produccion", label: "Producción", hint: "Indicadores", icon: BarChart3 },
+    { module: "proyeccion", label: "Lo que viene", hint: "Proyección", icon: TrendingUp },
   ],
 };
 

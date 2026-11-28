@@ -19,7 +19,7 @@ import { ApiError, NetworkError, api } from "./lib/api";
 import { errorText } from "./lib/errorText";
 import { localdb } from "./lib/localdb";
 import { chosenOrg, preferOrg, rememberOrg } from "./lib/orgs";
-import { isDemoOrg, setDataScope } from "./lib/scope";
+import { isDemoOrg, isRichDemo, setDataScope } from "./lib/scope";
 import {
   clearKeystore,
   lastEmail,
@@ -128,7 +128,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const orgId = session?.memberships[0]?.organizationId ?? "";
   const role = session?.memberships[0]?.role ?? null;
   // Antes de pintar cualquier pantalla: datos de ejemplo solo en la organización demostrativa.
-  setDataScope(orgId, isDemoOrg(session?.memberships[0]?.organizationName));
+  setDataScope(
+    orgId,
+    isDemoOrg(session?.memberships[0]?.organizationName),
+    isRichDemo(session?.memberships[0]?.organizationName),
+  );
 
   const refresh = useCallback(async () => {
     if (!orgId) return;

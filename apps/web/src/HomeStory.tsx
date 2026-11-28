@@ -8,6 +8,7 @@ import {
   Milk,
   PawPrint,
   Sparkles,
+  TrendingUp,
 } from "lucide-react";
 import { type ReactNode, useId, useState } from "react";
 import { type AlertItem, AlertsSheet } from "./Alerts";
@@ -117,6 +118,8 @@ export interface HomeStoryProps {
   /** Semáforo del clima de hoy, para contarlo en el resumen. */
   weatherState: DashState;
   onAsk(): void;
+  /** Abre la proyección (lo que viene); se omite si el rol no la ve. */
+  onProjection?(): void;
 }
 
 const plural = (n: number, one: string, many: string) => `${num(n)} ${n === 1 ? one : many}`;
@@ -170,18 +173,34 @@ export function HomeStory(p: HomeStoryProps) {
           <h1>{title}</h1>
           <p className="dash-date">{p.dateText}</p>
         </div>
-        <button
-          type="button"
-          className="dash-ask"
-          aria-label="Preguntarle a su finca"
-          onClick={() => {
-            haptic(8);
-            p.onAsk();
-          }}
-        >
-          <Sparkles size={20} aria-hidden="true" />
-          <span className="da-text">Preguntar</span>
-        </button>
+        <div className="dash-actions">
+          {p.onProjection && (
+            <button
+              type="button"
+              className="dash-ask dash-proj"
+              aria-label="Ver lo que viene"
+              onClick={() => {
+                haptic(8);
+                p.onProjection?.();
+              }}
+            >
+              <TrendingUp size={20} aria-hidden="true" />
+              <span className="da-text">Lo que viene</span>
+            </button>
+          )}
+          <button
+            type="button"
+            className="dash-ask"
+            aria-label="Preguntarle a su finca"
+            onClick={() => {
+              haptic(8);
+              p.onAsk();
+            }}
+          >
+            <Sparkles size={20} aria-hidden="true" />
+            <span className="da-text">Preguntar</span>
+          </button>
+        </div>
       </header>
 
       {states.length > 0 && (

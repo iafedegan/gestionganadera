@@ -10,6 +10,7 @@ import {
   buildHerd,
   demoProfile,
 } from "./demoData.js";
+import { addRichDemo } from "./demoRich.js";
 import { push, todayIn } from "./sync.js";
 
 /**
@@ -451,6 +452,11 @@ export function ensureDemo(db: Db, spec: DemoSpec): Promise<{ userId: string; or
   const p = create(db, spec)
     .then(async (r) => {
       await addSupplies(db, spec, r.userId, r.orgId).catch(() => undefined);
+      // Cada parte revisa si ya existe: también completa las cuentas que ya estaban creadas.
+      if (spec.rich)
+        await addRichDemo(db, spec, r.userId, r.orgId).catch((err) =>
+          console.error("datos de muestra completos", err),
+        );
       return r;
     })
     .catch((err) => {

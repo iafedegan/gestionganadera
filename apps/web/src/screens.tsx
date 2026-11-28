@@ -422,6 +422,7 @@ export function Login() {
 /** Color y una frase corta de cada módulo en el menú del celular (mismo estilo de «Anotar»). */
 const MOD_LOOK: Partial<Record<ModuleKey, [string, string]>> = {
   inicio: ["verde", "Cómo va hoy"],
+  proyeccion: ["azul", "Lo que viene"],
   animales: ["verde", "Su hato"],
   expediente: ["ambar", "La finca"],
   trazabilidad: ["verde", "Bosque"],
@@ -1155,6 +1156,9 @@ export function Home({
         weather={<FarmIntel tile onState={setWeatherState} />}
         weatherState={weatherState}
         onAsk={() => setAsking(true)}
+        {...(canSeeModule("proyeccion", role)
+          ? { onProjection: () => onModule("proyeccion") }
+          : {})}
       />
       {asking && <AssistantDialog initial={null} onClose={() => setAsking(false)} />}
       {profileDialog}

@@ -2,6 +2,8 @@ import type { FastifyInstance } from "fastify";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { buildApp } from "../src/app.js";
 import { type Db, createPgliteDb } from "../src/db.js";
+import { demoSpec } from "../src/demoData.js";
+import { addRichDemo } from "../src/demoRich.js";
 
 const H = { "x-requested-with": "ganaderia" };
 
@@ -161,6 +163,70 @@ describe("cuentas de muestra", () => {
     );
     expect((await enter(on, "vet_grande")).json().memberships).toHaveLength(1);
   });
+
+  it("«Ganadero grande» trae todos los módulos con datos y no los duplica", async () => {
+    const owner = (await enter(on, "grande")).json();
+    const orgId = owner.memberships[0].organizationId as string;
+    const counts = () =>
+      db.admin(async (q) => {
+        const n = async (sql: string, args: unknown[] = [orgId]) =>
+          Number((await q<{ n: string }>(sql, args))[0]?.n ?? 0);
+        return {
+          consultas: await n("SELECT count(*) AS n FROM tech_case WHERE organization_id = $1"),
+          respuestas: await n(
+            "SELECT count(*) AS n FROM tech_message m JOIN tech_case c ON c.id = m.case_id WHERE c.organization_id = $1",
+          ),
+          recomendaciones: await n(
+            "SELECT count(*) AS n FROM recommendation WHERE organization_id = $1",
+          ),
+          publicaciones: await n(
+            "SELECT count(*) AS n FROM community_post p JOIN app_user u ON u.id = p.author_id WHERE u.email LIKE 'demo-vecino-%'",
+            [],
+          ),
+          insumos: await n("SELECT count(*) AS n FROM supply WHERE organization_id = $1"),
+          movimientos: await n(
+            "SELECT count(*) AS n FROM stock_movement WHERE organization_id = $1",
+          ),
+          mapas: await n("SELECT count(*) AS n FROM farm_map WHERE organization_id = $1"),
+          bosque: await n("SELECT count(*) AS n FROM forest_check WHERE organization_id = $1"),
+        };
+      });
+    const first = await counts();
+    expect(first).toMatchObject({
+      consultas: 6,
+      recomendaciones: 11,
+      publicaciones: 12,
+      mapas: 3,
+      bosque: 3,
+    });
+    expect(first.respuestas).toBe(8);
+    expect(first.insumos).toBe(19);
+    expect(first.movimientos).toBeGreaterThan(100);
+    // La bodega muestra un lote vencido y varios por vencer.
+    const lots = await db.admin((q) =>
+      q<{ lot_code: string }>(
+        "SELECT lot_code FROM stock_movement WHERE organization_id = $1 AND lot_code IN ('VT-2604-V','OX-2611-P','SE-2611-L','RB-2610-P')",
+        [orgId],
+      ),
+    );
+    expect(lots).toHaveLength(4);
+
+    // La región ya tiene Secretario Técnico: la asistencia técnica deja de estar vacía.
+    const region = await on.inject({
+      url: `/v1/extension?organizationId=${orgId}`,
+      headers: { ...H, cookie: cookieOf(await enter(on, "grande")) },
+    });
+    expect(region.json()).toMatchObject({ tecnigan: "TECNIG@N de Casanare" });
+
+    // Correrlo otra vez (otro arranque del servidor) no duplica nada.
+    await addRichDemo(
+      db,
+      demoSpec("grande") as NonNullable<ReturnType<typeof demoSpec>>,
+      owner.userId,
+      orgId,
+    );
+    expect(await counts()).toEqual(first);
+  }, 120_000);
 
   it("cada perfil por rol entra a la ganadería completa con su rol, sin duplicarse", async () => {
     const roles = {

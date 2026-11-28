@@ -8,6 +8,7 @@ describe("menú por perfil", () => {
   it("el veterinario ve su trabajo clínico, no potreros, expediente, bosque ni el gremio", () => {
     expect(keys("veterinario")).toEqual([
       "inicio",
+      "proyeccion",
       "animales",
       "produccion",
       "reproduccion",
@@ -30,12 +31,14 @@ describe("menú por perfil", () => {
     expect(keys("mayordomo")).toEqual(expect.arrayContaining(["pasturas", "compras"]));
     expect(keys("operario")).toEqual(expect.arrayContaining(["produccion", "capacitacion"]));
     expect(keys("operario")).not.toContain("compras");
+    expect(keys("operario")).not.toContain("proyeccion");
+    expect(keys("mayordomo")).toContain("proyeccion");
   });
 
   it("el administrador ve la economía y la gestión; el dueño, todo", () => {
     expect(keys("admin_entidad")).toEqual(
       expect.arrayContaining(["economia", "ventas", "compras", "personal", "noticias"]),
     );
-    expect(keys("propietario")).toHaveLength(20);
+    expect(keys("propietario")).toHaveLength(21);
   });
 });
